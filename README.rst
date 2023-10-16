@@ -1,0 +1,138 @@
+=======================================
+lsbi: Linear Simulation Based Inference
+=======================================
+:lsbi: Linear Simulation Based Inference
+:Author: Will Handley
+:Version: 0.0.0
+:Homepage: https://github.com/handley-lab/lsbi
+:Documentation: http://lsbi.readthedocs.io/
+
+.. image:: https://github.com/handley-lab/lsbi/workflows/CI/badge.svg?branch=master
+   :target: https://github.com/handley-lab/lsbi/actions?query=workflow%3ACI+branch%3Amaster
+   :alt: Build Status
+.. image:: https://codecov.io/gh/handley-lab/lsbi/branch/master/graph/badge.svg
+   :target: https://codecov.io/gh/handley-lab/lsbi
+   :alt: Test Coverage Status
+.. image:: https://readthedocs.org/projects/lsbi/badge/?version=latest
+   :target: https://lsbi.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
+.. image:: https://badge.fury.io/py/lsbi.svg
+   :target: https://badge.fury.io/py/lsbi
+   :alt: PyPi location
+.. image:: https://zenodo.org/badge/XXXXXXXXX.svg
+   :target: https://zenodo.org/badge/latestdoi/XXXXXXXXX
+   :alt: Permanent DOI for this release
+.. image:: https://img.shields.io/badge/license-MIT-blue.svg
+   :target: https://github.com/handley-lab/lsbi/blob/master/LICENSE
+   :alt: License information
+
+
+
+
+
+``lsbi`` 
+
+It can be viewed as an extension to the Planck legacy archive across models and datasets
+
+It provides mcmc and nested sampling chains, allowing parameter estimation, model comparison and tension quantification.
+
+Current functionality includes:
+
+UNDER CONSTRUCTION
+
+
+Features
+--------
+
+Installation
+------------
+
+``lsbi`` can be installed via pip
+
+.. code:: bash
+
+    pip install lsbi
+
+or via the setup.py
+
+.. code:: bash
+
+    git clone https://github.com/handley-lab/lsbi
+    cd lsbi
+    python -m pip install .
+
+You can check that things are working by running the test suite:
+
+.. code:: bash
+
+    export MPLBACKEND=Agg     # only necessary for OSX users
+    python -m pytest
+    flake8 lsbi tests
+    pydocstyle --convention=numpy lsbi
+
+
+Dependencies
+~~~~~~~~~~~~
+
+Basic requirements:
+
+- Python 3.6+
+- `anesthetic <https://pypi.org/project/anesthetic/>`__
+
+Documentation:
+
+- `sphinx <https://pypi.org/project/Sphinx/>`__
+- `numpydoc <https://pypi.org/project/numpydoc/>`__
+
+Tests:
+
+- `pytest <https://pypi.org/project/pytest/>`__
+
+Documentation
+-------------
+
+Full Documentation is hosted at `ReadTheDocs <http://lsbi.readthedocs.io/>`__.  To build your own local copy of the documentation you'll need to install `sphinx <https://pypi.org/project/Sphinx/>`__. You can then run:
+
+.. code:: bash
+
+    python -m pip install ".[all,docs]"
+    cd docs
+    make html
+
+and view the documentation by opening ``docs/build/html/index.html`` in a browser. To regenerate the automatic RST files run:
+
+.. code:: bash
+
+    sphinx-apidoc -fM -t docs/templates/ -o docs/source/ lsbi/
+
+Citation
+--------
+
+If you use ``lsbi`` to generate results for a publication, please cite
+as: ::
+
+   Handley et al, (2024) lsbi: Linear Simulation Based Inference. 
+
+or using the BibTeX:
+
+.. code:: bibtex
+
+   @article{lsbi,
+       year  = {2023},
+       author = {Will Handley et al},
+       title = {lsbi: Linear Simulation Based Inference},
+       journal = {In preparation}
+   }
+
+
+Contributing
+------------
+There are many ways you can contribute via the `GitHub repository <https://github.com/handley-lab/lsbi>`__.
+
+- You can `open an issue <https://github.com/handley-lab/lsbi/issues>`__ to report bugs or to propose new features.
+- Pull requests are very welcome. Note that if you are going to propose major changes, be sure to open an issue for discussion first, to make sure that your PR will be accepted before you spend effort coding it.
+- Adding models and data to the grid. Contact `Will Handley <mailto:wh260@cam.ac.uk>`__ to request models or ask for your own to be uploaded.
+
+
+Questions/Comments
+------------------
