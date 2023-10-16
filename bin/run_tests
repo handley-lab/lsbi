@@ -1,0 +1,10 @@
+#!/bin/bash
+
+echo "Running PEP code style tests"
+flake8 lsbi tests
+
+echo "Running docstring checks"
+pydocstyle --convention=numpy lsbi
+
+echo "Running code tests"
+python -m pytest
