@@ -1,5 +1,7 @@
 from lsbi.model import LinearModel
 import numpy as np
+import scipy.stats
+from numpy.testing import assert_allclose
 
 
 def _test_shape(model, d, n):
@@ -44,3 +46,84 @@ def test_m_mu():
 
     model = LinearModel(m=np.random.rand(3), mu=np.random.rand(5))
     _test_shape(model, 3, 5)
+
+
+def random_model(d, n):
+    M = np.random.rand(d, n)
+    m = np.random.rand(d)
+    C = scipy.stats.wishart(scale=np.eye(d)).rvs()
+    mu = np.random.rand(n)
+    Sigma = scipy.stats.wishart(scale=np.eye(n)).rvs()
+    return LinearModel(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
+
+
+def test_joint():
+    d = 5
+    n = 3
+    N = 100
+    model = random_model(d, n)
+    prior = model.prior()
+    evidence = model.evidence()
+    joint = model.joint()
+
+    samples_1 = prior.rvs(N)
+    samples_2 = joint.rvs(N)[:, -n:]
+
+    for i in range(n):
+        p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+        assert p > 1e-5
+
+    p = scipy.stats.kstest(prior.logpdf(samples_2),
+                           prior.logpdf(samples_1)).pvalue
+    assert p > 1e-5
+
+    samples_1 = evidence.rvs(N)
+    samples_2 = joint.rvs(N)[:, :d]
+
+    for i in range(d):
+        p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+        assert p > 1e-5
+
+    p = scipy.stats.kstest(evidence.logpdf(samples_2),
+                           evidence.logpdf(samples_1)).pvalue
+    assert p > 1e-5
+
+
+def test_likelihood_posterior():
+    d = 5
+    n = 3
+    N = 100
+    model = random_model(d, n)
+    joint = model.joint()
+
+
+    samples = []
+    theta = model.prior().rvs()
+    for _ in range(N):
+        data = model.likelihood(theta).rvs()
+        theta = model.posterior(data).rvs()
+        samples.append(np.concatenate([data, theta])[:])
+    samples_1 = np.array(samples)
+    samples_2 = joint.rvs(N)
+
+    for i in range(n+d):
+        p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+        assert p > 1e-5
+
+    p = scipy.stats.kstest(joint.logpdf(samples_2),
+                           joint.logpdf(samples_1)).pvalue
+
+
+def test_DKL():
+    d = 5
+    n = 3
+    N = 1000
+    model = random_model(d, n)
+
+    data = model.evidence().rvs()
+    posterior = model.posterior(data)
+    prior = model.prior()
+
+    samples = posterior.rvs(N)
+    I = (posterior.logpdf(samples) - prior.logpdf(samples))
+    assert_allclose(I.mean(), model.DKL(data), atol=5*I.std()/np.sqrt(N))
