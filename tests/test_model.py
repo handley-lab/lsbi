@@ -96,7 +96,6 @@ def test_likelihood_posterior():
     model = random_model(d, n)
     joint = model.joint()
 
-
     samples = []
     theta = model.prior().rvs()
     for _ in range(N):
@@ -125,5 +124,5 @@ def test_DKL():
     prior = model.prior()
 
     samples = posterior.rvs(N)
-    I = (posterior.logpdf(samples) - prior.logpdf(samples))
-    assert_allclose(I.mean(), model.DKL(data), atol=5*I.std()/np.sqrt(N))
+    Info = (posterior.logpdf(samples) - prior.logpdf(samples))
+    assert_allclose(Info.mean(), model.DKL(data), atol=5*Info.std()/np.sqrt(N))

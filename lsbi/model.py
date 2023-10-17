@@ -132,7 +132,7 @@ class LinearModel(object):
         cov_q = self.prior().cov
         mu_p = self.posterior(D).mean
         mu_q = self.prior().mean
-        return 0.5 * (- np.linalg.slogdet(cov_p)[1] + np.linalg.slogdet(cov_q)[1]
-                      + np.trace(np.linalg.inv(cov_q) @ cov_p)
-                      + (mu_q - mu_p) @ np.linalg.inv(cov_q) @ (mu_q - mu_p)
-                      - len(mu_p))
+        return 0.5 * (- np.linalg.slogdet(cov_p)[1]
+                      + np.linalg.slogdet(cov_q)[1]
+                      + np.trace(np.linalg.inv(cov_q) @ cov_p - 1)
+                      + (mu_q - mu_p) @ np.linalg.inv(cov_q) @ (mu_q - mu_p))
