@@ -59,7 +59,7 @@ class LinearModel(object):
             d, n = self.M.shape
 
         if n is None:
-            raise ValueError('Unable to determine parameters dimensions n')
+            raise ValueError('Unable to determine number of parameters n')
         if d is None:
             raise ValueError('Unable to determine data dimensions d')
 

@@ -2,6 +2,7 @@ from lsbi.model import LinearModel
 import numpy as np
 import scipy.stats
 from numpy.testing import assert_allclose
+import pytest
 
 
 def _test_shape(model, d, n):
@@ -46,6 +47,16 @@ def test_m_mu():
 
     model = LinearModel(m=np.random.rand(3), mu=np.random.rand(5))
     _test_shape(model, 3, 5)
+
+
+def test_failure():
+    with pytest.raises(ValueError) as excinfo:
+        LinearModel(m=np.random.rand(5))
+    assert "Unable to determine number of parameters n" in str(excinfo.value)
+
+    with pytest.raises(ValueError) as excinfo:
+        LinearModel(mu=np.random.rand(3))
+    assert "Unable to determine data dimensions d" in str(excinfo.value)
 
 
 def random_model(d, n):
