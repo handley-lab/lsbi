@@ -3,7 +3,7 @@ lsbi: Linear Simulation Based Inference
 =======================================
 :lsbi: Linear Simulation Based Inference
 :Author: Will Handley
-:Version: 0.0.2
+:Version: 0.1.0
 :Homepage: https://github.com/handley-lab/lsbi
 :Documentation: http://lsbi.readthedocs.io/
 
@@ -32,11 +32,8 @@ lsbi: Linear Simulation Based Inference
 
 ``lsbi`` 
 
-It can be viewed as an extension to the Planck legacy archive across models and datasets
+A repository for linear modelling and simulation based inference
 
-It provides mcmc and nested sampling chains, allowing parameter estimation, model comparison and tension quantification.
-
-Current functionality includes:
 
 UNDER CONSTRUCTION
 
