@@ -3,7 +3,7 @@ lsbi: Linear Simulation Based Inference
 =======================================
 :lsbi: Linear Simulation Based Inference
 :Author: Will Handley
-:Version: 0.0.1
+:Version: 0.0.2
 :Homepage: https://github.com/handley-lab/lsbi
 :Documentation: http://lsbi.readthedocs.io/
 
@@ -19,8 +19,8 @@ lsbi: Linear Simulation Based Inference
 .. image:: https://badge.fury.io/py/lsbi.svg
    :target: https://badge.fury.io/py/lsbi
    :alt: PyPi location
-.. image:: https://zenodo.org/badge/XXXXXXXXX.svg
-   :target: https://zenodo.org/badge/latestdoi/XXXXXXXXX
+.. image:: https://zenodo.org/badge/705730277.svg
+   :target: https://zenodo.org/doi/10.5281/zenodo.10009816
    :alt: Permanent DOI for this release
 .. image:: https://img.shields.io/badge/license-MIT-blue.svg
    :target: https://github.com/handley-lab/lsbi/blob/master/LICENSE
