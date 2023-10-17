@@ -103,7 +103,7 @@ def test_joint():
 def test_likelihood_posterior():
     d = 5
     n = 3
-    N = 100
+    N = 1000
     model = random_model(d, n)
     joint = model.joint()
 
@@ -113,8 +113,8 @@ def test_likelihood_posterior():
         data = model.likelihood(theta).rvs()
         theta = model.posterior(data).rvs()
         samples.append(np.concatenate([data, theta])[:])
-    samples_1 = np.array(samples)
-    samples_2 = joint.rvs(N)
+    samples_1 = np.array(samples)[::100]
+    samples_2 = joint.rvs(len(samples_1))
 
     for i in range(n+d):
         p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
@@ -122,6 +122,7 @@ def test_likelihood_posterior():
 
     p = scipy.stats.kstest(joint.logpdf(samples_2),
                            joint.logpdf(samples_1)).pvalue
+    assert p > 1e-5
 
 
 def test_DKL():
