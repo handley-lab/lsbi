@@ -2,10 +2,18 @@
 import numpy as np
 from functools import cached_property
 from scipy.stats import multivariate_normal
+from numpy.linalg import solve, inv, slogdet
+
+
+def logdet(A):
+    """log(abs(det(A)))."""
+    return slogdet(A)[1]
 
 
 class LinearModel(object):
     """A linear model.
+
+    Model M:  D = m + M theta +/- sqrt(C)
 
     Defined by:
     - Parameters: theta (n,)
@@ -14,7 +22,7 @@ class LinearModel(object):
     - Prior covariance: Sigma (n, n)
     - Data mean: m (d,)
     - Data covariance: C (d, d)
-    - Model M: D = m + M theta +/- sqrt(C)
+
 
     Parameters
     ----------
@@ -87,12 +95,12 @@ class LinearModel(object):
     @cached_property
     def invSigma(self):
         """Inverse of prior covariance."""
-        return np.linalg.inv(self.Sigma)
+        return inv(self.Sigma)
 
     @cached_property
     def invC(self):
         """Inverse of data covariance."""
-        return np.linalg.inv(self.C)
+        return inv(self.C)
 
     def likelihood(self, theta):
         """P(D|theta) as a scipy distribution object."""
@@ -104,9 +112,8 @@ class LinearModel(object):
 
     def posterior(self, D):
         """P(theta|D) as a scipy distribution object."""
-        Sigma = np.linalg.inv(self.invSigma + self.M.T @ self.invC @ self.M)
-        mu = Sigma @ (self.invSigma @ self.mu
-                      + self.M.T @ self.invC @ (D-self.m))
+        Sigma = inv(self.invSigma + self.M.T @ self.invC @ self.M)
+        mu = self.mu + Sigma @ self.M.T @ self.invC @ (D-self.m)
         return multivariate_normal(mu, Sigma)
 
     def evidence(self):
@@ -132,7 +139,16 @@ class LinearModel(object):
         cov_q = self.prior().cov
         mu_p = self.posterior(D).mean
         mu_q = self.prior().mean
-        return 0.5 * (- np.linalg.slogdet(cov_p)[1]
-                      + np.linalg.slogdet(cov_q)[1]
-                      + np.trace(np.linalg.inv(cov_q) @ cov_p - 1)
-                      + (mu_q - mu_p) @ np.linalg.inv(cov_q) @ (mu_q - mu_p))
+        return 0.5 * (- logdet(cov_p) + logdet(cov_q)
+                      + np.trace(inv(cov_q) @ cov_p - 1)
+                      + (mu_q - mu_p) @ inv(cov_q) @ (mu_q - mu_p))
+
+    def reduce(self, D):
+        Sigma_L = inv(self.M.T @ self.invC @ self.M)
+        mu_L = Sigma_L @ self.M.T @ self.invC @ (D-self.m)
+        logLmax = (- logdet(2 * np.pi * self.C)/2 - (D-self.m) @ self.invC @
+                   (self.C - self.M @ Sigma_L @ self.M.T) @ self.invC @
+                   (D-self.m)/2)
+        return ReducedLinearModel(mu_L=mu_L, Sigma_L=Sigma_L, logLmax=logLmax,
+                                  mu_pi=self.prior().mean,
+                                  Sigma_pi=self.prior().cov)
