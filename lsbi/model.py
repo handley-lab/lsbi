@@ -2,7 +2,7 @@
 import numpy as np
 from functools import cached_property
 from scipy.stats import multivariate_normal
-from numpy.linalg import solve, inv, slogdet
+from numpy.linalg import inv, slogdet
 
 
 def logdet(A):
@@ -142,13 +142,3 @@ class LinearModel(object):
         return 0.5 * (- logdet(cov_p) + logdet(cov_q)
                       + np.trace(inv(cov_q) @ cov_p - 1)
                       + (mu_q - mu_p) @ inv(cov_q) @ (mu_q - mu_p))
-
-    def reduce(self, D):
-        Sigma_L = inv(self.M.T @ self.invC @ self.M)
-        mu_L = Sigma_L @ self.M.T @ self.invC @ (D-self.m)
-        logLmax = (- logdet(2 * np.pi * self.C)/2 - (D-self.m) @ self.invC @
-                   (self.C - self.M @ Sigma_L @ self.M.T) @ self.invC @
-                   (D-self.m)/2)
-        return ReducedLinearModel(mu_L=mu_L, Sigma_L=Sigma_L, logLmax=logLmax,
-                                  mu_pi=self.prior().mean,
-                                  Sigma_pi=self.prior().cov)
