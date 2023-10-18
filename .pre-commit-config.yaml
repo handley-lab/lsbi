@@ -6,10 +6,10 @@ repos:
         entry: python -m flake8
         language: system
         types: [python]
-        files: "anesthetic/|tests/"
+        files: "lsbi/|tests/"
       - id: pydocstyle
         name: pydocstyle
         entry: python -m pydocstyle --convention=numpy
         language: system
         types: [python]
-        files: "anesthetic/"
+        files: "lsbi/"
