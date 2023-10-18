@@ -139,11 +139,12 @@ class LinearModel(object):
         cov_q = self.prior().cov
         mu_p = self.posterior(D).mean
         mu_q = self.prior().mean
-        return 0.5 * (- logdet(cov_p) + logdet(cov_q)
-                      + np.trace(inv(cov_q) @ cov_p - 1)
-                      + (mu_q - mu_p) @ inv(cov_q) @ (mu_q - mu_p))
+        return (- logdet(cov_p) + logdet(cov_q)
+                + np.trace(inv(cov_q) @ cov_p - 1)
+                + (mu_q - mu_p) @ inv(cov_q) @ (mu_q - mu_p))/2
 
     def reduce(self, D):
+        """Reduce the model to a Gaussian in the parameters."""
         Sigma_L = inv(self.M.T @ self.invC @ self.M)
         mu_L = Sigma_L @ self.M.T @ self.invC @ (D-self.m)
         logLmax = (- logdet(2 * np.pi * self.C)/2 - (D-self.m) @ self.invC @
@@ -185,11 +186,13 @@ class ReducedLinearModel(object):
     """
 
     def __init__(self, *args, **kwargs):
-        self.mu_L = kwargs.pop('mu_L', None)
-        self.Sigma_L = kwargs.pop('Sigma_L', None)
+        self.mu_L = np.atleast_1d(kwargs.pop('mu_L'))
+        self.Sigma_L = np.atleast_2d(kwargs.pop('Sigma_L', None))
         self.logLmax = kwargs.pop('logLmax', 0)
-        self.mu_pi = kwargs.pop('mu_pi', np.zeros_like(self.mu_L))
-        self.Sigma_pi = kwargs.pop('Sigma_pi', np.eye(len(self.mu_pi)))
+        self.mu_pi = np.atleast_1d(kwargs.pop('mu_pi',
+                                              np.zeros_like(self.mu_L)))
+        self.Sigma_pi = np.atleast_2d(kwargs.pop('Sigma_pi',
+                                                 np.eye(len(self.mu_pi))))
         self.Sigma_P = inv(inv(self.Sigma_pi) + inv(self.Sigma_L))
         self.mu_P = self.Sigma_P @ (solve(self.Sigma_pi, self.mu_pi)
                                     + solve(self.Sigma_L, self.mu_L))
@@ -229,7 +232,7 @@ class ReducedLinearModel(object):
         return (logdet(self.Sigma_pi) - logdet(self.Sigma_P)
                 + np.trace(inv(self.Sigma_pi) @ self.Sigma_P - 1)
                 + (self.mu_P - self.mu_pi
-                   ) @ solve(self.Sigma_pi, self.mu_P - self.mu_pi))
+                   ) @ solve(self.Sigma_pi, self.mu_P - self.mu_pi))/2
 
 
 class ReducedLinearModelUniformPrior(object):
@@ -256,18 +259,16 @@ class ReducedLinearModelUniformPrior(object):
         Likelihood covariance
     logLmax : float, optional
         Likelihood maximum, defaults to zero
-    mu_pi : array_like, optional
-        Prior mean, defaults to zero vector
-    Sigma_pi : array_like, optional
-        Prior covariance, defaults to identity matrix
+    logV : float, optional
+        log prior volume, defaults to zero
     """
 
     def __init__(self, *args, **kwargs):
-        self.mu_L = kwargs.pop('mu_L', None)
-        self.Sigma_L = kwargs.pop('Sigma_L', None)
+        self.mu_L = np.atleast_1d(kwargs.pop('mu_L'))
+        self.Sigma_L = np.atleast_2d(kwargs.pop('Sigma_L'))
         self.logLmax = kwargs.pop('logLmax', 0)
-        self.V = kwargs.pop('V', np.zeros_like(self.mu_L))
-        self.Sigma_P = self.sigma_L
+        self.logV = kwargs.pop('logV', 0)
+        self.Sigma_P = self.Sigma_L
         self.mu_P = self.mu_L
 
     def posterior(self):
@@ -276,7 +277,7 @@ class ReducedLinearModelUniformPrior(object):
 
     def logpi(self, theta):
         """P(theta) as a scalar."""
-        return - np.log(self.V)
+        return - self.logV
 
     def logP(self, theta):
         """P(theta|D) as a scalar."""
@@ -289,8 +290,8 @@ class ReducedLinearModelUniformPrior(object):
 
     def logZ(self):
         """P(D) as a scalar."""
-        return self.logLmax + logdet(2*np.pi*self.Sigma_P)/2 - np.log(self.V)
+        return self.logLmax + logdet(2*np.pi*self.Sigma_P)/2 - self.logV
 
     def DKL(self):
         """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence."""
-        return np.log(self.V) - logdet(2*np.pi*np.e*self.Sigma_P)/2
+        return self.logV - logdet(2*np.pi*np.e*self.Sigma_P)/2

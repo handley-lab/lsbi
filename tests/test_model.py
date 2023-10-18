@@ -1,4 +1,7 @@
-from lsbi.model import LinearModel
+from lsbi.model import (LinearModel,
+                        ReducedLinearModel,
+                        ReducedLinearModelUniformPrior)
+
 import numpy as np
 import scipy.stats
 from numpy.testing import assert_allclose
@@ -26,7 +29,7 @@ class TestLinearModel(object):
         assert model.mu.shape == (n,)
         assert model.Sigma.shape == (n, n)
 
-    def test_M(self, d, n):
+    def test_init_M(self, d, n):
         model = LinearModel(M=np.random.rand())
         self._test_shape(model, 1, 1)
 
@@ -36,7 +39,7 @@ class TestLinearModel(object):
         model = LinearModel(M=np.random.rand(d, n))
         self._test_shape(model, d, n)
 
-    def test_m_mu(self, d, n):
+    def test_init_m_mu(self, d, n):
         model = LinearModel(m=np.random.rand(), mu=np.random.rand())
         self._test_shape(model, 1, 1)
 
@@ -130,3 +133,68 @@ class TestLinearModel(object):
         Info = (posterior.logpdf(samples) - prior.logpdf(samples))
         assert_allclose(Info.mean(), model.DKL(data),
                         atol=5*Info.std()/np.sqrt(N))
+
+
+def test_reduce():
+    model = LinearModel(M=np.random.rand(5, 3))
+    data = model.evidence().rvs()
+    reduced_model = model.reduce(data)
+    assert isinstance(reduced_model, ReducedLinearModel)
+    reduced_model.prior().mean
+    assert_allclose(reduced_model.prior().mean, model.prior().mean)
+    assert_allclose(reduced_model.prior().cov, model.prior().cov)
+    assert_allclose(reduced_model.posterior().mean, model.posterior(data).mean)
+    assert_allclose(reduced_model.posterior().cov, model.posterior(data).cov)
+    assert_allclose(model.evidence().logpdf(data), reduced_model.logZ())
+    assert_allclose(model.DKL(data), reduced_model.DKL())
+
+
+def random_reduced_model(n):
+    mu_pi = np.random.randn(n)
+    Sigma_pi = scipy.stats.wishart(scale=np.eye(n)).rvs()
+    mu_L = np.random.randn(n)
+    Sigma_L = scipy.stats.wishart(scale=np.eye(n)).rvs()
+    logLmax = np.random.randn()
+
+    return ReducedLinearModel(mu_pi=mu_pi, Sigma_pi=Sigma_pi, logLmax=logLmax,
+                              mu_L=mu_L, Sigma_L=Sigma_L)
+
+
+@pytest.mark.parametrize("n", np.arange(1, 6))
+def test_reduced(n):
+    model = random_reduced_model(n)
+    theta = model.posterior().rvs(1000)
+    assert_allclose(model.logpi(theta) + model.logL(theta),
+                    model.logP(theta) + model.logZ())
+
+
+def random_reduced_model_uniform_prior(n):
+    mu_L = np.random.randn(n)
+    Sigma_L = scipy.stats.wishart(scale=np.eye(n)).rvs()
+    logLmax = np.random.randn()
+    logV = np.random.randn()
+
+    return ReducedLinearModelUniformPrior(logLmax=logLmax, logV=logV,
+                                          mu_L=mu_L, Sigma_L=Sigma_L)
+
+
+@pytest.mark.parametrize("n", np.arange(1, 6))
+def test_reduced_uniform_prior(n):
+    model = random_reduced_model_uniform_prior(n)
+    theta = model.posterior().rvs(1000)
+    assert_allclose(model.logpi(theta) + model.logL(theta),
+                    model.logP(theta) + model.logZ())
+
+    logV = 50
+    Sigma_pi = np.exp(2*logV/n)/(2*np.pi)*np.eye(n)
+
+    reduced_model = ReducedLinearModel(logLmax=model.logLmax, mu_L=model.mu_L,
+                                       Sigma_L=model.Sigma_L,
+                                       Sigma_pi=Sigma_pi)
+
+    model = ReducedLinearModelUniformPrior(logLmax=model.logLmax,
+                                           mu_L=model.mu_L,
+                                           Sigma_L=model.Sigma_L, logV=logV)
+
+    assert_allclose(reduced_model.logZ(), model.logZ())
+    assert_allclose(reduced_model.DKL(), model.DKL())
