@@ -149,52 +149,55 @@ def test_reduce():
     assert_allclose(model.DKL(data), reduced_model.DKL())
 
 
-def random_reduced_model(n):
-    mu_pi = np.random.randn(n)
-    Sigma_pi = scipy.stats.wishart(scale=np.eye(n)).rvs()
-    mu_L = np.random.randn(n)
-    Sigma_L = scipy.stats.wishart(scale=np.eye(n)).rvs()
-    logLmax = np.random.randn()
+@pytest.mark.parametrize("n", np.arange(1, 6))
+class TestReducedLinearModel(object):
+    def random_model(self, n):
+        mu_pi = np.random.randn(n)
+        Sigma_pi = scipy.stats.wishart(scale=np.eye(n)).rvs()
+        mu_L = np.random.randn(n)
+        Sigma_L = scipy.stats.wishart(scale=np.eye(n)).rvs()
+        logLmax = np.random.randn()
 
-    return ReducedLinearModel(mu_pi=mu_pi, Sigma_pi=Sigma_pi, logLmax=logLmax,
-                              mu_L=mu_L, Sigma_L=Sigma_L)
+        return ReducedLinearModel(mu_pi=mu_pi, Sigma_pi=Sigma_pi,
+                                  logLmax=logLmax,
+                                  mu_L=mu_L, Sigma_L=Sigma_L)
+
+    def test_model(self, n):
+        model = self.random_model(n)
+        theta = model.posterior().rvs(1000)
+        assert_allclose(model.logpi(theta) + model.logL(theta),
+                        model.logP(theta) + model.logZ())
 
 
 @pytest.mark.parametrize("n", np.arange(1, 6))
-def test_reduced(n):
-    model = random_reduced_model(n)
-    theta = model.posterior().rvs(1000)
-    assert_allclose(model.logpi(theta) + model.logL(theta),
-                    model.logP(theta) + model.logZ())
+class TestReducedLinearModelUniformPrior(object):
+    def random_model(self, n):
+        mu_L = np.random.randn(n)
+        Sigma_L = scipy.stats.wishart(scale=np.eye(n)).rvs()
+        logLmax = np.random.randn()
+        logV = np.random.randn()
 
+        return ReducedLinearModelUniformPrior(logLmax=logLmax, logV=logV,
+                                              mu_L=mu_L, Sigma_L=Sigma_L)
 
-def random_reduced_model_uniform_prior(n):
-    mu_L = np.random.randn(n)
-    Sigma_L = scipy.stats.wishart(scale=np.eye(n)).rvs()
-    logLmax = np.random.randn()
-    logV = np.random.randn()
+    def test_model(self, n):
+        model = self.random_model(n)
+        theta = model.posterior().rvs(1000)
+        assert_allclose(model.logpi(theta) + model.logL(theta),
+                        model.logP(theta) + model.logZ())
 
-    return ReducedLinearModelUniformPrior(logLmax=logLmax, logV=logV,
-                                          mu_L=mu_L, Sigma_L=Sigma_L)
+        logV = 50
+        Sigma_pi = np.exp(2*logV/n)/(2*np.pi)*np.eye(n)
 
-
-@pytest.mark.parametrize("n", np.arange(1, 6))
-def test_reduced_uniform_prior(n):
-    model = random_reduced_model_uniform_prior(n)
-    theta = model.posterior().rvs(1000)
-    assert_allclose(model.logpi(theta) + model.logL(theta),
-                    model.logP(theta) + model.logZ())
-
-    logV = 50
-    Sigma_pi = np.exp(2*logV/n)/(2*np.pi)*np.eye(n)
-
-    reduced_model = ReducedLinearModel(logLmax=model.logLmax, mu_L=model.mu_L,
-                                       Sigma_L=model.Sigma_L,
-                                       Sigma_pi=Sigma_pi)
-
-    model = ReducedLinearModelUniformPrior(logLmax=model.logLmax,
+        reduced_model = ReducedLinearModel(logLmax=model.logLmax,
                                            mu_L=model.mu_L,
-                                           Sigma_L=model.Sigma_L, logV=logV)
+                                           Sigma_L=model.Sigma_L,
+                                           Sigma_pi=Sigma_pi)
 
-    assert_allclose(reduced_model.logZ(), model.logZ())
-    assert_allclose(reduced_model.DKL(), model.DKL())
+        model = ReducedLinearModelUniformPrior(logLmax=model.logLmax,
+                                               mu_L=model.mu_L,
+                                               Sigma_L=model.Sigma_L,
+                                               logV=logV)
+
+        assert_allclose(reduced_model.logZ(), model.logZ())
+        assert_allclose(reduced_model.DKL(), model.DKL())
