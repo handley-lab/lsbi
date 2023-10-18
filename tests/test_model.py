@@ -1,25 +1,21 @@
-from lsbi.model import (LinearModel,
-                        ReducedLinearModel,
-                        ReducedLinearModelUniformPrior)
+from lsbi.model import LinearModel
 import numpy as np
 import scipy.stats
 from numpy.testing import assert_allclose
 import pytest
 
-def random_model(d, n):
-    M = np.random.rand(d, n)
-    m = np.random.rand(d)
-    C = scipy.stats.wishart(scale=np.eye(d)).rvs()
-    mu = np.random.rand(n)
-    Sigma = scipy.stats.wishart(scale=np.eye(n)).rvs()
-    return LinearModel(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
 
-
-
-
-@pytest.mark.parametrize("n", np.arange(1,6))
-@pytest.mark.parametrize("d", np.arange(1,6))
+@pytest.mark.parametrize("n", np.arange(1, 6))
+@pytest.mark.parametrize("d", np.arange(1, 6))
 class TestLinearModel(object):
+
+    def random_model(self, d, n):
+        M = np.random.rand(d, n)
+        m = np.random.rand(d)
+        C = scipy.stats.wishart(scale=np.eye(d)).rvs()
+        mu = np.random.rand(n)
+        Sigma = scipy.stats.wishart(scale=np.eye(n)).rvs()
+        return LinearModel(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
 
     def _test_shape(self, model, d, n):
         assert model.n == n
@@ -53,20 +49,20 @@ class TestLinearModel(object):
         model = LinearModel(m=np.random.rand(d), mu=np.random.rand(n))
         self._test_shape(model, d, n)
 
-
     def test_failure(self, d, n):
         with pytest.raises(ValueError) as excinfo:
             LinearModel(m=np.random.rand(5))
-        assert "Unable to determine number of parameters n" in str(excinfo.value)
+        string = "Unable to determine number of parameters n"
+        assert string in str(excinfo.value)
 
         with pytest.raises(ValueError) as excinfo:
             LinearModel(mu=np.random.rand(3))
-        assert "Unable to determine data dimensions d" in str(excinfo.value)
-
+        string = "Unable to determine data dimensions d"
+        assert string in str(excinfo.value)
 
     def test_joint(self, d, n):
         N = 100
-        model = random_model(d, n)
+        model = self.random_model(d, n)
         prior = model.prior()
         evidence = model.evidence()
         joint = model.joint()
@@ -76,7 +72,6 @@ class TestLinearModel(object):
 
         if n == 1:
             samples_1 = np.atleast_2d(samples_1).T
-
 
         for i in range(n):
             p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
@@ -100,10 +95,9 @@ class TestLinearModel(object):
                                evidence.logpdf(samples_1)).pvalue
         assert p > 1e-5
 
-
     def test_likelihood_posterior(self, d, n):
         N = 100
-        model = random_model(d, n)
+        model = self.random_model(d, n)
         joint = model.joint()
 
         samples = []
@@ -124,10 +118,9 @@ class TestLinearModel(object):
                                joint.logpdf(samples_1)).pvalue
         assert p > 1e-5
 
-
     def test_DKL(self, d, n):
         N = 1000
-        model = random_model(d, n)
+        model = self.random_model(d, n)
 
         data = model.evidence().rvs()
         posterior = model.posterior(data)
@@ -135,4 +128,5 @@ class TestLinearModel(object):
 
         samples = posterior.rvs(N)
         Info = (posterior.logpdf(samples) - prior.logpdf(samples))
-        assert_allclose(Info.mean(), model.DKL(data), atol=5*Info.std()/np.sqrt(N))
+        assert_allclose(Info.mean(), model.DKL(data),
+                        atol=5*Info.std()/np.sqrt(N))
