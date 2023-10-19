@@ -1,3 +1,4 @@
+"""Simple binary classifiers to perform model comparison."""
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -5,6 +6,8 @@ from torch.optim.lr_scheduler import ExponentialLR
 
 
 class BinaryClassifierBase(nn.Module):
+    """Base model for binary classification. Following 2305.11241."""
+
     def __init__(self, input_dim, internal_dim=16, initial_dim=130):
         super(BinaryClassifierBase, self).__init__()
 
@@ -25,6 +28,7 @@ class BinaryClassifierBase(nn.Module):
         self.dense_5 = nn.Linear(internal_dim, 1)
 
     def forward(self, x):
+        """Forward pass through the network, logit output."""
         x = self.dense(x)
         x = self.leaky_relu(x)
         x = self.batch_norm(x)
@@ -43,18 +47,28 @@ class BinaryClassifierBase(nn.Module):
         return x
 
     def loss(self, x):
+        """Loss function for the network."""
         raise NotImplementedError
 
     def predict(self, x):
+        """Predict the Bayes Factor."""
         raise NotImplementedError
 
 
 class BinaryClassifier(BinaryClassifierBase):
+    """
+    Extends the BinaryClassifierBase to use a BCE loss function.
+
+    Furnishes with a direction prediction of the Bayes Factor.
+    """
+
     def loss(self, x, target):
-        x=self.forward(x)
+        """Binary cross entropy loss function for the network."""
+        x = self.forward(x)
         return nn.BCEWithLogitsLoss()(x, target)
 
     def predict(self, x):
+        """Predict the Bayes Factor."""
         x = torch.tensor(x, dtype=torch.float32)
         pred = self.forward(x)
         pred = nn.Sigmoid()(pred)
@@ -62,21 +76,29 @@ class BinaryClassifier(BinaryClassifierBase):
 
 
 class BinaryClassifierLPop(BinaryClassifierBase):
+    """
+    Extends the BinaryClassifierBase to use a LPop Exponential loss.
+
+    Furnishes with a direction prediction of the Bayes Factor.
+    """
+
     def lpop(self, x, alpha=2.0):
-        """implements leaky parity odd power transform"""
+        """Leaky parity odd power transform."""
         return x + x * torch.pow(torch.abs(x), alpha - 1.0)
 
     def loss(self, x, target, alpha=2.0):
-        x=self.forward(x)
+        """Lpop Loss function for the network."""
+        x = self.forward(x)
         return torch.exp(
             torch.logsumexp((0.5 - target) * self.lpop(x, alpha=alpha), dim=0)
             - torch.log(torch.tensor(x.shape[0], dtype=torch.float64))
         ).squeeze()
 
     def predict(self, x, alpha=2.0):
+        """Predict the Bayes Factor."""
         x = torch.tensor(x, dtype=torch.float32)
         pred = self.forward(x)
-        pred = self.lpop(pred,alpha=alpha)
+        pred = self.lpop(pred, alpha=alpha)
         return pred.detach().numpy()
 
 
@@ -89,10 +111,14 @@ def train(
     decay_rate=0.95,
     lr=0.001,
 ):
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-    else:
-        device = torch.device("cpu")
+    """Train the binary classifier."""
+    # if torch.cuda.is_available():
+    #     device = torch.device("cuda:0")
+    # else:
+    #     device = torch.device("cpu")
+
+    # for now just restrict to cpu
+    device = torch.device("cpu")
 
     # device = torch.device("mps")
     print("Using device: ", device)
@@ -156,7 +182,8 @@ def train(
             counter += 1
             if counter >= patience:
                 print(
-                    f"No improvement for {patience} epochs. Rolling back to best epoch."
+                    f"No improvement for {patience} epochs. \
+                        Rolling back to best epoch."
                 )
                 model.load_state_dict(best_weights)
                 break
