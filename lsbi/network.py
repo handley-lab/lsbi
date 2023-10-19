@@ -68,11 +68,14 @@ class BinaryClassifier(BinaryClassifierBase):
         return nn.BCEWithLogitsLoss()(x, target)
 
     def predict(self, x):
-        """Predict the Bayes Factor."""
+        """Predict the log Bayes Factor.
+
+        log K = lnP(Class 1) - lnP(Class 0)
+        """
         x = torch.tensor(x, dtype=torch.float32)
         pred = self.forward(x)
         pred = nn.Sigmoid()(pred)
-        return (torch.log(1 - pred) - torch.log(pred)).detach().numpy()
+        return (torch.log(pred) - torch.log(1-pred)).detach().numpy()
 
 
 class BinaryClassifierLPop(BinaryClassifierBase):
@@ -95,7 +98,10 @@ class BinaryClassifierLPop(BinaryClassifierBase):
         ).squeeze()
 
     def predict(self, x, alpha=2.0):
-        """Predict the Bayes Factor."""
+        """Predict the log Bayes Factor.
+
+        log K = lnP(Class 1) - lnP(Class 0)
+        """
         x = torch.tensor(x, dtype=torch.float32)
         pred = self.forward(x)
         pred = self.lpop(pred, alpha=alpha)
