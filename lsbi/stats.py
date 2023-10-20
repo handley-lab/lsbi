@@ -25,16 +25,17 @@ class mixture_multivariate_normal(object):
         self.covs = np.array([np.atleast_2d(c) for c in covs])
         self.logA = np.atleast_1d(logA)
         self.choleskys = np.linalg.cholesky(self.covs)
-        self.invcholeskys = np.linalg.inv(self.choleskys)
+        self.invcovs = np.linalg.inv(self.covs)
 
     def logpdf(self, x):
         """Log of the probability density function."""
-        x = self._process_quantiles(x, self.means.shape[-1])
+        process_quantiles = scipy.stats.multivariate_normal._process_quantiles
+        x = process_quantiles(x, self.means.shape[-1])
         dx = self.means - x[..., None, :]
-        chi2 = np.einsum('...ij,ijk,...ik->...i', dx, self.invcholeskys, dx)
+        chi2 = np.einsum('...ij,ijk,...ik->...i', dx, self.invcovs, dx)
         norm = -np.linalg.slogdet(2*np.pi*self.covs)[1]/2
         logA = self.logA - scipy.special.logsumexp(self.logA)
-        return np.squeeze(scipy.special.logsumexp(norm - chi2 + logA, axis=-1))
+        return np.squeeze(scipy.special.logsumexp(norm-chi2/2+logA, axis=-1))
 
     def rvs(self, size=1):
         """Random variates."""
@@ -45,16 +46,3 @@ class mixture_multivariate_normal(object):
         x = np.random.randn(*size, self.means.shape[-1])
         return np.squeeze(self.means[i, ..., None]
                           + self.choleskys[i] @ x[..., None])
-
-    def _process_quantiles(self, x, dim):
-        x = np.asarray(x, dtype=float)
-
-        if x.ndim == 0:
-            x = x[np.newaxis]
-        elif x.ndim == 1:
-            if dim == 1:
-                x = x[:, np.newaxis]
-            else:
-                x = x[np.newaxis, :]
-
-        return x

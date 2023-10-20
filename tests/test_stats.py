@@ -1,5 +1,6 @@
 import pytest
 from lsbi.stats import mixture_multivariate_normal
+from numpy.testing import assert_allclose
 import numpy as np
 import scipy.stats
 import scipy.special
@@ -8,8 +9,6 @@ import scipy.special
 @pytest.mark.parametrize("k", [1, 2, 5])
 @pytest.mark.parametrize("d", [1, 2, 5])
 def test_mixture_multivariate_normal(k, d):
-    k = 5
-    d = 2
     N = 1000
     means = np.random.randn(k, d)
     covs = scipy.stats.wishart(scale=np.eye(d)).rvs(k)
@@ -20,12 +19,16 @@ def test_mixture_multivariate_normal(k, d):
     logA -= scipy.special.logsumexp(logA)
 
     samples_1, logpdfs_1 = [], []
+    mvns = [scipy.stats.multivariate_normal(means[i], covs[i])
+            for i in range(k)]
     for _ in range(N):
         i = np.random.choice(k, p=np.exp(logA))
-        mvn = scipy.stats.multivariate_normal(means[i], covs[i])
-        x = mvn.rvs()
+        x = mvns[i].rvs()
         samples_1.append(x)
-        logpdfs_1.append(mixture.logpdf(x))
+        logpdf = scipy.special.logsumexp([mvns[j].logpdf(x) + logA[j]
+                                          for j in range(k)])
+        assert_allclose(logpdf, mixture.logpdf(x))
+        logpdfs_1.append(logpdf)
     samples_1, logpdfs_1 = np.array(samples_1), np.array(logpdfs_1)
 
     samples_2 = mixture.rvs(N)
@@ -43,4 +46,4 @@ def test_mixture_multivariate_normal(k, d):
 
     for shape in [(d,), (3, d), (3, 4, d)]:
         x = np.random.rand(*shape)
-        assert mvn.logpdf(x).shape == mixture.logpdf(x).shape
+        assert mvns[0].logpdf(x).shape == mixture.logpdf(x).shape
