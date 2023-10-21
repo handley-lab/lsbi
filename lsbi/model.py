@@ -82,6 +82,17 @@ class LinearModel(object):
         if self.Sigma is None:
             self.Sigma = np.eye(n)
 
+    @classmethod
+    def from_joint(cls, mean, cov, n):
+        """Construct model from joint distribution."""
+        mu = mean[-n:]
+        Sigma = cov[-n:, -n:]
+        M = solve(Sigma, cov[-n:, :-n]).T
+        m = mean[:-n] - M @ mu
+        C = cov[:-n, :-n] - M @ Sigma @ M.T
+
+        return cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
+
     @property
     def n(self):
         """Dimensionality of parameter space len(theta)."""
@@ -92,37 +103,43 @@ class LinearModel(object):
         """Dimensionality of data space len(D)."""
         return self.M.shape[0]
 
-    @cached_property
-    def invSigma(self):
-        """Inverse of prior covariance."""
-        return inv(self.Sigma)
-
-    @cached_property
-    def invC(self):
-        """Inverse of data covariance."""
-        return inv(self.C)
-
     def likelihood(self, theta):
-        """P(D|theta) as a scipy distribution object."""
+        """P(D|theta) as a scipy distribution object.
+
+        D ~ N( m + M theta, C )
+        """
         return multivariate_normal(self.D(theta), self.C)
 
     def prior(self):
-        """P(theta) as a scipy distribution object."""
+        """P(theta) as a scipy distribution object.
+
+        theta ~ N( mu, Sigma )
+        """
         return multivariate_normal(self.mu, self.Sigma)
 
     def posterior(self, D):
-        """P(theta|D) as a scipy distribution object."""
+        """P(theta|D) as a scipy distribution object.
+
+        theta ~ N( mu + Sigma M'C^{-1}(D-m), Sigma - Sigma M' C^{-1} M Sigma )
+        """
         Sigma = inv(self.invSigma + self.M.T @ self.invC @ self.M)
         mu = self.mu + Sigma @ self.M.T @ self.invC @ (D-self.m)
         return multivariate_normal(mu, Sigma)
 
     def evidence(self):
-        """P(D) as a scipy distribution object."""
+        """P(D) as a scipy distribution object.
+
+        D ~ N( m + M mu, C + M Sigma M' )
+        """
         return multivariate_normal(self.D(self.mu),
                                    self.C + self.M @ self.Sigma @ self.M.T)
 
     def joint(self):
-        """P(D, theta) as a scipy distribution object."""
+        """P(D, theta) as a scipy distribution object.
+
+        [  D  ] ~ N( [m + M mu]   [C + M Sigma M'  M Sigma] )
+        [theta]    ( [   mu   ] , [   Sigma M'      Sigma ] )
+        """
         mu = np.concatenate([self.D(self.mu), self.mu])
         Sigma = np.block([[self.C+self.M @ self.Sigma @ self.M.T,
                            self.M @ self.Sigma],
@@ -153,6 +170,16 @@ class LinearModel(object):
         return ReducedLinearModel(mu_L=mu_L, Sigma_L=Sigma_L, logLmax=logLmax,
                                   mu_pi=self.prior().mean,
                                   Sigma_pi=self.prior().cov)
+
+    @cached_property
+    def invSigma(self):
+        """Inverse of prior covariance."""
+        return inv(self.Sigma)
+
+    @cached_property
+    def invC(self):
+        """Inverse of data covariance."""
+        return inv(self.C)
 
 
 class ReducedLinearModel(object):

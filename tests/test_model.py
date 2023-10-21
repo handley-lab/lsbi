@@ -134,6 +134,20 @@ class TestLinearModel(object):
         assert_allclose(Info.mean(), model.DKL(data),
                         atol=5*Info.std()/np.sqrt(N))
 
+    def test_from_joint(self, d, n):
+        model = self.random_model(d, n)
+        joint = model.joint()
+        mean = joint.mean
+        cov = joint.cov
+        model2 = LinearModel.from_joint(mean, cov, n)
+        assert model2.n == model.n
+        assert model2.d == model.d
+        assert_allclose(model2.M, model.M)
+        assert_allclose(model2.m, model.m)
+        assert_allclose(model2.C, model.C)
+        assert_allclose(model2.mu, model.mu)
+        assert_allclose(model2.Sigma, model.Sigma)
+
 
 def test_reduce():
     model = LinearModel(M=np.random.rand(5, 3))
