@@ -157,11 +157,6 @@ def train(
     # data = data.to(device)
     model = model.to(device)
 
-    # Turn off the rollback for now as it's likely overkill
-    # best_loss = float("inf")
-    # best_weights = None
-    # patience = 5
-    # counter = 0
     for epoch in range(num_epochs):
         epoch_loss = []
         for i, (inputs, targets) in enumerate(dataloader):
@@ -180,19 +175,6 @@ def train(
         mean_loss = torch.mean(torch.tensor(epoch_loss)).item()
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {mean_loss}")
 
-        # if mean_loss < best_loss:
-        #     best_loss = mean_loss
-        #     best_weights = model.state_dict()
-        #     counter = 0
-        # else:
-        #     counter += 1
-        #     if counter >= patience:
-        #         print(
-        #             f"No improvement for {patience} epochs. \
-        #                 Rolling back to best epoch."
-        #         )
-        #         model.load_state_dict(best_weights)
-        #         break
     # Evaluate the model
     model.to("cpu")
     model.batch_norm.eval()
