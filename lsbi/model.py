@@ -109,7 +109,7 @@ class LinearModel(object):
 
         D ~ N( m + M theta, C )
         """
-        return multivariate_normal(self.D(theta), self.C)
+        return multivariate_normal(self.m + self.M @ theta, self.C)
 
     def prior(self):
         """P(theta) as a scipy distribution object.
@@ -124,7 +124,8 @@ class LinearModel(object):
         theta ~ N( mu + Sigma M'C^{-1}(D-m), Sigma - Sigma M' C^{-1} M Sigma )
         """
         Sigma = inv(self.invSigma + self.M.T @ self.invC @ self.M)
-        mu = self.mu + Sigma @ self.M.T @ self.invC @ (D-self.m)
+        D0 = self.m + self.M @ self.mu
+        mu = self.mu + Sigma @ self.M.T @ self.invC @ (D-D0)
         return multivariate_normal(mu, Sigma)
 
     def evidence(self):
@@ -132,7 +133,7 @@ class LinearModel(object):
 
         D ~ N( m + M mu, C + M Sigma M' )
         """
-        return multivariate_normal(self.D(self.mu),
+        return multivariate_normal(self.m + self.M @ self.mu,
                                    self.C + self.M @ self.Sigma @ self.M.T)
 
     def joint(self):
@@ -141,15 +142,12 @@ class LinearModel(object):
         [  D  ] ~ N( [m + M mu]   [C + M Sigma M'  M Sigma] )
         [theta]    ( [   mu   ] , [   Sigma M'      Sigma ] )
         """
-        mu = np.concatenate([self.D(self.mu), self.mu])
-        Sigma = np.block([[self.C+self.M @ self.Sigma @ self.M.T,
-                           self.M @ self.Sigma],
-                          [self.Sigma @ self.M.T, self.Sigma]])
+        evidence = self.evidence()
+        prior = self.prior()
+        mu = np.concatenate([evidence.mean, prior.mean])
+        Sigma = np.block([[evidence.cov, self.M @ self.Sigma],
+                          [self.Sigma @ self.M.T, prior.cov]])
         return multivariate_normal(mu, Sigma)
-
-    def D(self, theta):
-        """D(theta) as the underlying data model."""
-        return self.m + self.M @ theta
 
     def DKL(self, D):
         """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence."""
@@ -427,8 +425,11 @@ class LinearMixtureModel(object):
 
         D ~ N( m + M theta, C )
         """
-        mu = np.einsum('ijk,k->ij', self.M, theta)
-        return mixture_multivariate_normal(mu, self.C, self.logA)
+        mu = self.m + np.einsum('ijk,k->ij', self.M, theta)
+        prior = self.prior()
+        logA = np.squeeze(prior.logpdfs(theta) + self.logA
+                          - prior.logpdf(theta))
+        return mixture_multivariate_normal(mu, self.C, logA)
 
     def prior(self):
         """P(theta) as a scipy distribution object.
@@ -444,9 +445,13 @@ class LinearMixtureModel(object):
         """
         Sigma = inv(self.invSigma +
                     np.einsum('iaj,iab,ibk->ijk', self.M, self.invC, self.M))
+        D0 = self.m + np.einsum('iaj,ij->ia', self.M, self.mu)
         mu = self.mu + np.einsum('iab,icb,icf,if->ia',
-                                 Sigma, self.M, self.invC, D-self.m)
-        return mixture_multivariate_normal(mu, Sigma, self.logA)
+                                 Sigma, self.M, self.invC, D-D0)
+        evidence = self.evidence()
+        logA = np.squeeze(evidence.logpdfs(D) + self.logA
+                          - evidence.logpdf(D))
+        return mixture_multivariate_normal(mu, Sigma, logA)
 
     def evidence(self):
         """P(D) as a scipy distribution object.

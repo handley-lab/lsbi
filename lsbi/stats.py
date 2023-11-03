@@ -27,15 +27,20 @@ class mixture_multivariate_normal(object):
         self.choleskys = np.linalg.cholesky(self.covs)
         self.invcovs = np.linalg.inv(self.covs)
 
-    def logpdf(self, x):
-        """Log of the probability density function."""
+    def logpdfs(self, x):
+        """Log of the mixture of probability density functions."""
         process_quantiles = scipy.stats.multivariate_normal._process_quantiles
         x = process_quantiles(x, self.means.shape[-1])
         dx = self.means - x[..., None, :]
         chi2 = np.einsum('...ij,ijk,...ik->...i', dx, self.invcovs, dx)
         norm = -np.linalg.slogdet(2*np.pi*self.covs)[1]/2
+        return norm-chi2/2
+
+    def logpdf(self, x):
+        """Log of the probability density function."""
+        logpdfs = self.logpdfs(x)
         logA = self.logA - scipy.special.logsumexp(self.logA)
-        return np.squeeze(scipy.special.logsumexp(norm-chi2/2+logA, axis=-1))
+        return np.squeeze(scipy.special.logsumexp(logpdfs+logA, axis=-1))
 
     def rvs(self, size=1):
         """Random variates."""
