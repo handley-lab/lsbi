@@ -1,6 +1,7 @@
 from lsbi.model import (LinearModel,
                         ReducedLinearModel,
-                        ReducedLinearModelUniformPrior)
+                        ReducedLinearModelUniformPrior,
+                        LinearMixtureModel)
 
 import numpy as np
 import scipy.stats
@@ -215,3 +216,158 @@ class TestReducedLinearModelUniformPrior(object):
 
         assert_allclose(reduced_model.logZ(), model.logZ())
         assert_allclose(reduced_model.DKL(), model.DKL())
+
+
+@pytest.mark.parametrize("k", np.arange(1, 6))
+@pytest.mark.parametrize("n", np.arange(1, 6))
+@pytest.mark.parametrize("d", np.arange(1, 6))
+class TestLinearMixtureModel(object):
+
+    def random_model(self, k, d, n):
+        M = np.random.rand(k, d, n)
+        m = np.random.rand(k, d)
+        C = np.array([np.atleast_2d(scipy.stats.wishart(scale=np.eye(d)).rvs())
+                      for _ in range(k)])
+
+        mu = np.random.rand(k, n)
+        Sigma = np.array([np.atleast_2d(scipy.stats.wishart(scale=np.eye(n)
+                                                            ).rvs())
+                          for _ in range(k)])
+        logA = np.log(np.random.rand(k))
+        return LinearMixtureModel(M=M, m=m, C=C, mu=mu, Sigma=Sigma, logA=logA)
+
+    def _test_shape(self, model, k, d, n):
+        assert model.n == n
+        assert model.d == d
+        assert model.k == k
+        assert model.M.shape == (k, d, n)
+        assert model.m.shape == (k, d,)
+        assert model.C.shape == (k, d, d)
+        assert model.mu.shape == (k, n,)
+        assert model.Sigma.shape == (k, n, n)
+        assert model.logA.shape == (k,)
+
+#    def test_init_M(self, k, d, n):
+#        model = LinearMixtureModel(M=np.random.rand())
+#        self._test_shape(model, 1, 1, 1)
+#
+#        model = LinearMixtureModel(M=np.random.rand(n))
+#        self._test_shape(model, 1, 1, n)
+#
+#        model = LinearMixtureModel(M=np.random.rand(d, n))
+#        self._test_shape(model, 1, d, n)
+#
+#        model = LinearMixtureModel(M=np.random.rand(k, d, n))
+#        self._test_shape(model, k, d, n)
+#
+#    def test_init_m_mu_logA(self, k, d, n):
+#        model = LinearMixtureModel(m=np.random.rand(), mu=np.random.rand())
+#        self._test_shape(model, 1, 1, 1)
+#
+#        model = LinearMixtureModel(m=np.random.rand(), mu=np.random.rand(n))
+#        self._test_shape(model, 1, 1, n)
+#
+#        model = LinearMixtureModel(m=np.random.rand(d), mu=np.random.rand())
+#        self._test_shape(model, 1, d, 1)
+#
+#        model = LinearMixtureModel(m=np.random.rand(), mu=np.random.rand(),
+#                                   logA=np.random.rand(k))
+#        self._test_shape(model, k, 1, 1)
+#
+#        model = LinearMixtureModel(m=np.random.rand(d), mu=np.random.rand(),
+#                                   logA=np.random.rand(k))
+#        self._test_shape(model, k, d, 1)
+#
+#        model = LinearMixtureModel(m=np.random.rand(), mu=np.random.rand(n),
+#                                   logA=np.random.rand(k))
+#        self._test_shape(model, k, 1, n)
+#
+#        model = LinearMixtureModel(m=np.random.rand(d), mu=np.random.rand(n),
+#                                   logA=np.random.rand(k))
+#        self._test_shape(model, k, d, n)
+
+    def test_failure(self, k, d, n):
+        with pytest.raises(ValueError) as excinfo:
+            LinearMixtureModel(m=np.random.rand(5))
+        string = "Unable to determine number of parameters n"
+        assert string in str(excinfo.value)
+
+        with pytest.raises(ValueError) as excinfo:
+            LinearMixtureModel(mu=np.random.rand(3))
+        string = "Unable to determine data dimensions d"
+        assert string in str(excinfo.value)
+
+    def test_joint(self, k, d, n):
+        N = 100
+        model = self.random_model(k, d, n)
+        prior = model.prior()
+        evidence = model.evidence()
+        joint = model.joint()
+
+        samples_1 = prior.rvs(N)
+        samples_2 = joint.rvs(N)[:, -n:]
+
+        if n == 1:
+            samples_1 = np.atleast_2d(samples_1).T
+
+        for i in range(n):
+            p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+            assert p > 1e-5
+
+        p = scipy.stats.kstest(prior.logpdf(samples_2),
+                               prior.logpdf(samples_1)).pvalue
+        assert p > 1e-5
+
+        samples_1 = evidence.rvs(N)
+        samples_2 = joint.rvs(N)[:, :d]
+
+        if d == 1:
+            samples_1 = np.atleast_2d(samples_1).T
+
+        for i in range(d):
+            p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+            assert p > 1e-5
+
+        p = scipy.stats.kstest(evidence.logpdf(samples_2),
+                               evidence.logpdf(samples_1)).pvalue
+        assert p > 1e-5
+
+    def test_likelihood_posterior(self, k, d, n):
+        N = 100
+        model = self.random_model(k, d, n)
+        joint = model.joint()
+
+        samples = []
+        model.prior()
+        theta = np.atleast_1d(model.prior().rvs())
+        for _ in range(N):
+            data = np.atleast_1d(model.likelihood(theta).rvs())
+            theta = np.atleast_1d(model.posterior(data).rvs())
+            samples.append(np.concatenate([data, theta])[:])
+        samples_1 = np.array(samples)[::10]
+        samples_2 = joint.rvs(len(samples_1))
+
+        for i in range(n+d):
+            p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+            assert p > 1e-5
+
+        p = scipy.stats.kstest(joint.logpdf(samples_2),
+                               joint.logpdf(samples_1)).pvalue
+        assert p > 1e-5
+
+#    def test_from_joint(self, k, d, n):
+#        model = self.random_model(k, d, n)
+#        joint = model.joint()
+#        mean = joint.mean
+#        cov = joint.cov
+#        model2 = LinearMixtureModel.from_joint(mean, cov, n)
+#        assert model2.n == model.n
+#        assert model2.d == model.d
+#        assert_allclose(model2.M, model.M)
+#        assert_allclose(model2.m, model.m)
+#        assert_allclose(model2.C, model.C)
+#        assert_allclose(model2.mu, model.mu)
+#        assert_allclose(model2.Sigma, model.Sigma)
+#
+#
+#

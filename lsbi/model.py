@@ -2,6 +2,7 @@
 import numpy as np
 from functools import cached_property
 from scipy.stats import multivariate_normal
+from lsbi.stats import mixture_multivariate_normal
 from numpy.linalg import solve, inv, slogdet
 
 
@@ -322,3 +323,161 @@ class ReducedLinearModelUniformPrior(object):
     def DKL(self):
         """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence."""
         return self.logV - logdet(2*np.pi*np.e*self.Sigma_P)/2
+
+
+class LinearMixtureModel(object):
+    """A linear mixture model.
+
+    Parameters
+    ----------
+    M : array_like, optional
+        Model matrix, defaults to identity matrix
+    m : array_like, optional
+        Data mean, defaults to zero vector
+    C : array_like, optional
+        Data covariance, defaults to identity matrix
+    mu : array_like, optional
+        Prior mean, defaults to zero vector
+    Sigma : array_like, optional
+        Prior covariance, defaults to identity matrix
+    logAA : array_like, optional
+        Mixture log-weights, defaults to uniform weights
+
+    the overall shape is attempted to be inferred from the input parameters.
+    """
+
+    def __init__(self, *args, **kwargs):
+
+        self.M = kwargs.pop('M', None)
+        self.m = kwargs.pop('m', None)
+        self.C = kwargs.pop('C', None)
+        self.mu = kwargs.pop('mu', None)
+        self.Sigma = kwargs.pop('Sigma', None)
+        self.logA = kwargs.pop('logA', None)
+
+        k, n, d = None, None, None
+
+        if self.m is not None:
+            self.m = np.atleast_2d(self.m)
+            k, d = self.m.shape
+        if self.C is not None:
+            self.C = np.atleast_3d(self.C)
+            k, d, d = self.C.shape
+        if self.Sigma is not None:
+            self.Sigma = np.atleast_3d(self.Sigma)
+            k, n, n = self.Sigma.shape
+        if self.mu is not None:
+            self.mu = np.atleast_2d(self.mu)
+            k, n, = self.mu.shape
+        if self.M is not None:
+            self.M = np.atleast_3d(self.M)
+            k, d, n = self.M.shape
+        if self.logA is not None:
+            self.logA = np.atleast_1d(self.logA)
+            k, = self.logA.shape
+
+        if n is None:
+            raise ValueError('Unable to determine number of parameters n')
+        if d is None:
+            raise ValueError('Unable to determine data dimensions d')
+        if k is None:
+            raise ValueError('Unable to determine number of components k')
+
+        if self.logA is None:
+            self.logA = np.zeros(k) - np.log(k)
+        if self.M is None:
+            self.M = np.broadcast_to(np.eye(d, n), (k, d, n))
+        if self.m is None:
+            self.m = np.broadcast_to(np.zeros(d), (k, d))
+        if self.C is None:
+            self.C = np.broadcast_to(np.eye(d), (k, d, d))
+        if self.mu is None:
+            self.mu = np.broadcast_to(np.zeros(n), (k, n))
+        if self.Sigma is None:
+            self.Sigma = np.broadcast_to(np.eye(n), (k, n, n))
+
+    @classmethod
+    def from_joint(cls, mean, cov, n):
+        """Construct model from joint distribution."""
+        mu = mean[-n:]
+        Sigma = cov[-n:, -n:]
+        M = solve(Sigma, cov[-n:, :-n]).T
+        m = mean[:-n] - M @ mu
+        C = cov[:-n, :-n] - M @ Sigma @ M.T
+
+        return cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
+
+    @property
+    def n(self):
+        """Dimensionality of parameter space len(theta)."""
+        return self.M.shape[2]
+
+    @property
+    def d(self):
+        """Dimensionality of data space len(D)."""
+        return self.M.shape[1]
+
+    @property
+    def k(self):
+        """Number of mixture components."""
+        return self.M.shape[0]
+
+    def likelihood(self, theta):
+        """P(D|theta) as a scipy distribution object.
+
+        D ~ N( m + M theta, C )
+        """
+        mu = np.einsum('ijk,k->ij', self.M, theta)
+        return mixture_multivariate_normal(mu, self.C, self.logA)
+
+    def prior(self):
+        """P(theta) as a scipy distribution object.
+
+        theta ~ N( mu, Sigma )
+        """
+        return mixture_multivariate_normal(self.mu, self.Sigma, self.logA)
+
+    def posterior(self, D):
+        """P(theta|D) as a scipy distribution object.
+
+        theta ~ N( mu + Sigma M'C^{-1}(D-m), Sigma - Sigma M' C^{-1} M Sigma )
+        """
+        Sigma = inv(self.invSigma +
+                    np.einsum('iaj,iab,ibk->ijk', self.M, self.invC, self.M))
+        mu = self.mu + np.einsum('iab,icb,icf,if->ia',
+                                 Sigma, self.M, self.invC, D-self.m)
+        return mixture_multivariate_normal(mu, Sigma, self.logA)
+
+    def evidence(self):
+        """P(D) as a scipy distribution object.
+
+        D ~ N( m + M mu, C + M Sigma M' )
+        """
+        mu = self.m + np.einsum('ijk,ik->ij', self.M, self.mu)
+        Sigma = self.C + np.einsum('ija,iab,ikb->ijk',
+                                   self.M, self.Sigma, self.M)
+        return mixture_multivariate_normal(mu, Sigma, self.logA)
+
+    def joint(self):
+        """P(D, theta) as a scipy distribution object.
+
+        [  D  ] ~ N( [m + M mu]   [C + M Sigma M'  M Sigma] )
+        [theta]    ( [   mu   ] , [   Sigma M'      Sigma ] )
+        """
+        evidence = self.evidence()
+        prior = self.prior()
+        mu = np.block([evidence.means, prior.means])
+        corr = np.einsum('ijk,ikl->ijl', self.M, self.Sigma)
+        Sigma = np.block([[evidence.covs, corr],
+                          [corr.transpose(0, 2, 1), prior.covs]])
+        return mixture_multivariate_normal(mu, Sigma, self.logA)
+
+    @cached_property
+    def invSigma(self):
+        """Inverse of prior covariance."""
+        return inv(self.Sigma)
+
+    @cached_property
+    def invC(self):
+        """Inverse of data covariance."""
+        return inv(self.C)
