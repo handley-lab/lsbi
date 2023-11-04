@@ -360,7 +360,8 @@ class TestLinearMixtureModel(object):
         joint = model.joint()
         means = joint.means
         covs = joint.covs
-        model2 = LinearMixtureModel.from_joint(means, covs, n)
+        logA = joint.logA
+        model2 = LinearMixtureModel.from_joint(means, covs, logA, n)
         assert model2.n == model.n
         assert model2.d == model.d
         assert_allclose(model2.M, model.M)
@@ -368,3 +369,4 @@ class TestLinearMixtureModel(object):
         assert_allclose(model2.C, model.C)
         assert_allclose(model2.mu, model.mu)
         assert_allclose(model2.Sigma, model.Sigma)
+        assert_allclose(model2.logA, model.logA)

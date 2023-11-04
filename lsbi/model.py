@@ -418,14 +418,14 @@ class LinearMixtureModel(object):
         self.logA = np.broadcast_to(logA, (k,))
 
     @classmethod
-    def from_joint(cls, means, covs, n):
+    def from_joint(cls, means, covs, logA, n):
         """Construct model from joint distribution."""
         mu = means[:, -n:]
         Sigma = covs[:, -n:, -n:]
         M = solve(Sigma, covs[:, -n:, :-n]).transpose(0, 2, 1)
         m = means[:, :-n] - np.einsum('ija,ia->ij', M, mu)
         C = covs[:, :-n, :-n] - np.einsum('ija,iab,ikb->ijk', M, Sigma, M)
-        return cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
+        return cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma, logA=logA)
 
     @property
     def n(self):
