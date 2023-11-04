@@ -14,7 +14,8 @@ def logdet(A):
 class LinearModel(object):
     """A linear model.
 
-    Model M:  D = m + M theta +/- sqrt(C)
+    D|theta ~ N(m + M theta, C)
+    theta ~ N(mu, Sigma)
 
     Defined by:
     - Parameters: theta (n,)
@@ -23,7 +24,6 @@ class LinearModel(object):
     - Prior covariance: Sigma (n, n)
     - Data mean: m (d,)
     - Data covariance: C (d, d)
-
 
     Parameters
     ----------
@@ -42,46 +42,34 @@ class LinearModel(object):
     """
 
     def __init__(self, *args, **kwargs):
+        # Rationalise input arguments
+        M = self._atleast_2d(kwargs.pop('M', None))
+        m = self._atleast_1d(kwargs.pop('m', None))
+        C = self._atleast_2d(kwargs.pop('C', None))
+        mu = self._atleast_1d(kwargs.pop('mu', None))
+        Sigma = self._atleast_2d(kwargs.pop('Sigma', None))
 
-        self.M = kwargs.pop('M', None)
-        self.m = kwargs.pop('m', None)
-        self.C = kwargs.pop('C', None)
-        self.mu = kwargs.pop('mu', None)
-        self.Sigma = kwargs.pop('Sigma', None)
-
-        n, d = None, None
-
-        if self.m is not None:
-            self.m = np.atleast_1d(self.m)
-            d, = self.m.shape
-        if self.C is not None:
-            self.C = np.atleast_2d(self.C)
-            d, d = self.C.shape
-        if self.Sigma is not None:
-            self.Sigma = np.atleast_2d(self.Sigma)
-            n, n = self.Sigma.shape
-        if self.mu is not None:
-            self.mu = np.atleast_1d(self.mu)
-            n, = self.mu.shape
-        if self.M is not None:
-            self.M = np.atleast_2d(self.M)
-            d, n = self.M.shape
-
-        if n is None:
+        # Determine dimensions
+        n = max([M.shape[1], mu.shape[0], Sigma.shape[0], Sigma.shape[1]])
+        d = max([M.shape[0], m.shape[0], C.shape[0], C.shape[1]])
+        if not n:
             raise ValueError('Unable to determine number of parameters n')
-        if d is None:
+        if not d:
             raise ValueError('Unable to determine data dimensions d')
 
-        if self.M is None:
-            self.M = np.eye(d, n)
-        if self.m is None:
-            self.m = np.zeros(d)
-        if self.C is None:
-            self.C = np.eye(d)
-        if self.mu is None:
-            self.mu = np.zeros(n)
-        if self.Sigma is None:
-            self.Sigma = np.eye(n)
+        # Set defaults if no argument was passed
+        M = M if M.size else np.eye(d, n)
+        m = m if m.size else np.zeros(d)
+        C = C if C.size else np.eye(d)
+        mu = mu if mu.size else np.zeros(n)
+        Sigma = Sigma if Sigma.size else np.eye(n)
+
+        # Broadcast to correct shape
+        self.M = np.broadcast_to(M, (d, n))
+        self.m = np.broadcast_to(m, (d,))
+        self.C = np.broadcast_to(C, (d, d))
+        self.mu = np.broadcast_to(mu, (n,))
+        self.Sigma = np.broadcast_to(Sigma, (n, n))
 
     @classmethod
     def from_joint(cls, mean, cov, n):
@@ -108,6 +96,10 @@ class LinearModel(object):
         """P(D|theta) as a scipy distribution object.
 
         D ~ N( m + M theta, C )
+
+        Parameters
+        ----------
+        theta : array_like, shape (n,)
         """
         return multivariate_normal(self.m + self.M @ theta, self.C)
 
@@ -122,6 +114,10 @@ class LinearModel(object):
         """P(theta|D) as a scipy distribution object.
 
         theta ~ N( mu + Sigma M'C^{-1}(D-m), Sigma - Sigma M' C^{-1} M Sigma )
+
+        Parameters
+        ----------
+        D : array_like, shape (d,)
         """
         Sigma = inv(self.invSigma + self.M.T @ self.invC @ self.M)
         D0 = self.m + self.M @ self.mu
@@ -150,7 +146,12 @@ class LinearModel(object):
         return multivariate_normal(mu, Sigma)
 
     def DKL(self, D):
-        """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence."""
+        """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence.
+
+        Parameters
+        ----------
+        D : array_like, shape (d,)
+        """
         cov_p = self.posterior(D).cov
         cov_q = self.prior().cov
         mu_p = self.posterior(D).mean
@@ -160,7 +161,16 @@ class LinearModel(object):
                 + (mu_q - mu_p) @ inv(cov_q) @ (mu_q - mu_p))/2
 
     def reduce(self, D):
-        """Reduce the model to a Gaussian in the parameters."""
+        """Reduce the model to a Gaussian in the parameters.
+
+        Parameters
+        ----------
+        D : array_like, shape (d,)
+
+        Returns
+        -------
+        ReducedLinearModel
+        """
         Sigma_L = inv(self.M.T @ self.invC @ self.M)
         mu_L = Sigma_L @ self.M.T @ self.invC @ (D-self.m)
         logLmax = (- logdet(2 * np.pi * self.C)/2 - (D-self.m) @ self.invC @
@@ -179,6 +189,16 @@ class LinearModel(object):
     def invC(self):
         """Inverse of data covariance."""
         return inv(self.C)
+
+    def _atleast_2d(self, x):
+        if x is None:
+            return np.zeros(shape=(0, 0))
+        return np.atleast_2d(x)
+
+    def _atleast_1d(self, x):
+        if x is None:
+            return np.zeros(shape=(0,))
+        return np.atleast_1d(x)
 
 
 class ReducedLinearModel(object):
@@ -326,6 +346,22 @@ class ReducedLinearModelUniformPrior(object):
 class LinearMixtureModel(object):
     """A linear mixture model.
 
+    A linear mixture model is defined by
+
+    D|theta, A ~ N(m + M theta, C)
+    theta|A    ~ N(mu, Sigma)
+    A          ~ categorical(exp(logA))
+
+    Defined by:
+    - Parameters: theta (n,)
+    - Data: D (k, d)
+    - Prior mean: mu (k, n)
+    - Prior covariance: Sigma (k, n, n)
+    - Data mean: m (k, d)
+    - Data covariance: C (k, d, d)
+    - log mixture weights: logA (k,)
+
+
     Parameters
     ----------
     M : array_like, optional
@@ -338,71 +374,57 @@ class LinearMixtureModel(object):
         Prior mean, defaults to zero vector
     Sigma : array_like, optional
         Prior covariance, defaults to identity matrix
-    logAA : array_like, optional
+    logA : array_like, optional
         Mixture log-weights, defaults to uniform weights
 
     the overall shape is attempted to be inferred from the input parameters.
     """
 
     def __init__(self, *args, **kwargs):
+        # Rationalise input arguments
+        M = self._atleast_3d(kwargs.pop('M', None))
+        m = self._atleast_2d(kwargs.pop('m', None))
+        C = self._atleast_3d(kwargs.pop('C', None))
+        mu = self._atleast_2d(kwargs.pop('mu', None))
+        Sigma = self._atleast_3d(kwargs.pop('Sigma', None))
+        logA = self._atleast_1d(kwargs.pop('logA', None))
 
-        self.M = kwargs.pop('M', None)
-        self.m = kwargs.pop('m', None)
-        self.C = kwargs.pop('C', None)
-        self.mu = kwargs.pop('mu', None)
-        self.Sigma = kwargs.pop('Sigma', None)
-        self.logA = kwargs.pop('logA', None)
-
-        k, n, d = None, None, None
-
-        if self.m is not None:
-            self.m = np.atleast_2d(self.m)
-            k, d = self.m.shape
-        if self.C is not None:
-            self.C = np.atleast_3d(self.C)
-            k, d, d = self.C.shape
-        if self.Sigma is not None:
-            self.Sigma = np.atleast_3d(self.Sigma)
-            k, n, n = self.Sigma.shape
-        if self.mu is not None:
-            self.mu = np.atleast_2d(self.mu)
-            k, n, = self.mu.shape
-        if self.M is not None:
-            self.M = np.atleast_3d(self.M)
-            k, d, n = self.M.shape
-        if self.logA is not None:
-            self.logA = np.atleast_1d(self.logA)
-            k, = self.logA.shape
-
-        if n is None:
+        # Determine dimensions
+        n = max([M.shape[2], mu.shape[1], Sigma.shape[1], Sigma.shape[2]])
+        d = max([M.shape[1], m.shape[1], C.shape[1], C.shape[2]])
+        k = max([M.shape[0], m.shape[0], C.shape[0], mu.shape[0],
+                 Sigma.shape[0], logA.shape[0]])
+        if not n:
             raise ValueError('Unable to determine number of parameters n')
-        if d is None:
+        if not d:
             raise ValueError('Unable to determine data dimensions d')
-        if k is None:
+        if not k:
             raise ValueError('Unable to determine number of components k')
 
-        if self.logA is None:
-            self.logA = np.zeros(k) - np.log(k)
-        if self.M is None:
-            self.M = np.broadcast_to(np.eye(d, n), (k, d, n))
-        if self.m is None:
-            self.m = np.broadcast_to(np.zeros(d), (k, d))
-        if self.C is None:
-            self.C = np.broadcast_to(np.eye(d), (k, d, d))
-        if self.mu is None:
-            self.mu = np.broadcast_to(np.zeros(n), (k, n))
-        if self.Sigma is None:
-            self.Sigma = np.broadcast_to(np.eye(n), (k, n, n))
+        # Set defaults if no argument was passed
+        M = M if M.size else np.eye(d, n)
+        m = m if m.size else np.zeros(d)
+        C = C if C.size else np.eye(d)
+        mu = mu if mu.size else np.zeros(n)
+        Sigma = Sigma if Sigma.size else np.eye(n)
+        logA = logA if logA.size else - np.log(k)
+
+        # Broadcast to correct shape
+        self.M = np.broadcast_to(M, (k, d, n))
+        self.m = np.broadcast_to(m, (k, d))
+        self.C = np.broadcast_to(C, (k, d, d))
+        self.mu = np.broadcast_to(mu, (k, n))
+        self.Sigma = np.broadcast_to(Sigma, (k, n, n))
+        self.logA = np.broadcast_to(logA, (k,))
 
     @classmethod
-    def from_joint(cls, mean, cov, n):
+    def from_joint(cls, means, covs, n):
         """Construct model from joint distribution."""
-        mu = mean[-n:]
-        Sigma = cov[-n:, -n:]
-        M = solve(Sigma, cov[-n:, :-n]).T
-        m = mean[:-n] - M @ mu
-        C = cov[:-n, :-n] - M @ Sigma @ M.T
-
+        mu = means[:, -n:]
+        Sigma = covs[:, -n:, -n:]
+        M = solve(Sigma, covs[:, -n:, :-n]).transpose(0, 2, 1)
+        m = means[:, :-n] - np.einsum('ija,ia->ij', M, mu)
+        C = covs[:, :-n, :-n] - np.einsum('ija,iab,ikb->ijk', M, Sigma, M)
         return cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
 
     @property
@@ -417,48 +439,63 @@ class LinearMixtureModel(object):
 
     @property
     def k(self):
-        """Number of mixture components."""
+        """Number of mixture components len(logA)."""
         return self.M.shape[0]
 
     def likelihood(self, theta):
         """P(D|theta) as a scipy distribution object.
 
-        D ~ N( m + M theta, C )
+        D|theta,A ~ N( m + M theta, C )
+        theta|A   ~ N( mu, Sigma )
+        A         ~ categorical(exp(logA))
+
+        Parameters
+        ----------
+        theta : array_like, shape (n,)
         """
-        mu = self.m + np.einsum('ijk,k->ij', self.M, theta)
+        mu = self.m + np.einsum('ija,a->ij', self.M, theta)
         prior = self.prior()
-        logA = np.squeeze(prior.logpdfs(theta) + self.logA
-                          - prior.logpdf(theta))
+        logA = (prior.logpdf(theta, reduce=False) + self.logA
+                - prior.logpdf(theta))
         return mixture_multivariate_normal(mu, self.C, logA)
 
     def prior(self):
         """P(theta) as a scipy distribution object.
 
-        theta ~ N( mu, Sigma )
+        theta|A ~ N( mu, Sigma )
+        A       ~ categorical(exp(logA))
         """
         return mixture_multivariate_normal(self.mu, self.Sigma, self.logA)
 
     def posterior(self, D):
         """P(theta|D) as a scipy distribution object.
 
-        theta ~ N( mu + Sigma M'C^{-1}(D-m), Sigma - Sigma M' C^{-1} M Sigma )
+        theta|D, A ~ N( mu + S M'C^{-1}(D - m - M mu), S)
+        D|A        ~ N( m + M mu, C + M Sigma M' )
+        A          ~ categorical(exp(logA))
+        S = (Sigma^{-1} + M'C^{-1}M)^{-1}
+
+        Parameters
+        ----------
+        D : array_like, shape (d,)
         """
-        Sigma = inv(self.invSigma +
-                    np.einsum('iaj,iab,ibk->ijk', self.M, self.invC, self.M))
-        D0 = self.m + np.einsum('iaj,ij->ia', self.M, self.mu)
-        mu = self.mu + np.einsum('iab,icb,icf,if->ia',
+        Sigma = inv(self.invSigma + np.einsum('iaj,iab,ibk->ijk',
+                                              self.M, self.invC, self.M))
+        D0 = self.m + np.einsum('ija,ia->ij', self.M, self.mu)
+        mu = self.mu + np.einsum('ija,iba,ibc,ic->ij',
                                  Sigma, self.M, self.invC, D-D0)
         evidence = self.evidence()
-        logA = np.squeeze(evidence.logpdfs(D) + self.logA
-                          - evidence.logpdf(D))
+        logA = (evidence.logpdf(D, reduce=False) + self.logA
+                - evidence.logpdf(D))
         return mixture_multivariate_normal(mu, Sigma, logA)
 
     def evidence(self):
         """P(D) as a scipy distribution object.
 
-        D ~ N( m + M mu, C + M Sigma M' )
+        D|A ~ N( m + M mu, C + M Sigma M' )
+        A   ~ categorical(exp(logA))
         """
-        mu = self.m + np.einsum('ijk,ik->ij', self.M, self.mu)
+        mu = self.m + np.einsum('ija,ia->ij', self.M, self.mu)
         Sigma = self.C + np.einsum('ija,iab,ikb->ijk',
                                    self.M, self.Sigma, self.M)
         return mixture_multivariate_normal(mu, Sigma, self.logA)
@@ -466,13 +503,15 @@ class LinearMixtureModel(object):
     def joint(self):
         """P(D, theta) as a scipy distribution object.
 
-        [  D  ] ~ N( [m + M mu]   [C + M Sigma M'  M Sigma] )
-        [theta]    ( [   mu   ] , [   Sigma M'      Sigma ] )
+        [  D  ] | A ~ N( [m + M mu]   [C + M Sigma M'  M Sigma] )
+        [theta] |      ( [   mu   ] , [   Sigma M'      Sigma ] )
+
+        A           ~ categorical(exp(logA))
         """
         evidence = self.evidence()
         prior = self.prior()
         mu = np.block([evidence.means, prior.means])
-        corr = np.einsum('ijk,ikl->ijl', self.M, self.Sigma)
+        corr = np.einsum('ija,ial->ijl', self.M, self.Sigma)
         Sigma = np.block([[evidence.covs, corr],
                           [corr.transpose(0, 2, 1), prior.covs]])
         return mixture_multivariate_normal(mu, Sigma, self.logA)
@@ -486,3 +525,33 @@ class LinearMixtureModel(object):
     def invC(self):
         """Inverse of data covariance."""
         return inv(self.C)
+
+    def _atleast_3d(self, x):
+        if x is None:
+            return np.zeros(shape=(0, 0, 0))
+        x = np.array(x)
+        if x.size > 0:
+            x = np.atleast_2d(x)
+            if x.ndim == 2:
+                x = x[None, ...]
+        return x
+
+    def _atleast_2d(self, x):
+        if x is None:
+            return np.zeros(shape=(0, 0))
+        x = np.array(x)
+        if x.size > 0:
+            x = np.atleast_1d(x)
+            if x.ndim == 1:
+                x = x[None, ...]
+        return x
+
+    def _atleast_1d(self, x):
+        if x is None:
+            return np.zeros(shape=(0,))
+        x = np.array(x)
+        if x.size > 0:
+            x = np.atleast_1d(x)
+            if x.ndim == 0:
+                x = x[None]
+        return x

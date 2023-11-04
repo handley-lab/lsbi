@@ -355,19 +355,16 @@ class TestLinearMixtureModel(object):
                                joint.logpdf(samples_1)).pvalue
         assert p > 1e-5
 
-#    def test_from_joint(self, k, d, n):
-#        model = self.random_model(k, d, n)
-#        joint = model.joint()
-#        mean = joint.mean
-#        cov = joint.cov
-#        model2 = LinearMixtureModel.from_joint(mean, cov, n)
-#        assert model2.n == model.n
-#        assert model2.d == model.d
-#        assert_allclose(model2.M, model.M)
-#        assert_allclose(model2.m, model.m)
-#        assert_allclose(model2.C, model.C)
-#        assert_allclose(model2.mu, model.mu)
-#        assert_allclose(model2.Sigma, model.Sigma)
-#
-#
-#
+    def test_from_joint(self, k, d, n):
+        model = self.random_model(k, d, n)
+        joint = model.joint()
+        means = joint.means
+        covs = joint.covs
+        model2 = LinearMixtureModel.from_joint(means, covs, n)
+        assert model2.n == model.n
+        assert model2.d == model.d
+        assert_allclose(model2.M, model.M)
+        assert_allclose(model2.m, model.m)
+        assert_allclose(model2.C, model.C)
+        assert_allclose(model2.mu, model.mu)
+        assert_allclose(model2.Sigma, model.Sigma)
