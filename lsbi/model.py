@@ -14,31 +14,47 @@ def logdet(A):
 class LinearModel(object):
     """A linear model.
 
-    D|theta ~ N(m + M theta, C)
-    theta ~ N(mu, Sigma)
+    D|theta ~ N( m + M theta, C)
+    theta   ~ N( mu, Sigma)
 
-    Defined by:
-    - Parameters: theta (n,)
-    - Data: D (d,)
-    - Prior mean: mu (n,)
-    - Prior covariance: Sigma (n, n)
-    - Data mean: m (d,)
-    - Data covariance: C (d, d)
+          Parameters: theta (n,)
+                Data: D     (d,)
+          Prior mean: mu    (n,)
+    Prior covariance: Sigma (n, n)
+           Data mean: m     (d,)
+     Data covariance: C     (d, d)
 
     Parameters
     ----------
     M : array_like, optional
-        Model matrix, defaults to identity matrix
+        if matrix: model matrix
+        if vector: diagonal matrix with vector on diagonal
+        if scalar: scalar * rectangular identity matrix
+        Defaults to rectangular identity matrix
     m : array_like, optional
-        Data mean, defaults to zero vector
+        if vector: data mean
+        if scalar: scalar * unit vector
+        Defaults to zero vector
     C : array_like, optional
-        Data covariance, defaults to identity matrix
+        if matrix: data covariance
+        if vector: diagonal matrix with vector on diagonal
+        if scalar: scalar * identity matrix
+        Defaults to identity matrix
     mu : array_like, optional
-        Prior mean, defaults to zero vector
+        if vector: prior mean
+        if scalar: scalar * unit vector
+        Defaults to zero vector
     Sigma : array_like, optional
-        Prior covariance, defaults to identity matrix
-
-    the overall shape is attempted to be inferred from the input parameters.
+        if matrix: prior covariance
+        if vector: diagonal matrix with vector on diagonal
+        if scalar: scalar * identity matrix
+        Defaults to identity matrix
+    n : int, optional
+        Number of parameters
+        Defaults to automatically inferred value
+    d : int, optional
+        Number of data dimensions
+        Defaults to automatically inferred value
     """
 
     def __init__(self, *args, **kwargs):
@@ -48,10 +64,12 @@ class LinearModel(object):
         C = self._atleast_2d(kwargs.pop('C', None))
         mu = self._atleast_1d(kwargs.pop('mu', None))
         Sigma = self._atleast_2d(kwargs.pop('Sigma', None))
+        n = kwargs.pop('n', 0)
+        d = kwargs.pop('d', 0)
 
         # Determine dimensions
-        n = max([M.shape[1], mu.shape[0], Sigma.shape[0], Sigma.shape[1]])
-        d = max([M.shape[0], m.shape[0], C.shape[0], C.shape[1]])
+        n = max([n, M.shape[1], mu.shape[0], Sigma.shape[0], Sigma.shape[1]])
+        d = max([d, M.shape[0], m.shape[0], C.shape[0], C.shape[1]])
         if not n:
             raise ValueError('Unable to determine number of parameters n')
         if not d:
@@ -65,11 +83,11 @@ class LinearModel(object):
         Sigma = Sigma if Sigma.size else np.eye(n)
 
         # Broadcast to correct shape
-        self.M = np.broadcast_to(M, (d, n))
+        self.M = self._broadcast_to(M, (d, n))
         self.m = np.broadcast_to(m, (d,))
-        self.C = np.broadcast_to(C, (d, d))
+        self.C = self._broadcast_to(C, (d, d))
         self.mu = np.broadcast_to(mu, (n,))
-        self.Sigma = np.broadcast_to(Sigma, (n, n))
+        self.Sigma = self._broadcast_to(Sigma, (n, n))
 
     @classmethod
     def from_joint(cls, mean, cov, n):
@@ -200,11 +218,16 @@ class LinearModel(object):
             return np.zeros(shape=(0,))
         return np.atleast_1d(x)
 
+    def _broadcast_to(self, x, shape):
+        if x.shape == shape:
+            return x
+        return x * np.eye(*shape)
+
 
 class ReducedLinearModel(object):
     """A model with no data.
 
-    If a Likelihood is Gaussian in the parameters, it is sometmise more
+    If a Likelihood is Gaussian in the parameters, it is sometimes more
     clear/efficient to phrase it in terms of a parameter covariance, parameter
     mean and peak value:
 
@@ -346,38 +369,60 @@ class ReducedLinearModelUniformPrior(object):
 class LinearMixtureModel(object):
     """A linear mixture model.
 
-    A linear mixture model is defined by
-
-    D|theta, A ~ N(m + M theta, C)
-    theta|A    ~ N(mu, Sigma)
+    D|theta, A ~ N( m + M theta, C)
+    theta|A    ~ N( mu, Sigma)
     A          ~ categorical(exp(logA))
 
     Defined by:
-    - Parameters: theta (n,)
-    - Data: D (k, d)
-    - Prior mean: mu (k, n)
-    - Prior covariance: Sigma (k, n, n)
-    - Data mean: m (k, d)
-    - Data covariance: C (k, d, d)
-    - log mixture weights: logA (k,)
-
+             Parameters: theta (n,)
+                   Data: D     (d,)
+            Prior means: mu    (k, n)
+      Prior covariances: Sigma (k, n, n)
+             Data means: m     (k, d)
+       Data covariances: C     (k, d, d)
+    log mixture weights: logA  (k,)
 
     Parameters
     ----------
     M : array_like, optional
-        Model matrix, defaults to identity matrix
+        if ndim==3: model matrices
+        if ndim==2: model matrix with same matrix for all components
+        if ndim==1: model matrix with vector diagonal for all components
+        if scalar: scalar * rectangular identity matrix for all components
+        Defaults to k copies of rectangular identity matrices
     m : array_like, optional
-        Data mean, defaults to zero vector
+        if ndim==2: data means
+        if ndim==1: data mean with same vector for all components
+        if scalar: scalar * unit vector for all components
+        Defaults to 0 for all components
     C : array_like, optional
-        Data covariance, defaults to identity matrix
+        if ndim==3: data covariances
+        if ndim==2: data covariance with same matrix for all components
+        if ndim==1: data covariance with vector diagonal for all components
+        if scalar: scalar * identity matrix for all components
+        Defaults to k copies of identity matrices
     mu : array_like, optional
+        if ndim==2: prior means
+        if ndim==1: prior mean with same vector for all components
+        if scalar: scalar * unit vector for all components
+        Defaults to 0 for all components
         Prior mean, defaults to zero vector
     Sigma : array_like, optional
-        Prior covariance, defaults to identity matrix
+        if ndim==3: prior covariances
+        if ndim==2: prior covariance with same matrix for all components
+        if ndim==1: prior covariance with vector diagonal for all components
+        if scalar: scalar * identity matrix for all components
+        Defaults to k copies of identity matrices
     logA : array_like, optional
-        Mixture log-weights, defaults to uniform weights
-
-    the overall shape is attempted to be inferred from the input parameters.
+        if ndim==1: log mixture weights
+        if scalar: scalar * unit vector
+        Defaults to uniform weights
+    n : int, optional
+        Number of parameters, defaults to automatically inferred value
+    d : int, optional
+        Number of data dimensions, defaults to automatically inferred value
+    k : int, optional
+        Number of mixture components, defaults to automatically inferred value
     """
 
     def __init__(self, *args, **kwargs):
@@ -388,11 +433,14 @@ class LinearMixtureModel(object):
         mu = self._atleast_2d(kwargs.pop('mu', None))
         Sigma = self._atleast_3d(kwargs.pop('Sigma', None))
         logA = self._atleast_1d(kwargs.pop('logA', None))
+        n = kwargs.pop('n', 0)
+        d = kwargs.pop('d', 0)
+        k = kwargs.pop('k', 0)
 
         # Determine dimensions
-        n = max([M.shape[2], mu.shape[1], Sigma.shape[1], Sigma.shape[2]])
-        d = max([M.shape[1], m.shape[1], C.shape[1], C.shape[2]])
-        k = max([M.shape[0], m.shape[0], C.shape[0], mu.shape[0],
+        n = max([n, M.shape[2], mu.shape[1], Sigma.shape[1], Sigma.shape[2]])
+        d = max([d, M.shape[1], m.shape[1], C.shape[1], C.shape[2]])
+        k = max([k, M.shape[0], m.shape[0], C.shape[0], mu.shape[0],
                  Sigma.shape[0], logA.shape[0]])
         if not n:
             raise ValueError('Unable to determine number of parameters n')
@@ -410,11 +458,11 @@ class LinearMixtureModel(object):
         logA = logA if logA.size else - np.log(k)
 
         # Broadcast to correct shape
-        self.M = np.broadcast_to(M, (k, d, n))
+        self.M = self._broadcast_to(M, (k, d, n))
         self.m = np.broadcast_to(m, (k, d))
-        self.C = np.broadcast_to(C, (k, d, d))
+        self.C = self._broadcast_to(C, (k, d, d))
         self.mu = np.broadcast_to(mu, (k, n))
-        self.Sigma = np.broadcast_to(Sigma, (k, n, n))
+        self.Sigma = self._broadcast_to(Sigma, (k, n, n))
         self.logA = np.broadcast_to(logA, (k,))
 
     @classmethod
@@ -530,28 +578,26 @@ class LinearMixtureModel(object):
         if x is None:
             return np.zeros(shape=(0, 0, 0))
         x = np.array(x)
-        if x.size > 0:
-            x = np.atleast_2d(x)
-            if x.ndim == 2:
-                x = x[None, ...]
-        return x
+        if x.ndim == 3:
+            return x
+        return np.atleast_2d(x)[None, ...]
 
     def _atleast_2d(self, x):
         if x is None:
             return np.zeros(shape=(0, 0))
         x = np.array(x)
-        if x.size > 0:
-            x = np.atleast_1d(x)
-            if x.ndim == 1:
-                x = x[None, ...]
-        return x
+        if x.ndim == 2:
+            return x
+        return np.atleast_1d(x)[None, ...]
 
     def _atleast_1d(self, x):
         if x is None:
             return np.zeros(shape=(0,))
-        x = np.array(x)
-        if x.size > 0:
-            x = np.atleast_1d(x)
-            if x.ndim == 0:
-                x = x[None]
-        return x
+        return np.atleast_1d(x)
+
+    def _broadcast_to(self, x, shape):
+        if x.shape == shape:
+            return x
+        if x.shape[1:] == shape[1:]:
+            return np.broadcast_to(x, shape)
+        return x * np.ones(shape) * np.eye(shape[1], shape[2])[None, ...]
