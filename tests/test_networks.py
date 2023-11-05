@@ -2,7 +2,6 @@ from lsbi.network import (
     BinaryClassifierBase,
     BinaryClassifier,
     BinaryClassifierLPop,
-    train,
 )
 import torch
 import numpy as np
@@ -29,6 +28,15 @@ class TestClassifierBase:
             np.random.randint(0, 2, size=(10, 1)), dtype=torch.float32
         )
 
+    def fit_model(self, model, input_dim):
+        data_size = 10
+        data = np.random.rand(data_size, input_dim)
+        labels = np.random.randint(0, 2, size=(data_size))
+        y_start = model.predict(data)
+        model.fit(data, labels, num_epochs=1)
+        y_end = model.predict(data)
+        return y_start, y_end
+
     def test_init(self, model):
         assert isinstance(model, BinaryClassifierBase)
 
@@ -44,6 +52,10 @@ class TestClassifierBase:
         with pytest.raises(NotImplementedError):
             model.predict(x)
 
+    def test_fit(self, model, x):
+        with pytest.raises(NotImplementedError):
+            y_start, y_end = self.fit_model(model, x.shape[1])
+
 
 class TestClassifier(TestClassifierBase):
     CLS = BinaryClassifier
@@ -57,6 +69,11 @@ class TestClassifier(TestClassifierBase):
         y = model.predict(x)
         assert y.shape == (10, 1)
         assert isinstance(y, np.ndarray)
+
+    @pytest.mark.filterwarnings("ignore::UserWarning")
+    def test_fit(self, model, x):
+        y_start, y_end = self.fit_model(model, x.shape[1])
+        assert (y_start != y_end).any()
 
 
 class TestClassifierLPop(TestClassifierBase):
@@ -72,18 +89,7 @@ class TestClassifierLPop(TestClassifierBase):
         assert y.shape == (10, 1)
         assert isinstance(y, np.ndarray)
 
-
-@pytest.mark.parametrize("F", [BinaryClassifier, BinaryClassifierLPop])
-def test_train(F):
-    """Very basic call as the function can be v expensive"""
-    data_dim = 1
-    data_size = 10
-    data = np.random.rand(data_size, data_dim)
-
-    labels = np.random.randint(0, 2, size=(data_size))
-    model = F(data_dim)
-    y_start = model.predict(data)
-
-    model = train(model, data, labels, num_epochs=1)
-    y_end = model.predict(data)
-    assert (y_start != y_end).any()
+    @pytest.mark.filterwarnings("ignore::UserWarning")
+    def test_fit(self, model, x):
+        y_start, y_end = self.fit_model(model, x.shape[1])
+        assert (y_start != y_end).any()

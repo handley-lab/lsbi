@@ -54,6 +54,72 @@ class BinaryClassifierBase(nn.Module):
         """Predict the Bayes Factor."""
         raise NotImplementedError
 
+    def fit(self, X, y, **kwargs):
+        """Fit classifier on input features X to predict labels y."""
+        num_epochs = kwargs.get("num_epochs", 10)
+        batch_size = kwargs.get("batch_size", 128)
+        decay_rate = kwargs.get("decay_rate", 0.95)
+        lr = kwargs.get("lr", 0.001)
+        device = kwargs.get("device", "cpu")
+            
+        device = torch.device(device)
+
+        # device = torch.device("mps")
+        print("Using device: ", device)
+
+        # Convert labels to torch tensor
+        X = torch.tensor(X, dtype=torch.float32)
+        labels = torch.tensor(y, dtype=torch.float32)
+        labels = labels.unsqueeze(1)
+        labels = labels.to(device)
+   
+        dataset = torch.utils.data.TensorDataset(X, labels)
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, shuffle=True
+        )
+
+        # Define the loss function and optimizer
+        criterion = self.loss
+
+        optimizer = optim.Adam(self.parameters(), lr=lr)
+
+        # Create the scheduler and pass in the optimizer and decay rate
+        scheduler = ExponentialLR(optimizer, gamma=decay_rate)
+
+        # Train the binary classifier
+        num_epochs = num_epochs
+
+        # Create a DataLoader for batch training
+        self.to(torch.float32)
+        # data = data.to(device)
+        self.to(device)
+
+        for epoch in range(num_epochs):
+            epoch_loss = []
+            for i, (inputs, targets) in enumerate(dataloader):
+                # Clear gradients
+                optimizer.zero_grad()
+                inputs = inputs.to(device)
+                # Forward pass
+                loss = criterion(inputs, targets)
+                epoch_loss.append(loss.item())
+                # Backward pass and optimize
+                loss.backward()
+                optimizer.step()
+
+            # Print loss for every epoch
+            scheduler.step()
+            mean_loss = torch.mean(torch.tensor(epoch_loss)).item()
+            print(f"Epoch {epoch+1}/{num_epochs}, Loss: {mean_loss}")
+
+        # Evaluate the model
+        self.to("cpu")
+        self.batch_norm.eval()
+        self.batch_norm_1.eval()
+        self.batch_norm_2.eval()
+        self.batch_norm_3.eval()
+        
+
 
 class BinaryClassifier(BinaryClassifierBase):
     """
@@ -75,7 +141,7 @@ class BinaryClassifier(BinaryClassifierBase):
         x = torch.tensor(x, dtype=torch.float32)
         pred = self.forward(x)
         pred = nn.Sigmoid()(pred)
-        return (torch.log(pred) - torch.log(1-pred)).detach().numpy()
+        return (torch.log(pred) - torch.log(1 - pred)).detach().numpy()
 
 
 class BinaryClassifierLPop(BinaryClassifierBase):
@@ -106,79 +172,3 @@ class BinaryClassifierLPop(BinaryClassifierBase):
         pred = self.forward(x)
         pred = self.lpop(pred, alpha=alpha)
         return pred.detach().numpy()
-
-
-def train(
-    model,
-    data,
-    labels,
-    num_epochs=10,
-    batch_size=128,
-    decay_rate=0.95,
-    lr=0.001,
-):
-    """Train the binary classifier."""
-    # if torch.cuda.is_available():
-    #     device = torch.device("cuda:0")
-    # else:
-    #     device = torch.device("cpu")
-
-    # for now just restrict to cpu
-    device = torch.device("cpu")
-
-    # device = torch.device("mps")
-    print("Using device: ", device)
-
-    # Convert labels to torch tensor
-    data = torch.tensor(data, dtype=torch.float32)
-    labels = torch.tensor(labels, dtype=torch.float32)
-    labels = labels.unsqueeze(1)
-
-    batch_size = batch_size
-    labels = labels.to(device)
-    dataset = torch.utils.data.TensorDataset(data, labels)
-    dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=True
-    )
-
-    # Define the loss function and optimizer
-    criterion = model.loss
-
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-
-    # Create the scheduler and pass in the optimizer and decay rate
-    scheduler = ExponentialLR(optimizer, gamma=decay_rate)
-
-    # Train the binary classifier
-    num_epochs = num_epochs
-
-    # Create a DataLoader for batch training
-    model = model.to(torch.float32)
-    # data = data.to(device)
-    model = model.to(device)
-
-    for epoch in range(num_epochs):
-        epoch_loss = []
-        for i, (inputs, targets) in enumerate(dataloader):
-            # Clear gradients
-            optimizer.zero_grad()
-            inputs = inputs.to(device)
-            # Forward pass
-            loss = criterion(inputs, targets)
-            epoch_loss.append(loss.item())
-            # Backward pass and optimize
-            loss.backward()
-            optimizer.step()
-
-        # Print loss for every epoch
-        scheduler.step()
-        mean_loss = torch.mean(torch.tensor(epoch_loss)).item()
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {mean_loss}")
-
-    # Evaluate the model
-    model.to("cpu")
-    model.batch_norm.eval()
-    model.batch_norm_1.eval()
-    model.batch_norm_2.eval()
-    model.batch_norm_3.eval()
-    return model
