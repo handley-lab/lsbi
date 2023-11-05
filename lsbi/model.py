@@ -446,8 +446,6 @@ class LinearMixtureModel(object):
             raise ValueError('Unable to determine number of parameters n')
         if not d:
             raise ValueError('Unable to determine data dimensions d')
-        if not k:
-            raise ValueError('Unable to determine number of components k')
 
         # Set defaults if no argument was passed
         M = M if M.size else np.eye(d, n)

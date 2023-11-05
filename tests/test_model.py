@@ -15,10 +15,10 @@ class TestLinearModel(object):
     cls = LinearModel
 
     def random_model(self, d, n):
-        M = np.random.rand(d, n)
-        m = np.random.rand(d)
+        M = rand(d, n)
+        m = rand(d)
         C = scipy.stats.wishart(scale=np.eye(d)).rvs()
-        mu = np.random.rand(n)
+        mu = (n)
         Sigma = scipy.stats.wishart(scale=np.eye(n)).rvs()
         return self.cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
 
@@ -42,15 +42,15 @@ class TestLinearModel(object):
         self._test_shape(self.cls(M=rand(d, 1), n=n), d, n)
         self._test_shape(self.cls(M=rand(d, n)), d, n)
 
-        M = np.random.rand()
+        M = rand()
         model = self.cls(M=M, d=d, n=n)
         assert_allclose(np.diag(model.M), M)
 
-        M = np.random.rand(n)
+        M = rand(n)
         model = self.cls(M=M, d=d)
         assert_allclose(np.diag(model.M), M[:min(d, n)])
 
-        M = np.random.rand(d, n)
+        M = rand(d, n)
         model = self.cls(M=M)
         assert_allclose(model.M, M)
 
@@ -59,11 +59,11 @@ class TestLinearModel(object):
         self._test_shape(self.cls(mu=rand(), d=d, n=n), d, n)
         self._test_shape(self.cls(mu=rand(n), d=d), d, n)
 
-        mu = np.random.rand()
+        mu = rand()
         model = self.cls(mu=mu, d=d, n=n)
         assert_allclose(model.mu, mu)
 
-        mu = np.random.rand(n)
+        mu = rand(n)
         model = self.cls(mu=mu, d=d)
         assert_allclose(model.mu, mu)
 
@@ -73,15 +73,15 @@ class TestLinearModel(object):
         self._test_shape(self.cls(Sigma=rand(n), d=d), d, n)
         self._test_shape(self.cls(Sigma=rand(n, n), d=d), d, n)
 
-        Sigma = np.random.rand()
+        Sigma = rand()
         model = self.cls(Sigma=Sigma, d=d, n=n)
         assert_allclose(np.diag(model.Sigma), Sigma)
 
-        Sigma = np.random.rand(n)
+        Sigma = rand(n)
         model = self.cls(Sigma=Sigma, d=d)
         assert_allclose(np.diag(model.Sigma), Sigma)
 
-        Sigma = np.random.rand(n, n)
+        Sigma = rand(n, n)
         model = self.cls(Sigma=Sigma, d=d)
         assert_allclose(model.Sigma, Sigma)
 
@@ -90,11 +90,11 @@ class TestLinearModel(object):
         self._test_shape(self.cls(m=rand(), d=d, n=n), d, n)
         self._test_shape(self.cls(m=rand(d), n=n), d, n)
 
-        m = np.random.rand()
+        m = rand()
         model = self.cls(m=m, d=d, n=n)
         assert_allclose(model.m, m)
 
-        m = np.random.rand(d)
+        m = rand(d)
         model = self.cls(m=m, n=n)
         assert_allclose(model.m, m)
 
@@ -104,26 +104,26 @@ class TestLinearModel(object):
         self._test_shape(self.cls(C=rand(d), n=n), d, n)
         self._test_shape(self.cls(C=rand(d, d), n=n), d, n)
 
-        C = np.random.rand()
+        C = rand()
         model = self.cls(C=C, d=d, n=n)
         assert_allclose(np.diag(model.C), C)
 
-        C = np.random.rand(d)
+        C = rand(d)
         model = self.cls(C=C, n=n)
         assert_allclose(np.diag(model.C), C)
 
-        C = np.random.rand(d, d)
+        C = rand(d, d)
         model = self.cls(C=C, n=n)
         assert_allclose(model.C, C)
 
     def test_failure(self, d, n):
         with pytest.raises(ValueError) as excinfo:
-            self.cls(m=np.random.rand(d))
+            self.cls(m=rand(d))
         string = "Unable to determine number of parameters n"
         assert string in str(excinfo.value)
 
         with pytest.raises(ValueError) as excinfo:
-            self.cls(mu=np.random.rand(n))
+            self.cls(mu=rand(n))
         string = "Unable to determine data dimensions d"
         assert string in str(excinfo.value)
 
@@ -215,7 +215,7 @@ class TestLinearModel(object):
     def test_reduce(self, d, n):
         if n > d:
             pytest.skip("n > d")
-        model = self.cls(M=np.random.rand(d, n))
+        model = self.cls(M=rand(d, n))
         data = model.evidence().rvs()
         reduced_model = model.reduce(data)
         assert isinstance(reduced_model, ReducedLinearModel)
@@ -291,16 +291,16 @@ class TestLinearMixtureModel(object):
     cls = LinearMixtureModel
 
     def random_model(self, k, d, n):
-        M = np.random.rand(k, d, n)
-        m = np.random.rand(k, d)
+        M = rand(k, d, n)
+        m = rand(k, d)
         C = np.array([np.atleast_2d(scipy.stats.wishart(scale=np.eye(d)).rvs())
                       for _ in range(k)])
 
-        mu = np.random.rand(k, n)
+        mu = rand(k, n)
         Sigma = np.array([np.atleast_2d(scipy.stats.wishart(scale=np.eye(n)
                                                             ).rvs())
                           for _ in range(k)])
-        logA = np.log(np.random.rand(k))
+        logA = np.log(rand(k))
         return self.cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma, logA=logA)
 
     def _test_shape(self, model, k, d, n):
@@ -352,37 +352,37 @@ class TestLinearMixtureModel(object):
 
         self._test_shape(self.cls(M=rand(k, d, n)), k, d, n)
 
-        M = np.random.rand()
+        M = rand()
         model = self.cls(M=M, d=d, n=n)
         assert_allclose(np.diag(model.M[0]), M)
 
-        M = np.random.rand(n)
+        M = rand(n)
         model = self.cls(M=M, d=d)
         assert_allclose(np.diag(model.M[0]), M[:min(d, n)])
 
-        M = np.random.rand(d, n)
+        M = rand(d, n)
         model = self.cls(M=M)
         assert_allclose(model.M[0], M)
 
-        M = np.random.rand()
+        M = rand()
         model = self.cls(M=M, k=k, d=d, n=n)
         for M_ in model.M:
             assert_allclose(M_, model.M[0])
             assert_allclose(np.diag(M_), M)
 
-        M = np.random.rand(n)
+        M = rand(n)
         model = self.cls(M=M, d=d)
         for M_ in model.M:
             assert_allclose(M_, model.M[0])
             assert_allclose(np.diag(M_), M[:min(d, n)])
 
-        M = np.random.rand(d, n)
+        M = rand(d, n)
         model = self.cls(M=M)
         for M_ in model.M:
             assert_allclose(M_, model.M[0])
             assert_allclose(M_, M)
 
-        M = np.random.rand(k, d, n)
+        M = rand(k, d, n)
         model = self.cls(M=M)
         assert_allclose(model.M, M)
 
@@ -395,24 +395,24 @@ class TestLinearMixtureModel(object):
         self._test_shape(self.cls(mu=rand(n), k=k, d=d), k, d, n)
         self._test_shape(self.cls(mu=rand(k, n), d=d), k, d, n)
 
-        mu = np.random.rand()
+        mu = rand()
         model = self.cls(mu=mu, d=d, n=n)
         assert_allclose(model.mu, mu)
 
-        mu = np.random.rand(n)
+        mu = rand(n)
         model = self.cls(mu=mu, d=d)
         assert_allclose(model.mu[0], mu)
 
-        mu = np.random.rand()
+        mu = rand()
         model = self.cls(mu=mu, k=k, d=d, n=n)
         assert_allclose(model.mu, mu)
 
-        mu = np.random.rand(n)
+        mu = rand(n)
         model = self.cls(mu=mu, k=k, d=d)
         for mu_ in model.mu:
             assert_allclose(mu_, mu)
 
-        mu = np.random.rand(k, n)
+        mu = rand(k, n)
         model = self.cls(mu=mu, d=d)
         assert_allclose(model.mu, mu)
 
@@ -427,34 +427,34 @@ class TestLinearMixtureModel(object):
         self._test_shape(self.cls(Sigma=rand(n, n), k=k, d=d), k, d, n)
         self._test_shape(self.cls(Sigma=rand(k, n, n), d=d), k, d, n)
 
-        Sigma = np.random.rand()
+        Sigma = rand()
         model = self.cls(Sigma=Sigma, d=d, n=n)
         assert_allclose(np.diag(model.Sigma[0]), Sigma)
 
-        Sigma = np.random.rand(n)
+        Sigma = rand(n)
         model = self.cls(Sigma=Sigma, d=d)
         assert_allclose(np.diag(model.Sigma[0]), Sigma)
 
-        Sigma = np.random.rand(n, n)
+        Sigma = rand(n, n)
         model = self.cls(Sigma=Sigma, d=d)
         assert_allclose(model.Sigma[0], Sigma)
 
-        Sigma = np.random.rand()
+        Sigma = rand()
         model = self.cls(Sigma=Sigma, k=k, d=d, n=n)
         for Sigma_ in model.Sigma:
             assert_allclose(np.diag(Sigma_), Sigma)
 
-        Sigma = np.random.rand(n)
+        Sigma = rand(n)
         model = self.cls(Sigma=Sigma, k=k, d=d)
         for Sigma_ in model.Sigma:
             assert_allclose(np.diag(Sigma_), Sigma)
 
-        Sigma = np.random.rand(n, n)
+        Sigma = rand(n, n)
         model = self.cls(Sigma=Sigma, k=k, d=d)
         for Sigma_ in model.Sigma:
             assert_allclose(Sigma_, Sigma)
 
-        Sigma = np.random.rand(k, n, n)
+        Sigma = rand(k, n, n)
         model = self.cls(Sigma=Sigma, d=d)
         assert_allclose(model.Sigma, Sigma)
 
@@ -467,24 +467,24 @@ class TestLinearMixtureModel(object):
         self._test_shape(self.cls(m=rand(d), k=k, n=n), k, d, n)
         self._test_shape(self.cls(m=rand(k, d), n=n), k, d, n)
 
-        m = np.random.rand()
+        m = rand()
         model = self.cls(m=m, d=d, n=n)
         assert_allclose(model.m, m)
 
-        m = np.random.rand(d)
+        m = rand(d)
         model = self.cls(m=m, n=n)
         assert_allclose(model.m[0], m)
 
-        m = np.random.rand()
+        m = rand()
         model = self.cls(m=m, k=k, d=d, n=n)
         assert_allclose(model.m, m)
 
-        m = np.random.rand(d)
+        m = rand(d)
         model = self.cls(m=m, k=k, n=n)
         for mu_ in model.m:
             assert_allclose(mu_, m)
 
-        m = np.random.rand(k, d)
+        m = rand(k, d)
         model = self.cls(m=m, n=n)
         assert_allclose(model.m, m)
 
@@ -499,34 +499,34 @@ class TestLinearMixtureModel(object):
         self._test_shape(self.cls(C=rand(d, d), k=k, n=n), k, d, n)
         self._test_shape(self.cls(C=rand(k, d, d), n=n), k, d, n)
 
-        C = np.random.rand()
+        C = rand()
         model = self.cls(C=C, d=d, n=n)
         assert_allclose(np.diag(model.C[0]), C)
 
-        C = np.random.rand(d)
+        C = rand(d)
         model = self.cls(C=C, n=n)
         assert_allclose(np.diag(model.C[0]), C)
 
-        C = np.random.rand(d, d)
+        C = rand(d, d)
         model = self.cls(C=C, n=n)
         assert_allclose(model.C[0], C)
 
-        C = np.random.rand()
+        C = rand()
         model = self.cls(C=C, k=k, d=d, n=n)
         for Sigma_ in model.C:
             assert_allclose(np.diag(Sigma_), C)
 
-        C = np.random.rand(d)
+        C = rand(d)
         model = self.cls(C=C, k=k, n=n)
         for Sigma_ in model.C:
             assert_allclose(np.diag(Sigma_), C)
 
-        C = np.random.rand(d, d)
+        C = rand(d, d)
         model = self.cls(C=C, k=k, n=n)
         for Sigma_ in model.C:
             assert_allclose(Sigma_, C)
 
-        C = np.random.rand(k, d, d)
+        C = rand(k, d, d)
         model = self.cls(C=C, n=n)
         assert_allclose(model.C, C)
 
@@ -535,22 +535,22 @@ class TestLinearMixtureModel(object):
         self._test_shape(self.cls(logA=rand(), k=k, d=d, n=n), k, d, n)
         self._test_shape(self.cls(logA=rand(k), d=d, n=n), k, d, n)
 
-        logA = np.random.rand()
+        logA = rand()
         model = self.cls(logA=logA, d=d, n=n)
         assert_allclose(model.logA, logA)
 
-        logA = np.random.rand(k)
+        logA = rand(k)
         model = self.cls(logA=logA, d=d, n=n)
         assert_allclose(model.logA, logA)
 
     def test_failure(self, k, d, n):
         with pytest.raises(ValueError) as excinfo:
-            self.cls(m=np.random.rand(5))
+            self.cls(m=rand(d))
         string = "Unable to determine number of parameters n"
         assert string in str(excinfo.value)
 
         with pytest.raises(ValueError) as excinfo:
-            self.cls(mu=np.random.rand(3))
+            self.cls(mu=rand(n))
         string = "Unable to determine data dimensions d"
         assert string in str(excinfo.value)
 
