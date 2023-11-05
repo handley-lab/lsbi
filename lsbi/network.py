@@ -61,7 +61,7 @@ class BinaryClassifierBase(nn.Module):
         decay_rate = kwargs.get("decay_rate", 0.95)
         lr = kwargs.get("lr", 0.001)
         device = kwargs.get("device", "cpu")
-            
+
         device = torch.device(device)
 
         # device = torch.device("mps")
@@ -72,7 +72,7 @@ class BinaryClassifierBase(nn.Module):
         labels = torch.tensor(y, dtype=torch.float32)
         labels = labels.unsqueeze(1)
         labels = labels.to(device)
-   
+
         dataset = torch.utils.data.TensorDataset(X, labels)
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=batch_size, shuffle=True
@@ -118,7 +118,6 @@ class BinaryClassifierBase(nn.Module):
         self.batch_norm_1.eval()
         self.batch_norm_2.eval()
         self.batch_norm_3.eval()
-        
 
 
 class BinaryClassifier(BinaryClassifierBase):
