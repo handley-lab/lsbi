@@ -22,7 +22,6 @@ lsbi.network module
 .. automodule:: lsbi.network
    :members:
    :undoc-members:
-   :show-inheritance:
 
 
 lsbi.stats module
@@ -31,15 +30,5 @@ lsbi.stats module
 .. automodule:: lsbi.stats
    :members:
    :undoc-members:
-   :show-inheritance:
-
-
-lsbi.utils module
------------------
-
-.. automodule:: lsbi.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 
