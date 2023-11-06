@@ -169,7 +169,7 @@ class TestLinearModel(object):
 
         samples = []
         model.prior()
-        theta = np.atleast_1d(model.prior().rvs())
+        theta = model.prior().rvs()
         for _ in range(N):
             data = np.atleast_1d(model.likelihood(theta).rvs())
             theta = np.atleast_1d(model.posterior(data).rvs())
@@ -229,6 +229,41 @@ class TestLinearModel(object):
         assert_allclose(model.evidence().logpdf(data), reduced_model.logZ())
         assert_allclose(model.DKL(data), reduced_model.DKL())
 
+    def test_marginal_conditional(self, d, n):
+        model = self.random_model(d, n)
+        i = np.arange(d+n)[-n:]
+        model_1 = model.evidence()
+        model_2 = model.joint().marginalise(i)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(model_1.cov, model_2.cov)
+
+        theta = model.prior().rvs()
+        model_1 = model.likelihood(theta)
+        model_2 = model.joint().condition(i, theta)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(model_1.cov, model_2.cov)
+
+        i = np.arange(d+n)[:d]
+        model_1 = model.prior()
+        model_2 = model.joint().marginalise(i)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(model_1.cov, model_2.cov)
+
+        D = model.evidence().rvs()
+        model_1 = model.posterior(D)
+        model_2 = model.joint().condition(i, D)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(model_1.cov, model_2.cov)
+
+    def test_bayes_theorem(self, d, n):
+        model = self.random_model(d, n)
+        theta = model.prior().rvs()
+        D = model.evidence().rvs()
+        assert_allclose(model.posterior(D).logpdf(theta) +
+                        model.evidence().logpdf(D),
+                        model.likelihood(theta).logpdf(D) +
+                        model.prior().logpdf(theta))
+
 
 @pytest.mark.parametrize("n", np.arange(1, 6))
 class TestReducedLinearModel(object):
@@ -243,11 +278,11 @@ class TestReducedLinearModel(object):
                                   logLmax=logLmax,
                                   mu_L=mu_L, Sigma_L=Sigma_L)
 
-    def test_model(self, n):
+    def test_bayes_theorem(self, n):
         model = self.random_model(n)
-        theta = model.posterior().rvs(1000)
-        assert_allclose(model.logpi(theta) + model.logL(theta),
-                        model.logP(theta) + model.logZ())
+        theta = model.prior().rvs()
+        assert_allclose(model.logP(theta) + model.logZ(),
+                        model.logL(theta) + model.logpi(theta))
 
 
 @pytest.mark.parametrize("n", np.arange(1, 6))
@@ -282,6 +317,12 @@ class TestReducedLinearModelUniformPrior(object):
 
         assert_allclose(reduced_model.logZ(), model.logZ())
         assert_allclose(reduced_model.DKL(), model.DKL())
+
+    def test_bayes_theorem(self, n):
+        model = self.random_model(n)
+        theta = model.posterior().rvs()
+        assert_allclose(model.logP(theta) + model.logZ(),
+                        model.logL(theta) + model.logpi(theta))
 
 
 @pytest.mark.parametrize("k", np.arange(1, 6))
@@ -596,7 +637,7 @@ class TestLinearMixtureModel(object):
 
         samples = []
         model.prior()
-        theta = np.atleast_1d(model.prior().rvs())
+        theta = model.prior().rvs()
         for _ in range(N):
             data = np.atleast_1d(model.likelihood(theta).rvs())
             theta = np.atleast_1d(model.posterior(data).rvs())
@@ -627,3 +668,38 @@ class TestLinearMixtureModel(object):
         assert_allclose(model2.mu, model.mu)
         assert_allclose(model2.Sigma, model.Sigma)
         assert_allclose(model2.logA, model.logA)
+
+    def test_marginal_conditional(self, k, d, n):
+        model = self.random_model(k, d, n)
+        i = np.arange(d+n)[-n:]
+        model_1 = model.evidence()
+        model_2 = model.joint().marginalise(i)
+        assert_allclose(model_1.means, model_2.means)
+        assert_allclose(model_1.covs, model_2.covs)
+
+        theta = model.prior().rvs()
+        model_1 = model.likelihood(theta)
+        model_2 = model.joint().condition(i, theta)
+        assert_allclose(model_1.means, model_2.means)
+        assert_allclose(model_1.covs, model_2.covs)
+
+        i = np.arange(d+n)[:d]
+        model_1 = model.prior()
+        model_2 = model.joint().marginalise(i)
+        assert_allclose(model_1.means, model_2.means)
+        assert_allclose(model_1.covs, model_2.covs)
+
+        D = model.evidence().rvs()
+        model_1 = model.posterior(D)
+        model_2 = model.joint().condition(i, D)
+        assert_allclose(model_1.means, model_2.means)
+        assert_allclose(model_1.covs, model_2.covs)
+
+    def test_bayes_theorem(self, k, d, n):
+        model = self.random_model(k, d, n)
+        theta = model.prior().rvs()
+        D = model.evidence().rvs()
+        assert_allclose(model.posterior(D).logpdf(theta) +
+                        model.evidence().logpdf(D),
+                        model.likelihood(theta).logpdf(D) +
+                        model.prior().logpdf(theta))

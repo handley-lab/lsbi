@@ -91,6 +91,8 @@ class LinearModel(object):
     @classmethod
     def from_joint(cls, mean, cov, n):
         """Construct model from joint distribution."""
+        mean = np.atleast_1d(mean)
+        cov = np.atleast_2d(cov)
         mu = mean[-n:]
         Sigma = cov[-n:, -n:]
         M = solve(Sigma, cov[-n:, :-n]).T
@@ -118,6 +120,7 @@ class LinearModel(object):
         ----------
         theta : array_like, shape (n,)
         """
+        theta = np.atleast_1d(theta)
         return multivariate_normal(self.m + self.M @ theta, self.C)
 
     def prior(self):
@@ -136,6 +139,7 @@ class LinearModel(object):
         ----------
         D : array_like, shape (d,)
         """
+        D = np.atleast_1d(D)
         Sigma = inv(inv(self.Sigma) + self.M.T @ inv(self.C) @ self.M)
         D0 = self.m + self.M @ self.mu
         mu = self.mu + Sigma @ self.M.T @ inv(self.C) @ (D-D0)
@@ -488,6 +492,7 @@ class LinearMixtureModel(object):
         ----------
         theta : array_like, shape (n,)
         """
+        theta = np.atleast_1d(theta)
         mu = self.m + np.einsum('ija,a->ij', self.M, theta)
         prior = self.prior()
         logA = (prior.logpdf(theta, reduce=False) + self.logA
@@ -514,6 +519,7 @@ class LinearMixtureModel(object):
         ----------
         D : array_like, shape (d,)
         """
+        D = np.atleast_1d(D)
         Sigma = inv(inv(self.Sigma) + np.einsum('iaj,iab,ibk->ijk',
                                                 self.M, inv(self.C), self.M))
         D0 = self.m + np.einsum('ija,ia->ij', self.M, self.mu)
