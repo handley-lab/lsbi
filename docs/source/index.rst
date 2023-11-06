@@ -4,7 +4,7 @@
    :maxdepth: 1
    :caption: Contents
 
-   anesthetic <modules>
+   lsbi <modules>
 
 .. include:: ../../README.rst
 
