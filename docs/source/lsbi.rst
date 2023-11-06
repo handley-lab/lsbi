@@ -34,3 +34,12 @@ lsbi.stats module
    :show-inheritance:
 
 
+lsbi.utils module
+-----------------
+
+.. automodule:: lsbi.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
