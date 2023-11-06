@@ -10,16 +10,13 @@ class BinaryClassifierBase(nn.Module):
 
     A simple binary classifier:
     - 5 hidden layers
-        - Layer 1 with 130 units
-        - Layers 2-4 with 16 units
+        - Layer 1 with initial_dim units
+        - Layers 2-4 with internal_dim units
     - Leaky ReLU activation function
     - Batch normalization
     - Output layer with 1 unit linear classifier unit
-    - Adam optimizer with learning rate 0.001
-    - Exponential learning rate decay with decay rate 0.95
-    - Binary cross entropy loss function
-
-    and 16 hidden units per layer.
+    - Adam optimizer with default learning rate 0.001
+    - Exponential learning rate decay with default decay rate 0.95
 
     Parameters
     ----------
@@ -35,28 +32,28 @@ class BinaryClassifierBase(nn.Module):
         super(BinaryClassifierBase, self).__init__()
 
         self.model = nn.Sequential(
-                nn.Linear(input_dim, initial_dim),
-                nn.LeakyReLU(),
-                nn.BatchNorm1d(initial_dim),
-                nn.Linear(initial_dim, internal_dim),
-                nn.LeakyReLU(),
-                nn.BatchNorm1d(internal_dim),
-                nn.Linear(internal_dim, internal_dim),
-                nn.LeakyReLU(),
-                nn.BatchNorm1d(internal_dim),
-                nn.Linear(internal_dim, internal_dim),
-                nn.LeakyReLU(),
-                nn.BatchNorm1d(internal_dim),
-                nn.Linear(internal_dim, internal_dim),
-                nn.LeakyReLU(),
-                nn.Linear(internal_dim, 1),
-                )
+            nn.Linear(input_dim, initial_dim),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(initial_dim),
+            nn.Linear(initial_dim, internal_dim),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(internal_dim),
+            nn.Linear(internal_dim, internal_dim),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(internal_dim),
+            nn.Linear(internal_dim, internal_dim),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(internal_dim),
+            nn.Linear(internal_dim, internal_dim),
+            nn.LeakyReLU(),
+            nn.Linear(internal_dim, 1),
+        )
 
     def forward(self, x):
         """Forward pass through the network, logit output."""
         return self.model(x)
 
-    def loss(self, x, y, *args, **kwargs):
+    def loss(self, x, y):
         """Loss function for the network."""
         raise NotImplementedError
 
@@ -132,6 +129,10 @@ class BinaryClassifierBase(nn.Module):
             mean_loss = torch.mean(torch.tensor(epoch_loss)).item()
             print(f"Epoch {epoch+1}/{num_epochs}, Loss: {mean_loss}")
 
+        # once training is done, set the model to eval(), ensures batchnorm
+        # and dropout are not used during inference
+        self.model.eval()
+
 
 class BinaryClassifier(BinaryClassifierBase):
     """
@@ -140,7 +141,7 @@ class BinaryClassifier(BinaryClassifierBase):
     Furnishes with a direction prediction of the Bayes Factor.
     """
 
-    def loss(self, x, y, *args, **kwargs):
+    def loss(self, x, y):
         """Binary cross entropy loss function for the network."""
         y_ = self.forward(x)
         return nn.BCEWithLogitsLoss()(y_, y)
@@ -161,26 +162,35 @@ class BinaryClassifierLPop(BinaryClassifierBase):
     Extends the BinaryClassifierBase to use a LPop Exponential loss.
 
     Furnishes with a direction prediction of the Bayes Factor.
+
+    Parameters
+    ----------
+    alpha : float, optional (default=2.0)
+        Scale factor for the exponent transform.
     """
 
-    def lpop(self, x, alpha=2.0):
+    def __init__(self, *args, **kwargs):
+        self.alpha = kwargs.pop("alpha", 2.0)
+        super(BinaryClassifierLPop, self).__init__(*args, **kwargs)
+        
+    def lpop(self, x):
         """Leaky parity odd power transform."""
-        return x + x * torch.pow(torch.abs(x), alpha - 1.0)
+        return x + x * torch.pow(torch.abs(x), self.alpha - 1.0)
 
-    def loss(self, x, y, alpha=2.0, *args, **kwargs):
+    def loss(self, x, y):
         """Lpop Loss function for the network."""
         x = self.forward(x)
         return torch.exp(
-            torch.logsumexp((0.5 - y) * self.lpop(x, alpha=alpha), dim=0)
+            torch.logsumexp((0.5 - y) * self.lpop(x), dim=0)
             - torch.log(torch.tensor(x.shape[0], dtype=torch.float64))
         ).squeeze()
 
-    def predict(self, x, alpha=2.0):
+    def predict(self, x):
         """Predict the log Bayes Factor.
 
         log K = lnP(Class 1) - lnP(Class 0)
         """
         x = torch.tensor(x, dtype=torch.float32)
         pred = self.forward(x)
-        pred = self.lpop(pred, alpha=alpha)
+        pred = self.lpop(pred)
         return pred.detach().numpy()

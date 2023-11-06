@@ -75,9 +75,13 @@ class TestClassifier(TestClassifierBase):
         y_start, y_end = self.fit_model(model, x.shape[1])
         assert (y_start != y_end).any()
 
-
+@pytest.mark.parametrize("alpha", [2, 5])
 class TestClassifierLPop(TestClassifierBase):
     CLS = BinaryClassifierLPop
+
+    @pytest.fixture
+    def model(self, input_dim, internal_dim, initial_dim,alpha):
+        return self.CLS(input_dim, internal_dim, initial_dim,alpha=alpha)
 
     def test_loss(self, model, x, y):
         loss = model.loss(x, y)
