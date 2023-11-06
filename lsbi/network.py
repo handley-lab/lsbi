@@ -6,47 +6,57 @@ from torch.optim.lr_scheduler import ExponentialLR
 
 
 class BinaryClassifierBase(nn.Module):
-    """Base model for binary classification. Following 2305.11241."""
+    """Base model for binary classification. Following 2305.11241.
+
+    A simple binary classifier:
+    - 5 hidden layers
+        - Layer 1 with 130 units
+        - Layers 2-4 with 16 units
+    - Leaky ReLU activation function
+    - Batch normalization
+    - Output layer with 1 unit linear classifier unit
+    - Adam optimizer with learning rate 0.001
+    - Exponential learning rate decay with decay rate 0.95
+    - Binary cross entropy loss function
+
+    and 16 hidden units per layer.
+
+    Parameters
+    ----------
+    input_dim : int
+        Dimension of the input data.
+    internal_dim : int, optional (default=16)
+        Dimension of the internal layers of the network.
+    initial_dim : int, optional (default=130)
+        Dimension of the first layer of the network.
+    """
 
     def __init__(self, input_dim, internal_dim=16, initial_dim=130):
         super(BinaryClassifierBase, self).__init__()
 
-        self.dense = nn.Linear(input_dim, initial_dim)
-        self.leaky_relu = nn.LeakyReLU()
-        self.batch_norm = nn.BatchNorm1d(initial_dim)
-        self.dense_1 = nn.Linear(initial_dim, internal_dim)
-        self.leaky_relu_1 = nn.LeakyReLU()
-        self.batch_norm_1 = nn.BatchNorm1d(internal_dim)
-        self.dense_2 = nn.Linear(internal_dim, internal_dim)
-        self.leaky_relu_2 = nn.LeakyReLU()
-        self.batch_norm_2 = nn.BatchNorm1d(internal_dim)
-        self.dense_3 = nn.Linear(internal_dim, internal_dim)
-        self.leaky_relu_3 = nn.LeakyReLU()
-        self.batch_norm_3 = nn.BatchNorm1d(internal_dim)
-        self.dense_4 = nn.Linear(internal_dim, internal_dim)
-        self.leaky_relu_4 = nn.LeakyReLU()
-        self.dense_5 = nn.Linear(internal_dim, 1)
+        self.model = nn.Sequential(
+                nn.Linear(input_dim, initial_dim),
+                nn.LeakyReLU(),
+                nn.BatchNorm1d(initial_dim),
+                nn.Linear(initial_dim, internal_dim),
+                nn.LeakyReLU(),
+                nn.BatchNorm1d(internal_dim),
+                nn.Linear(internal_dim, internal_dim),
+                nn.LeakyReLU(),
+                nn.BatchNorm1d(internal_dim),
+                nn.Linear(internal_dim, internal_dim),
+                nn.LeakyReLU(),
+                nn.BatchNorm1d(internal_dim),
+                nn.Linear(internal_dim, internal_dim),
+                nn.LeakyReLU(),
+                nn.Linear(internal_dim, 1),
+                )
 
     def forward(self, x):
         """Forward pass through the network, logit output."""
-        x = self.dense(x)
-        x = self.leaky_relu(x)
-        x = self.batch_norm(x)
-        x = self.dense_1(x)
-        x = self.leaky_relu_1(x)
-        x = self.batch_norm_1(x)
-        x = self.dense_2(x)
-        x = self.leaky_relu_2(x)
-        x = self.batch_norm_2(x)
-        x = self.dense_3(x)
-        x = self.leaky_relu_3(x)
-        x = self.batch_norm_3(x)
-        x = self.dense_4(x)
-        x = self.leaky_relu_4(x)
-        x = self.dense_5(x)
-        return x
+        return self.model(x)
 
-    def loss(self, x):
+    def loss(self, x, y, *args, **kwargs):
         """Loss function for the network."""
         raise NotImplementedError
 
@@ -55,16 +65,31 @@ class BinaryClassifierBase(nn.Module):
         raise NotImplementedError
 
     def fit(self, X, y, **kwargs):
-        """Fit classifier on input features X to predict labels y."""
+        """Fit classifier on input features X to predict labels y.
+
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            Input data.
+        y : array-like, shape (n_samples,)
+            Target values.
+        num_epochs : int, optional (default=10)
+            Number of epochs to train the network.
+        batch_size : int, optional (default=128)
+            Batch size for training.
+        decay_rate : float, optional (default=0.95)
+            Decay rate for the learning rate scheduler.
+        lr : float, optional (default=0.001)
+            Learning rate for the optimizer.
+        device : str, optional (default="cpu")
+            Device to use for training.
+        """
         num_epochs = kwargs.get("num_epochs", 10)
         batch_size = kwargs.get("batch_size", 128)
         decay_rate = kwargs.get("decay_rate", 0.95)
         lr = kwargs.get("lr", 0.001)
-        device = kwargs.get("device", "cpu")
+        device = torch.device(kwargs.get("device", "cpu"))
 
-        device = torch.device(device)
-
-        # device = torch.device("mps")
         print("Using device: ", device)
 
         # Convert labels to torch tensor
@@ -73,6 +98,7 @@ class BinaryClassifierBase(nn.Module):
         labels = labels.unsqueeze(1)
         labels = labels.to(device)
 
+        # Create a DataLoader for batch training
         dataset = torch.utils.data.TensorDataset(X, labels)
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=batch_size, shuffle=True
@@ -80,19 +106,13 @@ class BinaryClassifierBase(nn.Module):
 
         # Define the loss function and optimizer
         criterion = self.loss
-
         optimizer = optim.Adam(self.parameters(), lr=lr)
 
         # Create the scheduler and pass in the optimizer and decay rate
         scheduler = ExponentialLR(optimizer, gamma=decay_rate)
 
-        # Train the binary classifier
-        num_epochs = num_epochs
-
         # Create a DataLoader for batch training
-        self.to(torch.float32)
-        # data = data.to(device)
-        self.to(device)
+        self.to(device=device, dtype=torch.float32)
 
         for epoch in range(num_epochs):
             epoch_loss = []
@@ -112,13 +132,6 @@ class BinaryClassifierBase(nn.Module):
             mean_loss = torch.mean(torch.tensor(epoch_loss)).item()
             print(f"Epoch {epoch+1}/{num_epochs}, Loss: {mean_loss}")
 
-        # Evaluate the model
-        self.to("cpu")
-        self.batch_norm.eval()
-        self.batch_norm_1.eval()
-        self.batch_norm_2.eval()
-        self.batch_norm_3.eval()
-
 
 class BinaryClassifier(BinaryClassifierBase):
     """
@@ -127,10 +140,10 @@ class BinaryClassifier(BinaryClassifierBase):
     Furnishes with a direction prediction of the Bayes Factor.
     """
 
-    def loss(self, x, target):
+    def loss(self, x, y, *args, **kwargs):
         """Binary cross entropy loss function for the network."""
-        x = self.forward(x)
-        return nn.BCEWithLogitsLoss()(x, target)
+        y_ = self.forward(x)
+        return nn.BCEWithLogitsLoss()(y_, y)
 
     def predict(self, x):
         """Predict the log Bayes Factor.
@@ -154,11 +167,11 @@ class BinaryClassifierLPop(BinaryClassifierBase):
         """Leaky parity odd power transform."""
         return x + x * torch.pow(torch.abs(x), alpha - 1.0)
 
-    def loss(self, x, target, alpha=2.0):
+    def loss(self, x, y, alpha=2.0, *args, **kwargs):
         """Lpop Loss function for the network."""
         x = self.forward(x)
         return torch.exp(
-            torch.logsumexp((0.5 - target) * self.lpop(x, alpha=alpha), dim=0)
+            torch.logsumexp((0.5 - y) * self.lpop(x, alpha=alpha), dim=0)
             - torch.log(torch.tensor(x.shape[0], dtype=torch.float64))
         ).squeeze()
 

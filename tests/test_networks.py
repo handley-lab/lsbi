@@ -44,9 +44,9 @@ class TestClassifierBase:
         y = model.forward(x)
         assert y.shape == (10, 1)
 
-    def test_loss(self, model, x):
+    def test_loss(self, model, x, y):
         with pytest.raises(NotImplementedError):
-            model.loss(x)
+            model.loss(x, y)
 
     def test_predict(self, model, x):
         with pytest.raises(NotImplementedError):
