@@ -7,6 +7,7 @@ name = "lsbi"
 dynamic = ["version"]
 authors = [
     { name="Will Handley", email="williamjameshandley@gmail.com" },
+    { name="David Yallup", email="david.yallup@gmail.com" },
 ]
 description = "Linear Simulation Based Inference"
 readme = "README.rst"
@@ -16,6 +17,7 @@ dependencies = [
     'numpy',
     'scipy',
     'matplotlib',
+    'torch',
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
