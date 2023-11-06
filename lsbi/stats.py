@@ -117,6 +117,7 @@ class mixture_multivariate_normal(object):
         """
         i = self._bar(indices)
         k = indices
+        marginal = self.marginalise(i)
 
         means = (self.means[:, i] +
                  np.einsum('ija,iab,ib->ij', self.covs[:, i][:, :, k],
@@ -126,7 +127,8 @@ class mixture_multivariate_normal(object):
                 np.einsum('ija,iab,ibk->ijk', self.covs[:, i][:, :, k],
                           inv(self.covs[:, k][:, :, k]),
                           self.covs[:, k][:, :, i]))
-        logA = self.logA
+        logA = (marginal.logpdf(values, reduce=False) + self.logA
+                - marginal.logpdf(values))
         return mixture_multivariate_normal(means, covs, logA)
 
     def _bar(self, indices):

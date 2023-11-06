@@ -676,24 +676,28 @@ class TestLinearMixtureModel(object):
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.means, model_2.means)
         assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.logA, model_2.logA)
 
         theta = model.prior().rvs()
         model_1 = model.likelihood(theta)
         model_2 = model.joint().condition(i, theta)
         assert_allclose(model_1.means, model_2.means)
         assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.logA, model_2.logA)
 
         i = np.arange(d+n)[:d]
         model_1 = model.prior()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.means, model_2.means)
         assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.logA, model_2.logA)
 
         D = model.evidence().rvs()
         model_1 = model.posterior(D)
         model_2 = model.joint().condition(i, D)
         assert_allclose(model_1.means, model_2.means)
         assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.logA, model_2.logA)
 
     def test_bayes_theorem(self, k, d, n):
         model = self.random_model(k, d, n)
