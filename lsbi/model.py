@@ -1,6 +1,5 @@
 """Gaussian models for linear Bayesian inference."""
 import numpy as np
-from functools import cached_property
 from scipy.stats import multivariate_normal
 from lsbi.stats import mixture_multivariate_normal
 from numpy.linalg import solve, inv, slogdet
@@ -14,8 +13,8 @@ def logdet(A):
 class LinearModel(object):
     """A linear model.
 
-    D|theta ~ N( m + M theta, C)
-    theta   ~ N( mu, Sigma)
+    D|theta ~ N( m + M theta, C )
+    theta   ~ N( mu, Sigma )
 
           Parameters: theta (n,)
                 Data: D     (d,)
@@ -137,9 +136,9 @@ class LinearModel(object):
         ----------
         D : array_like, shape (d,)
         """
-        Sigma = inv(self.invSigma + self.M.T @ self.invC @ self.M)
+        Sigma = inv(inv(self.Sigma) + self.M.T @ inv(self.C) @ self.M)
         D0 = self.m + self.M @ self.mu
-        mu = self.mu + Sigma @ self.M.T @ self.invC @ (D-D0)
+        mu = self.mu + Sigma @ self.M.T @ inv(self.C) @ (D-D0)
         return multivariate_normal(mu, Sigma)
 
     def evidence(self):
@@ -189,24 +188,14 @@ class LinearModel(object):
         -------
         ReducedLinearModel
         """
-        Sigma_L = inv(self.M.T @ self.invC @ self.M)
-        mu_L = Sigma_L @ self.M.T @ self.invC @ (D-self.m)
-        logLmax = (- logdet(2 * np.pi * self.C)/2 - (D-self.m) @ self.invC @
-                   (self.C - self.M @ Sigma_L @ self.M.T) @ self.invC @
+        Sigma_L = inv(self.M.T @ inv(self.C) @ self.M)
+        mu_L = Sigma_L @ self.M.T @ inv(self.C) @ (D-self.m)
+        logLmax = (- logdet(2 * np.pi * self.C)/2 - (D-self.m) @ inv(self.C) @
+                   (self.C - self.M @ Sigma_L @ self.M.T) @ inv(self.C) @
                    (D-self.m)/2)
         return ReducedLinearModel(mu_L=mu_L, Sigma_L=Sigma_L, logLmax=logLmax,
                                   mu_pi=self.prior().mean,
                                   Sigma_pi=self.prior().cov)
-
-    @cached_property
-    def invSigma(self):
-        """Inverse of prior covariance."""
-        return inv(self.Sigma)
-
-    @cached_property
-    def invC(self):
-        """Inverse of data covariance."""
-        return inv(self.C)
 
     def _atleast_2d(self, x):
         if x is None:
@@ -369,9 +358,9 @@ class ReducedLinearModelUniformPrior(object):
 class LinearMixtureModel(object):
     """A linear mixture model.
 
-    D|theta, A ~ N( m + M theta, C)
-    theta|A    ~ N( mu, Sigma)
-    A          ~ categorical(exp(logA))
+    D|theta, A ~ N( m + M theta, C )
+    theta|A    ~ N( mu, Sigma )
+    A          ~ categorical( exp(logA) )
 
     Defined by:
              Parameters: theta (n,)
@@ -516,7 +505,7 @@ class LinearMixtureModel(object):
     def posterior(self, D):
         """P(theta|D) as a scipy distribution object.
 
-        theta|D, A ~ N( mu + S M'C^{-1}(D - m - M mu), S)
+        theta|D, A ~ N( mu + S M'C^{-1}(D - m - M mu), S )
         D|A        ~ N( m + M mu, C + M Sigma M' )
         A          ~ categorical(exp(logA))
         S = (Sigma^{-1} + M'C^{-1}M)^{-1}
@@ -525,11 +514,11 @@ class LinearMixtureModel(object):
         ----------
         D : array_like, shape (d,)
         """
-        Sigma = inv(self.invSigma + np.einsum('iaj,iab,ibk->ijk',
-                                              self.M, self.invC, self.M))
+        Sigma = inv(inv(self.Sigma) + np.einsum('iaj,iab,ibk->ijk',
+                                                self.M, inv(self.C), self.M))
         D0 = self.m + np.einsum('ija,ia->ij', self.M, self.mu)
         mu = self.mu + np.einsum('ija,iba,ibc,ic->ij',
-                                 Sigma, self.M, self.invC, D-D0)
+                                 Sigma, self.M, inv(self.C), D-D0)
         evidence = self.evidence()
         logA = (evidence.logpdf(D, reduce=False) + self.logA
                 - evidence.logpdf(D))
@@ -561,16 +550,6 @@ class LinearMixtureModel(object):
         Sigma = np.block([[evidence.covs, corr],
                           [corr.transpose(0, 2, 1), prior.covs]])
         return mixture_multivariate_normal(mu, Sigma, self.logA)
-
-    @cached_property
-    def invSigma(self):
-        """Inverse of prior covariance."""
-        return inv(self.Sigma)
-
-    @cached_property
-    def invC(self):
-        """Inverse of data covariance."""
-        return inv(self.C)
 
     def _atleast_3d(self, x):
         if x is None:
