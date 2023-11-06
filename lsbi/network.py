@@ -172,7 +172,7 @@ class BinaryClassifierLPop(BinaryClassifierBase):
     def __init__(self, *args, **kwargs):
         self.alpha = kwargs.pop("alpha", 2.0)
         super(BinaryClassifierLPop, self).__init__(*args, **kwargs)
-        
+
     def lpop(self, x):
         """Leaky parity odd power transform."""
         return x + x * torch.pow(torch.abs(x), self.alpha - 1.0)
