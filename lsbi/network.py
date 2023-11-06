@@ -9,14 +9,14 @@ class BinaryClassifierBase(nn.Module):
     """Base model for binary classification. Following 2305.11241.
 
     A simple binary classifier:
-    - 5 hidden layers
-        - Layer 1 with initial_dim units
-        - Layers 2-4 with internal_dim units
-    - Leaky ReLU activation function
-    - Batch normalization
-    - Output layer with 1 unit linear classifier unit
-    - Adam optimizer with default learning rate 0.001
-    - Exponential learning rate decay with default decay rate 0.95
+        - 5 hidden layers:
+            - Layer 1 with initial_dim units
+            - Layers 2-4 with internal_dim units
+        - Leaky ReLU activation function
+        - Batch normalization
+        - Output layer with 1 unit linear classifier unit
+        - Adam optimizer with default learning rate 0.001
+        - Exponential learning rate decay with default decay rate 0.95
 
     Parameters
     ----------
