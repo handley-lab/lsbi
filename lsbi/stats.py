@@ -7,7 +7,7 @@ from numpy.linalg import inv
 
 class multivariate_normal(multivariate_normal_frozen):  # noqa: D101
     def marginalise(self, indices):
-        """Marginalise out the given indices.
+        """Marginalise over indices.
 
         Parameters
         ----------
@@ -20,7 +20,7 @@ class multivariate_normal(multivariate_normal_frozen):  # noqa: D101
         return multivariate_normal(mean, cov)
 
     def condition(self, indices, values):
-        """Condition over the given indices.
+        """Condition on indices with values.
 
         Parameters
         ----------
@@ -92,7 +92,7 @@ class mixture_multivariate_normal(object):
                           + choleskys[i] @ x[..., None])
 
     def marginalise(self, indices):
-        """Marginalise out the given indices.
+        """Marginalise over indices.
 
         Parameters
         ----------
@@ -106,7 +106,7 @@ class mixture_multivariate_normal(object):
         return mixture_multivariate_normal(means, covs, logA)
 
     def condition(self, indices, values):
-        """Condition over the given indices.
+        """Condition on indices with values.
 
         Parameters
         ----------
