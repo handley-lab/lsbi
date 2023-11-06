@@ -1,5 +1,6 @@
 import pytest
-from lsbi.stats import mixture_multivariate_normal
+from lsbi.stats import (mixture_multivariate_normal,
+                        multivariate_normal)
 from numpy.testing import assert_allclose
 import numpy as np
 import scipy.stats
@@ -47,3 +48,52 @@ def test_mixture_multivariate_normal(k, d):
     for shape in [(d,), (3, d), (3, 4, d)]:
         x = np.random.rand(*shape)
         assert mvns[0].logpdf(x).shape == mixture.logpdf(x).shape
+
+
+def test_marginalise_condition_multivariate_normal():
+    d = 5
+    mean = np.random.randn(d)
+    cov = scipy.stats.wishart(scale=np.eye(d)).rvs()
+    dist_1 = multivariate_normal(mean, cov)
+    dist_2 = dist_1.marginalise([0, 2, 4])
+    assert dist_2.mean.shape == (2,)
+    assert dist_2.cov.shape == (2, 2)
+    assert_allclose(dist_1.mean[[1, 3]], dist_2.mean)
+    assert_allclose(dist_1.cov[[1, 3]][:, [1, 3]], dist_2.cov)
+
+    dist_3 = dist_1.condition([0, 2, 4], [1, 2, 3])
+    assert dist_3.mean.shape == (2,)
+    assert dist_3.cov.shape == (2, 2)
+
+
+@pytest.mark.parametrize("k", np.arange(1, 5))
+@pytest.mark.parametrize("d", np.arange(1, 5))
+@pytest.mark.parametrize("p", np.arange(1, 5))
+def test_marginalise_condition_mixtures(d, k, p):
+    if d <= p:
+        pytest.skip("d <= p")
+    i = np.random.choice(d, p, replace=False)
+    j = np.array([x for x in range(d) if x not in i])
+    means = np.random.randn(k, d)
+    covs = scipy.stats.wishart(scale=np.eye(d)).rvs(k)
+    if k == 1:
+        covs = np.array([covs])
+    covs.shape
+    means.shape
+    logA = np.log(scipy.stats.dirichlet(np.ones(k)).rvs())[0] + 10
+    mixture = mixture_multivariate_normal(means, covs, logA)
+    mixture_2 = mixture.marginalise(i)
+    assert mixture_2.means.shape == (k, d-p)
+    assert mixture_2.covs.shape == (k, d-p, d-p)
+    assert_allclose(mixture.means[:, j], mixture_2.means)
+    assert_allclose(mixture.covs[:, j][:, :, j], mixture_2.covs)
+
+    v = np.random.randn(k, p)
+    mixture_3 = mixture.condition(i, v)
+    assert mixture_3.means.shape == (k, d-p)
+    assert mixture_3.covs.shape == (k, d-p, d-p)
+
+    v = np.random.randn(p)
+    mixture_3 = mixture.condition(i, v)
+    assert mixture_3.means.shape == (k, d-p)
+    assert mixture_3.covs.shape == (k, d-p, d-p)
