@@ -1,7 +1,7 @@
 """Gaussian models for linear Bayesian inference."""
 import numpy as np
-from scipy.stats import multivariate_normal
-from lsbi.stats import mixture_multivariate_normal
+from lsbi.stats import (mixture_multivariate_normal,
+                        multivariate_normal)
 from numpy.linalg import solve, inv, slogdet
 
 
@@ -274,7 +274,7 @@ class ReducedLinearModel(object):
     def logL(self, theta):
         """P(D|theta) as a scalar."""
         return (self.logLmax
-                + multivariate_normal.logpdf(theta, self.mu_L, self.Sigma_L)
+                + multivariate_normal(self.mu_L, self.Sigma_L).logpdf(theta)
                 + logdet(2 * np.pi * self.Sigma_L)/2)
 
     def logZ(self):
@@ -344,7 +344,7 @@ class ReducedLinearModelUniformPrior(object):
     def logL(self, theta):
         """P(D|theta) as a scalar."""
         return (self.logLmax + logdet(2 * np.pi * self.Sigma_L)/2
-                + multivariate_normal.logpdf(theta, self.mu_L, self.Sigma_L))
+                + multivariate_normal(self.mu_L, self.Sigma_L).logpdf(theta))
 
     def logZ(self):
         """P(D) as a scalar."""
