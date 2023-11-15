@@ -215,8 +215,8 @@ class mixture_multivariate_normal(object):
                 x[..., i] = f(theta[..., i])
             else:
                 y = x[..., i]
-                a = -1e10 * np.ones_like(y)
-                b = +1e10 * np.ones_like(y)
+                a = (m - 10 * np.sqrt(c)).min(axis=-1)
+                b = (m + 10 * np.sqrt(c)).max(axis=-1)
                 theta[..., i] = bisect(f, a, b)
         if inverse:
             return x

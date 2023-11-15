@@ -7,6 +7,12 @@ def logdet(A):
     return np.linalg.slogdet(A)[1]
 
 
+def quantise(f, x, tol=1e-8):
+    """Quantise f(x) to zero within tolerance tol."""
+    y = np.atleast_1d(f(x))
+    return np.where(np.abs(y) < tol, 0, y)
+
+
 def bisect(f, a, b, args=(), tol=1e-8):
     """Vectorised simple bisection search.
 
@@ -31,10 +37,19 @@ def bisect(f, a, b, args=(), tol=1e-8):
         Solution to the equation f(x) = 0.
     """
     while np.abs(a-b).max() > tol:
-        fa = f(a)
-        fb = f(b)
+        fa = quantise(f, a, tol)
+        fb = quantise(f, b, tol)
+        a = np.where(fb == 0, b, a)
+        b = np.where(fa == 0, a, b)
+
+        if np.any(fa*fb > 0):
+            raise ValueError("f(a) and f(b) must have opposite signs")
         q = (a+b)/2
-        fq = f(q)
-        a = np.where(np.sign(fq) == np.sign(fa), q, a)
-        b = np.where(np.sign(fq) == np.sign(fb), q, b)
+        fq = quantise(f, q, tol)
+
+        a = np.where(fq == 0, q, a)
+        a = np.where(fa * fq > 0, q, a)
+
+        b = np.where(fq == 0, q, b)
+        b = np.where(fb * fq > 0, q, b)
     return (a+b)/2
