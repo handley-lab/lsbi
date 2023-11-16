@@ -50,6 +50,72 @@ def test_mixture_multivariate_normal(k, d):
         assert mvns[0].logpdf(x).shape == mixture.logpdf(x).shape
 
 
+def test_mixture_multivariate_normal_bijector():
+    k = 4
+    d = 10
+    covs = scipy.stats.wishart.rvs(d, np.eye(d), size=k)
+    means = np.random.randn(k, d)
+    logA = np.log(scipy.stats.dirichlet.rvs(np.ones(k))[0])
+    model = mixture_multivariate_normal(means, covs, logA)
+
+    # Test inversion
+    x = np.random.rand(1000, d)
+    theta = model.bijector(x)
+    assert_allclose(model.bijector(theta, inverse=True), x, atol=1e-6)
+
+    # Test sampling
+    samples = model.rvs(1000)
+    for i in range(d):
+        p = scipy.stats.kstest(theta[:, i], samples[:, i]).pvalue
+        assert p > 1e-5
+
+    p = scipy.stats.kstest(model.logpdf(samples), model.logpdf(theta)).pvalue
+    assert p > 1e-5
+
+    # Test shapes
+    x = np.random.rand(d)
+    theta = model.bijector(x)
+    assert theta.shape == x.shape
+    assert model.bijector(theta, inverse=True).shape == x.shape
+
+    x = np.random.rand(3, 4, d)
+    theta = model.bijector(x)
+    assert theta.shape == x.shape
+    assert model.bijector(theta, inverse=True).shape == x.shape
+
+
+def test_multivariate_normal_bijector():
+    d = 10
+    cov = scipy.stats.wishart.rvs(d, np.eye(d))
+    mean = np.random.randn(d)
+    model = multivariate_normal(mean, cov)
+
+    # Test inversion
+    x = np.random.rand(1000, d)
+    theta = model.bijector(x)
+    assert_allclose(model.bijector(theta, inverse=True), x, atol=1e-6)
+
+    # Test sampling
+    samples = model.rvs(1000)
+    for i in range(d):
+        p = scipy.stats.kstest(theta[:, i], samples[:, i]).pvalue
+        assert p > 1e-5
+
+    p = scipy.stats.kstest(model.logpdf(samples), model.logpdf(theta)).pvalue
+    assert p > 1e-5
+
+    # Test shapes
+    x = np.random.rand(d)
+    theta = model.bijector(x)
+    assert theta.shape == x.shape
+    assert model.bijector(theta, inverse=True).shape == x.shape
+
+    x = np.random.rand(3, 4, d)
+    theta = model.bijector(x)
+    assert theta.shape == x.shape
+    assert model.bijector(theta, inverse=True).shape == x.shape
+
+
 def test_marginalise_condition_multivariate_normal():
     d = 5
     mean = np.random.randn(d)
