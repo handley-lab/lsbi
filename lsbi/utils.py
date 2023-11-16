@@ -36,6 +36,8 @@ def bisect(f, a, b, args=(), tol=1e-8):
     x : ndarray
         Solution to the equation f(x) = 0.
     """
+    a = np.array(a)
+    b = np.array(b)
     while np.abs(a-b).max() > tol:
         fa = quantise(f, a, tol)
         fb = quantise(f, b, tol)
