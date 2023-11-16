@@ -2,7 +2,9 @@
 import numpy as np
 import scipy.stats
 from scipy.stats._multivariate import multivariate_normal_frozen
+from scipy.special import logsumexp, erf
 from numpy.linalg import inv
+from lsbi.utils import bisect
 
 
 class multivariate_normal(multivariate_normal_frozen):  # noqa: D101
@@ -42,6 +44,33 @@ class multivariate_normal(multivariate_normal_frozen):  # noqa: D101
         k = np.ones(len(self.mean), dtype=bool)
         k[indices] = False
         return k
+
+    def bijector(self, x, inverse=False):
+        """Bijector between U([0, 1])^d and the distribution.
+
+        - x in [0, 1]^d is the hypercube space.
+        - theta in R^d is the physical space.
+
+        Computes the transformation from x to theta or theta to x depending on
+        the value of inverse.
+
+        Parameters
+        ----------
+        x : array_like, shape (..., d)
+            if inverse: x is theta
+            else: x is x
+        inverse : bool, optional, default=False
+            If True: compute the inverse transformation from physical to
+            hypercube space.
+        """
+        L = np.linalg.cholesky(self.cov)
+        if inverse:
+            Linv = inv(L)
+            y = np.einsum('ij,...j->...i', Linv, x-self.mean)
+            return scipy.stats.norm.cdf(y)
+        else:
+            y = scipy.stats.norm.ppf(x)
+            return self.mean + np.einsum('ij,...j->...i', L, y)
 
 
 class mixture_multivariate_normal(object):
@@ -136,3 +165,60 @@ class mixture_multivariate_normal(object):
         k = np.ones(self.means.shape[-1], dtype=bool)
         k[indices] = False
         return k
+
+    def bijector(self, x, inverse=False):
+        """Bijector between U([0, 1])^d and the distribution.
+
+        - x in [0, 1]^d is the hypercube space.
+        - theta in R^d is the physical space.
+
+        Computes the transformation from x to theta or theta to x depending on
+        the value of inverse.
+
+        Parameters
+        ----------
+        x : array_like, shape (..., d)
+            if inverse: x is theta
+            else: x is x
+        inverse : bool, optional, default=False
+            If True: compute the inverse transformation from physical to
+            hypercube space.
+        """
+        theta = np.empty_like(x)
+        if inverse:
+            theta[:] = x
+            x = np.empty_like(x)
+
+        for i in range(x.shape[-1]):
+            m = self.means[..., :, i] + np.einsum('ia,iab,...ib->...i',
+                                                  self.covs[:, i, :i],
+                                                  inv(self.covs[:, :i, :i]),
+                                                  theta[..., None, :i]
+                                                  - self.means[:, :i])
+            c = self.covs[:, i, i] - np.einsum('ia,iab,ib->i',
+                                               self.covs[:, i, :i],
+                                               inv(self.covs[:, :i, :i]),
+                                               self.covs[:, i, :i])
+            dist = mixture_multivariate_normal(self.means[:, :i],
+                                               self.covs[:, :i, :i],
+                                               self.logA)
+            logA = (self.logA + dist.logpdf(theta[..., :i], reduce=False)
+                    - dist.logpdf(theta[..., :i])[..., None])
+            A = np.exp(logA - logsumexp(logA, axis=-1)[..., None])
+
+            def f(t):
+                return (A * 0.5 * (1 + erf((t[..., None] - m)/np.sqrt(2 * c)))
+                        ).sum(axis=-1) - y
+
+            if inverse:
+                y = 0
+                x[..., i] = f(theta[..., i])
+            else:
+                y = x[..., i]
+                a = (m - 10 * np.sqrt(c)).min(axis=-1)
+                b = (m + 10 * np.sqrt(c)).max(axis=-1)
+                theta[..., i] = bisect(f, a, b)
+        if inverse:
+            return x
+        else:
+            return theta

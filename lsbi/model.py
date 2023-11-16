@@ -2,12 +2,8 @@
 import numpy as np
 from lsbi.stats import (mixture_multivariate_normal,
                         multivariate_normal)
-from numpy.linalg import solve, inv, slogdet
-
-
-def logdet(A):
-    """log(abs(det(A)))."""
-    return slogdet(A)[1]
+from numpy.linalg import solve, inv
+from lsbi.utils import logdet
 
 
 class LinearModel(object):
