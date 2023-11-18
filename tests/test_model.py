@@ -6,7 +6,6 @@ import numpy as np
 from numpy.random import rand
 from scipy.stats import invwishart, kstest
 from numpy.testing import assert_allclose
-from numpy.linalg import inv
 import pytest
 N = 1000
 
@@ -232,25 +231,25 @@ class TestLinearModel(object):
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov @ inv(model_2.cov), np.eye(d), atol=1e-8)
+        assert_allclose(model_1.cov, model_2.cov)
 
         theta = model.prior().rvs()
         model_1 = model.likelihood(theta)
         model_2 = model.joint().condition(i, theta)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov @ inv(model_2.cov), np.eye(d), atol=1e-8)
+        assert_allclose(model_1.cov, model_2.cov)
 
         i = np.arange(d+n)[:d]
         model_1 = model.prior()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov @ inv(model_2.cov), np.eye(n), atol=1e-8)
+        assert_allclose(model_1.cov, model_2.cov)
 
         D = model.evidence().rvs()
         model_1 = model.posterior(D)
         model_2 = model.joint().condition(i, D)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov @ inv(model_2.cov), np.eye(n), atol=1e-8)
+        assert_allclose(model_1.cov, model_2.cov)
 
     def test_bayes_theorem(self, d, n):
         model = self.random_model(d, n)
@@ -667,33 +666,28 @@ class TestLinearMixtureModel(object):
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs @ inv(model_2.covs),
-                        np.repeat(np.eye(d)[None, ...], k, axis=0), atol=1e-8)
+        assert_allclose(model_1.covs, model_2.covs)
         assert_allclose(model_1.logA, model_2.logA)
 
         theta = model.prior().rvs()
         model_1 = model.likelihood(theta)
         model_2 = model.joint().condition(i, theta)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs @ inv(model_2.covs),
-                        np.repeat(np.eye(d)[None, ...], k, axis=0), atol=1e-8)
+        assert_allclose(model_1.covs, model_2.covs)
         assert_allclose(model_1.logA, model_2.logA)
 
         i = np.arange(d+n)[:d]
         model_1 = model.prior()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs, model_2.covs, rtol=1e-5,)
-        assert_allclose(model_1.covs @ inv(model_2.covs),
-                        np.repeat(np.eye(n)[None, ...], k, axis=0), atol=1e-8)
+        assert_allclose(model_1.covs, model_2.covs)
         assert_allclose(model_1.logA, model_2.logA)
 
         D = model.evidence().rvs()
         model_1 = model.posterior(D)
         model_2 = model.joint().condition(i, D)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs @ inv(model_2.covs),
-                        np.repeat(np.eye(n)[None, ...], k, axis=0), atol=1e-8)
+        assert_allclose(model_1.covs, model_2.covs)
         assert_allclose(model_1.logA, model_2.logA)
 
     def test_bayes_theorem(self, k, d, n):
