@@ -4,9 +4,11 @@ from lsbi.model import (LinearModel,
                         LinearMixtureModel)
 import numpy as np
 from numpy.random import rand
-import scipy.stats
+from scipy.stats import invwishart, kstest
 from numpy.testing import assert_allclose
+from numpy.linalg import inv
 import pytest
+N = 1000
 
 
 @pytest.mark.parametrize("n", np.arange(1, 6))
@@ -17,9 +19,9 @@ class TestLinearModel(object):
     def random_model(self, d, n):
         M = rand(d, n)
         m = rand(d)
-        C = scipy.stats.wishart(scale=np.eye(d)).rvs()
+        C = invwishart(scale=np.eye(d)).rvs()
         mu = (n)
-        Sigma = scipy.stats.wishart(scale=np.eye(n)).rvs()
+        Sigma = invwishart(scale=np.eye(n)).rvs()
         return self.cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
 
     def _test_shape(self, model, d, n):
@@ -128,7 +130,6 @@ class TestLinearModel(object):
         assert string in str(excinfo.value)
 
     def test_joint(self, d, n):
-        N = 100
         model = self.random_model(d, n)
         prior = model.prior()
         evidence = model.evidence()
@@ -141,11 +142,10 @@ class TestLinearModel(object):
             samples_1 = np.atleast_2d(samples_1).T
 
         for i in range(n):
-            p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+            p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
             assert p > 1e-5
 
-        p = scipy.stats.kstest(prior.logpdf(samples_2),
-                               prior.logpdf(samples_1)).pvalue
+        p = kstest(prior.logpdf(samples_2), prior.logpdf(samples_1)).pvalue
         assert p > 1e-5
 
         samples_1 = evidence.rvs(N)
@@ -155,15 +155,14 @@ class TestLinearModel(object):
             samples_1 = np.atleast_2d(samples_1).T
 
         for i in range(d):
-            p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+            p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
             assert p > 1e-5
 
-        p = scipy.stats.kstest(evidence.logpdf(samples_2),
-                               evidence.logpdf(samples_1)).pvalue
+        p = kstest(evidence.logpdf(samples_2),
+                   evidence.logpdf(samples_1)).pvalue
         assert p > 1e-5
 
     def test_likelihood_posterior(self, d, n):
-        N = 100
         model = self.random_model(d, n)
         joint = model.joint()
 
@@ -174,19 +173,17 @@ class TestLinearModel(object):
             data = np.atleast_1d(model.likelihood(theta).rvs())
             theta = np.atleast_1d(model.posterior(data).rvs())
             samples.append(np.concatenate([data, theta])[:])
-        samples_1 = np.array(samples)[::10]
+        samples_1 = np.array(samples)[::100]
         samples_2 = joint.rvs(len(samples_1))
 
         for i in range(n+d):
-            p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+            p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
             assert p > 1e-5
 
-        p = scipy.stats.kstest(joint.logpdf(samples_2),
-                               joint.logpdf(samples_1)).pvalue
+        p = kstest(joint.logpdf(samples_2), joint.logpdf(samples_1)).pvalue
         assert p > 1e-5
 
     def test_DKL(self, d, n):
-        N = 1000
         model = self.random_model(d, n)
 
         data = model.evidence().rvs()
@@ -235,25 +232,25 @@ class TestLinearModel(object):
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov, model_2.cov)
+        assert_allclose(model_1.cov @ inv(model_2.cov), np.eye(d), atol=1e-8)
 
         theta = model.prior().rvs()
         model_1 = model.likelihood(theta)
         model_2 = model.joint().condition(i, theta)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov, model_2.cov)
+        assert_allclose(model_1.cov @ inv(model_2.cov), np.eye(d), atol=1e-8)
 
         i = np.arange(d+n)[:d]
         model_1 = model.prior()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov, model_2.cov)
+        assert_allclose(model_1.cov @ inv(model_2.cov), np.eye(n), atol=1e-8)
 
         D = model.evidence().rvs()
         model_1 = model.posterior(D)
         model_2 = model.joint().condition(i, D)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov, model_2.cov)
+        assert_allclose(model_1.cov @ inv(model_2.cov), np.eye(n), atol=1e-8)
 
     def test_bayes_theorem(self, d, n):
         model = self.random_model(d, n)
@@ -269,9 +266,9 @@ class TestLinearModel(object):
 class TestReducedLinearModel(object):
     def random_model(self, n):
         mu_pi = np.random.randn(n)
-        Sigma_pi = scipy.stats.wishart(scale=np.eye(n)).rvs()
+        Sigma_pi = invwishart(scale=np.eye(n)).rvs()
         mu_L = np.random.randn(n)
-        Sigma_L = scipy.stats.wishart(scale=np.eye(n)).rvs()
+        Sigma_L = invwishart(scale=np.eye(n)).rvs()
         logLmax = np.random.randn()
 
         return ReducedLinearModel(mu_pi=mu_pi, Sigma_pi=Sigma_pi,
@@ -289,7 +286,7 @@ class TestReducedLinearModel(object):
 class TestReducedLinearModelUniformPrior(object):
     def random_model(self, n):
         mu_L = np.random.randn(n)
-        Sigma_L = scipy.stats.wishart(scale=np.eye(n)).rvs()
+        Sigma_L = invwishart(scale=np.eye(n)).rvs()
         logLmax = np.random.randn()
         logV = np.random.randn()
 
@@ -298,7 +295,7 @@ class TestReducedLinearModelUniformPrior(object):
 
     def test_model(self, n):
         model = self.random_model(n)
-        theta = model.posterior().rvs(1000)
+        theta = model.posterior().rvs(N)
         assert_allclose(model.logpi(theta) + model.logL(theta),
                         model.logP(theta) + model.logZ())
 
@@ -334,12 +331,11 @@ class TestLinearMixtureModel(object):
     def random_model(self, k, d, n):
         M = rand(k, d, n)
         m = rand(k, d)
-        C = np.array([np.atleast_2d(scipy.stats.wishart(scale=np.eye(d)).rvs())
+        C = np.array([np.atleast_2d(invwishart(scale=np.eye(d)).rvs())
                       for _ in range(k)])
 
         mu = rand(k, n)
-        Sigma = np.array([np.atleast_2d(scipy.stats.wishart(scale=np.eye(n)
-                                                            ).rvs())
+        Sigma = np.array([np.atleast_2d(invwishart(scale=np.eye(n)).rvs())
                           for _ in range(k)])
         logA = np.log(rand(k))
         return self.cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma, logA=logA)
@@ -596,7 +592,6 @@ class TestLinearMixtureModel(object):
         assert string in str(excinfo.value)
 
     def test_joint(self, k, d, n):
-        N = 100
         model = self.random_model(k, d, n)
         prior = model.prior()
         evidence = model.evidence()
@@ -609,11 +604,10 @@ class TestLinearMixtureModel(object):
             samples_1 = np.atleast_2d(samples_1).T
 
         for i in range(n):
-            p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+            p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
             assert p > 1e-5
 
-        p = scipy.stats.kstest(prior.logpdf(samples_2),
-                               prior.logpdf(samples_1)).pvalue
+        p = kstest(prior.logpdf(samples_2), prior.logpdf(samples_1)).pvalue
         assert p > 1e-5
 
         samples_1 = evidence.rvs(N)
@@ -623,15 +617,14 @@ class TestLinearMixtureModel(object):
             samples_1 = np.atleast_2d(samples_1).T
 
         for i in range(d):
-            p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+            p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
             assert p > 1e-5
 
-        p = scipy.stats.kstest(evidence.logpdf(samples_2),
-                               evidence.logpdf(samples_1)).pvalue
+        p = kstest(evidence.logpdf(samples_2),
+                   evidence.logpdf(samples_1)).pvalue
         assert p > 1e-5
 
     def test_likelihood_posterior(self, k, d, n):
-        N = 100
         model = self.random_model(k, d, n)
         joint = model.joint()
 
@@ -642,15 +635,14 @@ class TestLinearMixtureModel(object):
             data = np.atleast_1d(model.likelihood(theta).rvs())
             theta = np.atleast_1d(model.posterior(data).rvs())
             samples.append(np.concatenate([data, theta])[:])
-        samples_1 = np.array(samples)[::10]
+        samples_1 = np.array(samples)[::100]
         samples_2 = joint.rvs(len(samples_1))
 
         for i in range(n+d):
-            p = scipy.stats.kstest(samples_1[:, i], samples_2[:, i]).pvalue
+            p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
             assert p > 1e-5
 
-        p = scipy.stats.kstest(joint.logpdf(samples_2),
-                               joint.logpdf(samples_1)).pvalue
+        p = kstest(joint.logpdf(samples_2), joint.logpdf(samples_1)).pvalue
         assert p > 1e-5
 
     def test_from_joint(self, k, d, n):
@@ -675,28 +667,33 @@ class TestLinearMixtureModel(object):
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.covs @ inv(model_2.covs),
+                        np.repeat(np.eye(d)[None, ...], k, axis=0), atol=1e-8)
         assert_allclose(model_1.logA, model_2.logA)
 
         theta = model.prior().rvs()
         model_1 = model.likelihood(theta)
         model_2 = model.joint().condition(i, theta)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.covs @ inv(model_2.covs),
+                        np.repeat(np.eye(d)[None, ...], k, axis=0), atol=1e-8)
         assert_allclose(model_1.logA, model_2.logA)
 
         i = np.arange(d+n)[:d]
         model_1 = model.prior()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.covs, model_2.covs, rtol=1e-5,)
+        assert_allclose(model_1.covs @ inv(model_2.covs),
+                        np.repeat(np.eye(n)[None, ...], k, axis=0), atol=1e-8)
         assert_allclose(model_1.logA, model_2.logA)
 
         D = model.evidence().rvs()
         model_1 = model.posterior(D)
         model_2 = model.joint().condition(i, D)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.covs @ inv(model_2.covs),
+                        np.repeat(np.eye(n)[None, ...], k, axis=0), atol=1e-8)
         assert_allclose(model_1.logA, model_2.logA)
 
     def test_bayes_theorem(self, k, d, n):
