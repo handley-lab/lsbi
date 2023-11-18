@@ -334,11 +334,13 @@ class TestLinearMixtureModel(object):
     def random_model(self, k, d, n):
         M = rand(k, d, n)
         m = rand(k, d)
-        C = np.array([np.atleast_2d(invwishart(scale=np.eye(d)).rvs())
+        C = np.array([np.atleast_2d(invwishart(scale=np.eye(d),
+                                               df=d*10).rvs())
                       for _ in range(k)])
 
         mu = rand(k, n)
-        Sigma = np.array([np.atleast_2d(invwishart(scale=np.eye(n)).rvs())
+        Sigma = np.array([np.atleast_2d(invwishart(scale=np.eye(n),
+                                                   df=d*10).rvs())
                           for _ in range(k)])
         logA = np.log(rand(k))
         return self.cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma, logA=logA)
