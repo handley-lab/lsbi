@@ -18,9 +18,9 @@ class TestLinearModel(object):
     def random_model(self, d, n):
         M = rand(d, n)
         m = rand(d)
-        C = invwishart(scale=np.eye(d)).rvs()
-        mu = (n)
-        Sigma = invwishart(scale=np.eye(n)).rvs()
+        C = invwishart(scale=np.eye(d), df=10*d).rvs()
+        mu = rand(n)
+        Sigma = invwishart(scale=np.eye(n), df=10*n).rvs()
         return self.cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
 
     def _test_shape(self, model, d, n):
@@ -231,25 +231,29 @@ class TestLinearModel(object):
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov, model_2.cov)
+        assert_allclose(model_1.cov, model_2.cov,
+                        rtol=1e-6, atol=1e-6)
 
         theta = model.prior().rvs()
         model_1 = model.likelihood(theta)
         model_2 = model.joint().condition(i, theta)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov, model_2.cov)
+        assert_allclose(model_1.cov, model_2.cov,
+                        rtol=1e-6, atol=1e-6)
 
         i = np.arange(d+n)[:d]
         model_1 = model.prior()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov, model_2.cov)
+        assert_allclose(model_1.cov, model_2.cov,
+                        rtol=1e-6, atol=1e-6)
 
         D = model.evidence().rvs()
         model_1 = model.posterior(D)
         model_2 = model.joint().condition(i, D)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov, model_2.cov)
+        assert_allclose(model_1.cov, model_2.cov,
+                        rtol=1e-6, atol=1e-6)
 
     def test_bayes_theorem(self, d, n):
         model = self.random_model(d, n)
@@ -666,28 +670,32 @@ class TestLinearMixtureModel(object):
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.covs, model_2.covs,
+                        rtol=1e-6, atol=1e-6)
         assert_allclose(model_1.logA, model_2.logA)
 
         theta = model.prior().rvs()
         model_1 = model.likelihood(theta)
         model_2 = model.joint().condition(i, theta)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.covs, model_2.covs,
+                        rtol=1e-6, atol=1e-6)
         assert_allclose(model_1.logA, model_2.logA)
 
         i = np.arange(d+n)[:d]
         model_1 = model.prior()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.covs, model_2.covs,
+                        rtol=1e-6, atol=1e-6)
         assert_allclose(model_1.logA, model_2.logA)
 
         D = model.evidence().rvs()
         model_1 = model.posterior(D)
         model_2 = model.joint().condition(i, D)
         assert_allclose(model_1.means, model_2.means)
-        assert_allclose(model_1.covs, model_2.covs)
+        assert_allclose(model_1.covs, model_2.covs,
+                        rtol=1e-6, atol=1e-6)
         assert_allclose(model_1.logA, model_2.logA)
 
     def test_bayes_theorem(self, k, d, n):

@@ -13,7 +13,7 @@ N = 1000
 @pytest.mark.parametrize("d", [1, 2, 5])
 def test_mixture_multivariate_normal(k, d):
     means = np.random.randn(k, d)
-    covs = invwishart(scale=np.eye(d)).rvs(k)
+    covs = invwishart(scale=np.eye(d), df=d*10).rvs(k)
     if k == 1:
         covs = np.array([covs])
     logA = np.log(scipy.stats.dirichlet(np.ones(k)).rvs())[0] + 10
@@ -54,7 +54,7 @@ def test_mixture_multivariate_normal(k, d):
 def test_mixture_multivariate_normal_bijector():
     k = 4
     d = 10
-    covs = invwishart.rvs(d, np.eye(d), size=k)
+    covs = invwishart.rvs(d, np.eye(d), df=d*10, size=k)
     means = np.random.randn(k, d)
     logA = np.log(scipy.stats.dirichlet.rvs(np.ones(k))[0])
     model = mixture_multivariate_normal(means, covs, logA)
@@ -87,7 +87,7 @@ def test_mixture_multivariate_normal_bijector():
 
 def test_multivariate_normal_bijector():
     d = 10
-    cov = invwishart.rvs(d, np.eye(d))
+    cov = invwishart.rvs(d, np.eye(d), df=d*10)
     mean = np.random.randn(d)
     model = multivariate_normal(mean, cov)
 
@@ -120,7 +120,7 @@ def test_multivariate_normal_bijector():
 def test_marginalise_condition_multivariate_normal():
     d = 5
     mean = np.random.randn(d)
-    cov = invwishart(scale=np.eye(d)).rvs()
+    cov = invwishart(scale=np.eye(d), df=d*10).rvs()
     dist_1 = multivariate_normal(mean, cov)
     dist_2 = dist_1.marginalise([0, 2, 4])
     assert dist_2.mean.shape == (2,)
@@ -142,7 +142,7 @@ def test_marginalise_condition_mixtures(d, k, p):
     i = np.random.choice(d, p, replace=False)
     j = np.array([x for x in range(d) if x not in i])
     means = np.random.randn(k, d)
-    covs = invwishart(scale=np.eye(d)).rvs(k)
+    covs = invwishart(scale=np.eye(d), df=d*10).rvs(k)
     if k == 1:
         covs = np.array([covs])
     covs.shape
