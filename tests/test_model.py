@@ -10,8 +10,8 @@ import pytest
 N = 1000
 
 
-@pytest.mark.parametrize("n", np.arange(1, 6))
-@pytest.mark.parametrize("d", np.arange(1, 6))
+@pytest.mark.parametrize("n", [1, 2, 5, 10])
+@pytest.mark.parametrize("d", [1, 2, 5, 10])
 class TestLinearModel(object):
     cls = LinearModel
 
