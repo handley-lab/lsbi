@@ -15,7 +15,7 @@ N = 1000
 class TestLinearModel(object):
     cls = LinearModel
 
-    def random_model(self, d, n):
+    def random(self, d, n):
         M = rand(d, n)
         m = rand(d)
         C = invwishart(scale=np.eye(d), df=10*d).rvs()
@@ -129,7 +129,7 @@ class TestLinearModel(object):
         assert string in str(excinfo.value)
 
     def test_joint(self, d, n):
-        model = self.random_model(d, n)
+        model = self.random(d, n)
         prior = model.prior()
         evidence = model.evidence()
         joint = model.joint()
@@ -162,7 +162,7 @@ class TestLinearModel(object):
         assert p > 1e-5
 
     def test_likelihood_posterior(self, d, n):
-        model = self.random_model(d, n)
+        model = self.random(d, n)
         joint = model.joint()
 
         samples = []
@@ -183,7 +183,7 @@ class TestLinearModel(object):
         assert p > 1e-5
 
     def test_DKL(self, d, n):
-        model = self.random_model(d, n)
+        model = self.random(d, n)
 
         data = model.evidence().rvs()
         posterior = model.posterior(data)
@@ -195,7 +195,7 @@ class TestLinearModel(object):
                         atol=5*Info.std()/np.sqrt(N))
 
     def test_from_joint(self, d, n):
-        model = self.random_model(d, n)
+        model = self.random(d, n)
         joint = model.joint()
         mean = joint.mean
         cov = joint.cov
@@ -226,7 +226,7 @@ class TestLinearModel(object):
         assert_allclose(model.DKL(data), reduced_model.DKL())
 
     def test_marginal_conditional(self, d, n):
-        model = self.random_model(d, n)
+        model = self.random(d, n)
         i = np.arange(d+n)[-n:]
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
@@ -256,7 +256,7 @@ class TestLinearModel(object):
                         rtol=1e-6, atol=1e-6)
 
     def test_bayes_theorem(self, d, n):
-        model = self.random_model(d, n)
+        model = self.random(d, n)
         theta = model.prior().rvs()
         D = model.evidence().rvs()
         assert_allclose(model.posterior(D).logpdf(theta) +
@@ -267,7 +267,7 @@ class TestLinearModel(object):
 
 @pytest.mark.parametrize("n", np.arange(1, 6))
 class TestReducedLinearModel(object):
-    def random_model(self, n):
+    def random(self, n):
         mu_pi = np.random.randn(n)
         Sigma_pi = invwishart(scale=np.eye(n)).rvs()
         mu_L = np.random.randn(n)
@@ -279,7 +279,7 @@ class TestReducedLinearModel(object):
                                   mu_L=mu_L, Sigma_L=Sigma_L)
 
     def test_bayes_theorem(self, n):
-        model = self.random_model(n)
+        model = self.random(n)
         theta = model.prior().rvs()
         assert_allclose(model.logP(theta) + model.logZ(),
                         model.logL(theta) + model.logpi(theta))
@@ -287,7 +287,7 @@ class TestReducedLinearModel(object):
 
 @pytest.mark.parametrize("n", np.arange(1, 6))
 class TestReducedLinearModelUniformPrior(object):
-    def random_model(self, n):
+    def random(self, n):
         mu_L = np.random.randn(n)
         Sigma_L = invwishart(scale=np.eye(n)).rvs()
         logLmax = np.random.randn()
@@ -297,7 +297,7 @@ class TestReducedLinearModelUniformPrior(object):
                                               mu_L=mu_L, Sigma_L=Sigma_L)
 
     def test_model(self, n):
-        model = self.random_model(n)
+        model = self.random(n)
         theta = model.posterior().rvs(N)
         assert_allclose(model.logpi(theta) + model.logL(theta),
                         model.logP(theta) + model.logZ())
@@ -319,7 +319,7 @@ class TestReducedLinearModelUniformPrior(object):
         assert_allclose(reduced_model.DKL(), model.DKL())
 
     def test_bayes_theorem(self, n):
-        model = self.random_model(n)
+        model = self.random(n)
         theta = model.posterior().rvs()
         assert_allclose(model.logP(theta) + model.logZ(),
                         model.logL(theta) + model.logpi(theta))
@@ -331,7 +331,7 @@ class TestReducedLinearModelUniformPrior(object):
 class TestLinearMixtureModel(object):
     cls = LinearMixtureModel
 
-    def random_model(self, k, d, n):
+    def random(self, k, d, n):
         M = rand(k, d, n)
         m = rand(k, d)
         C = np.array([np.atleast_2d(invwishart(scale=np.eye(d),
@@ -597,7 +597,7 @@ class TestLinearMixtureModel(object):
         assert string in str(excinfo.value)
 
     def test_joint(self, k, d, n):
-        model = self.random_model(k, d, n)
+        model = self.random(k, d, n)
         prior = model.prior()
         evidence = model.evidence()
         joint = model.joint()
@@ -630,7 +630,7 @@ class TestLinearMixtureModel(object):
         assert p > 1e-5
 
     def test_likelihood_posterior(self, k, d, n):
-        model = self.random_model(k, d, n)
+        model = self.random(k, d, n)
         joint = model.joint()
 
         samples = []
@@ -651,7 +651,7 @@ class TestLinearMixtureModel(object):
         assert p > 1e-5
 
     def test_from_joint(self, k, d, n):
-        model = self.random_model(k, d, n)
+        model = self.random(k, d, n)
         joint = model.joint()
         means = joint.means
         covs = joint.covs
@@ -667,7 +667,7 @@ class TestLinearMixtureModel(object):
         assert_allclose(model2.logA, model.logA)
 
     def test_marginal_conditional(self, k, d, n):
-        model = self.random_model(k, d, n)
+        model = self.random(k, d, n)
         i = np.arange(d+n)[-n:]
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
@@ -701,7 +701,7 @@ class TestLinearMixtureModel(object):
         assert_allclose(model_1.logA, model_2.logA)
 
     def test_bayes_theorem(self, k, d, n):
-        model = self.random_model(k, d, n)
+        model = self.random(k, d, n)
         theta = model.prior().rvs()
         D = model.evidence().rvs()
         assert_allclose(model.posterior(D).logpdf(theta) +

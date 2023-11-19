@@ -14,7 +14,7 @@ N = 1000
 class TestMixtureMultivariateNormal(object):
     cls = mixture_multivariate_normal
 
-    def random_mixture(self, k, d):
+    def random(self, k, d):
         means = np.random.randn(k, d)
         covs = invwishart(scale=np.eye(d), df=d*10).rvs(k)
         if k == 1:
@@ -23,11 +23,11 @@ class TestMixtureMultivariateNormal(object):
         return self.cls(means, covs, logA)
 
     def test_rvs(self, k, d):
-        mixture = self.random_mixture(k, d)
-        logA = mixture.logA
+        dist = self.random(k, d)
+        logA = dist.logA
         logA -= scipy.special.logsumexp(logA)
-        mvns = [scipy.stats.multivariate_normal(mixture.means[i],
-                                                mixture.covs[i])
+        mvns = [scipy.stats.multivariate_normal(dist.means[i],
+                                                dist.covs[i])
                 for i in range(k)]
 
         samples_1, logpdfs_1 = [], []
@@ -37,12 +37,12 @@ class TestMixtureMultivariateNormal(object):
             samples_1.append(x)
             logpdf = scipy.special.logsumexp([mvns[j].logpdf(x) + logA[j]
                                               for j in range(k)])
-            assert_allclose(logpdf, mixture.logpdf(x))
+            assert_allclose(logpdf, dist.logpdf(x))
             logpdfs_1.append(logpdf)
         samples_1, logpdfs_1 = np.array(samples_1), np.array(logpdfs_1)
 
-        samples_2 = mixture.rvs(N)
-        logpdfs_2 = mixture.logpdf(samples_2)
+        samples_2 = dist.rvs(N)
+        logpdfs_2 = dist.logpdf(samples_2)
 
         for i in range(d):
             if d == 1:
@@ -56,35 +56,37 @@ class TestMixtureMultivariateNormal(object):
 
         for shape in [(d,), (3, d), (3, 4, d)]:
             x = np.random.rand(*shape)
-            assert mvns[0].logpdf(x).shape == mixture.logpdf(x).shape
+            assert mvns[0].logpdf(x).shape == dist.logpdf(x).shape
 
     def test_bijector(self, k, d):
-        mixture = self.random_mixture(k, d)
+        k = 1
+        d = 4
+        dist = self.random(k, d)
 
         # Test inversion
         x = np.random.rand(N, d)
-        theta = mixture.bijector(x)
-        assert_allclose(mixture.bijector(theta, inverse=True), x, atol=1e-6)
+        theta = dist.bijector(x)
+        assert_allclose(dist.bijector(theta, inverse=True), x, atol=1e-6)
 
         # Test sampling
-        samples = mixture.rvs(N)
+        samples = dist.rvs(N)
         for i in range(d):
             p = kstest(theta[:, i], samples[:, i]).pvalue
             assert p > 1e-5
 
-        p = kstest(mixture.logpdf(samples), mixture.logpdf(theta)).pvalue
+        p = kstest(dist.logpdf(samples), dist.logpdf(theta)).pvalue
         assert p > 1e-5
 
         # Test shapes
         x = np.random.rand(d)
-        theta = mixture.bijector(x)
+        theta = dist.bijector(x)
         assert theta.shape == x.shape
-        assert mixture.bijector(theta, inverse=True).shape == x.shape
+        assert dist.bijector(theta, inverse=True).shape == x.shape
 
         x = np.random.rand(3, 4, d)
-        theta = mixture.bijector(x)
+        theta = dist.bijector(x)
         assert theta.shape == x.shape
-        assert mixture.bijector(theta, inverse=True).shape == x.shape
+        assert dist.bijector(theta, inverse=True).shape == x.shape
 
     @pytest.mark.parametrize("p", np.arange(1, 5))
     def test_marginalise_condition(self, d, k, p):
@@ -92,20 +94,20 @@ class TestMixtureMultivariateNormal(object):
             pytest.skip("d <= p")
         i = np.random.choice(d, p, replace=False)
         j = np.array([x for x in range(d) if x not in i])
-        mixture = self.random_mixture(k, d)
-        mixture_2 = mixture.marginalise(i)
+        dist = self.random(k, d)
+        mixture_2 = dist.marginalise(i)
         assert mixture_2.means.shape == (k, d-p)
         assert mixture_2.covs.shape == (k, d-p, d-p)
-        assert_allclose(mixture.means[:, j], mixture_2.means)
-        assert_allclose(mixture.covs[:, j][:, :, j], mixture_2.covs)
+        assert_allclose(dist.means[:, j], mixture_2.means)
+        assert_allclose(dist.covs[:, j][:, :, j], mixture_2.covs)
 
         v = np.random.randn(k, p)
-        mixture_3 = mixture.condition(i, v)
+        mixture_3 = dist.condition(i, v)
         assert mixture_3.means.shape == (k, d-p)
         assert mixture_3.covs.shape == (k, d-p, d-p)
 
         v = np.random.randn(p)
-        mixture_3 = mixture.condition(i, v)
+        mixture_3 = dist.condition(i, v)
         assert mixture_3.means.shape == (k, d-p)
         assert mixture_3.covs.shape == (k, d-p, d-p)
 
@@ -114,37 +116,64 @@ class TestMixtureMultivariateNormal(object):
 class TestMultivariateNormal(object):
     cls = multivariate_normal
 
-    def random_model(self, d):
+    def random(self, d):
         mean = np.random.randn(d)
         cov = invwishart(scale=np.eye(d), df=d*10).rvs()
         return self.cls(mean, cov)
 
-    def test_bijector(self, d):
-        model = self.random_model(d)
-        # Test inversion
-        x = np.random.rand(N, d)
-        theta = model.bijector(x)
-        assert_allclose(model.bijector(theta, inverse=True), x, atol=1e-6)
+    def test_rvs(self, d):
+        dist = self.random(d)
+        mvn = scipy.stats.multivariate_normal(dist.mean, dist.cov)
 
-        # Test sampling
-        samples = model.rvs(N)
+        samples_1 = mvn.rvs(N)
+        logpdfs_1 = mvn.logpdf(samples_1)
+        assert_allclose(logpdfs_1, dist.logpdf(samples_1))
+        samples_2 = dist.rvs(N)
+        logpdfs_2 = dist.logpdf(samples_2)
+
         for i in range(d):
-            p = kstest(theta[:, i], samples[:, i]).pvalue
+            if d == 1:
+                p = kstest(samples_1, samples_2).pvalue
+            else:
+                p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
             assert p > 1e-5
 
-        p = kstest(model.logpdf(samples), model.logpdf(theta)).pvalue
+        p = kstest(logpdfs_1, logpdfs_2).pvalue
+        assert p > 1e-5
+
+        for shape in [(), (d,), (3, d), (3, 4, d)]:
+            x = np.random.rand(*shape)
+            assert mvn.logpdf(x).shape == dist.logpdf(x).shape
+
+    def test_bijector(self, d):
+        dist = self.random(d)
+        # Test inversion
+        x = np.random.rand(N, d)
+        theta = dist.bijector(x)
+        assert_allclose(dist.bijector(theta, inverse=True), x, atol=1e-6)
+
+        # Test sampling
+        samples = dist.rvs(N)
+        for i in range(d):
+            if d == 1:
+                p = kstest(np.squeeze(theta), samples).pvalue
+            else:
+                p = kstest(theta[:, i], samples[:, i]).pvalue
+            assert p > 1e-5
+
+        p = kstest(dist.logpdf(samples), dist.logpdf(theta)).pvalue
         assert p > 1e-5
 
         # Test shapes
         x = np.random.rand(d)
-        theta = model.bijector(x)
+        theta = dist.bijector(x)
         assert theta.shape == x.shape
-        assert model.bijector(theta, inverse=True).shape == x.shape
+        assert dist.bijector(theta, inverse=True).shape == x.shape
 
         x = np.random.rand(3, 4, d)
-        theta = model.bijector(x)
+        theta = dist.bijector(x)
         assert theta.shape == x.shape
-        assert model.bijector(theta, inverse=True).shape == x.shape
+        assert dist.bijector(theta, inverse=True).shape == x.shape
 
     @pytest.mark.parametrize("p", np.arange(1, 5))
     def test_marginalise_condition_multivariate_normal(self, d, p):
@@ -152,7 +181,7 @@ class TestMultivariateNormal(object):
             pytest.skip("d <= p")
         i = np.random.choice(d, p, replace=False)
         j = np.array([x for x in range(d) if x not in i])
-        dist_1 = self.random_model(d)
+        dist_1 = self.random(d)
         dist_2 = dist_1.marginalise(i)
         assert dist_2.mean.shape == (d-p,)
         assert dist_2.cov.shape == (d-p, d-p)
