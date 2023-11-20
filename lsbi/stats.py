@@ -95,7 +95,7 @@ class mixture_multivariate_normal(object):
         self.covs = np.array([np.atleast_2d(c) for c in covs])
         self.logA = np.atleast_1d(logA)
 
-    def logpdf(self, x, reduce=True):
+    def logpdf(self, x, reduce=True, keepdims=False):
         """Log of the probability density function."""
         process_quantiles = scipy.stats.multivariate_normal._process_quantiles
         x = process_quantiles(x, self.means.shape[-1])
@@ -103,11 +103,13 @@ class mixture_multivariate_normal(object):
         invcovs = np.linalg.inv(self.covs)
         chi2 = np.einsum('...ij,ijk,...ik->...i', dx, invcovs, dx)
         norm = -np.linalg.slogdet(2*np.pi*self.covs)[1]/2
-        logpdfs = norm - chi2/2
-        if not reduce:
-            return np.squeeze(logpdfs)
-        logA = self.logA - scipy.special.logsumexp(self.logA)
-        return np.squeeze(scipy.special.logsumexp(logpdfs+logA, axis=-1))
+        logpdf = norm - chi2/2
+        if reduce:
+            logA = self.logA - scipy.special.logsumexp(self.logA)
+            logpdf = np.squeeze(scipy.special.logsumexp(logpdf+logA, axis=-1))
+        if not keepdims:
+            logpdf = np.squeeze(logpdf)
+        return logpdf
 
     def rvs(self, size=1):
         """Random variates."""
@@ -202,8 +204,9 @@ class mixture_multivariate_normal(object):
             dist = mixture_multivariate_normal(self.means[:, :i],
                                                self.covs[:, :i, :i],
                                                self.logA)
-            logA = (self.logA + dist.logpdf(theta[..., :i], reduce=False)
-                    - dist.logpdf(theta[..., :i])[..., None])
+            logA = (self.logA
+                    + dist.logpdf(theta[..., :i], reduce=False, keepdims=True)
+                    - dist.logpdf(theta[..., :i], keepdims=True)[..., None])
             A = np.exp(logA - logsumexp(logA, axis=-1)[..., None])
 
             def f(t):
