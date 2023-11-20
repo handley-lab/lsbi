@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.9'
           cache: 'pip'
-      - name: Upgrade pip and install linters
+      - name: Install black
         run: pip install black
       - name: Run black
         run: black . --check
@@ -30,12 +30,12 @@ jobs:
         with:
           python-version: '3.9'
           cache: 'pip'
-      - name: Upgrade pip and install linters
+      - name: Install isort
         run: pip install isort
       - name: Run isort
         run: isort . --check-only
 
-  unittests:
+  pydocstyle:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,11 +43,7 @@ jobs:
         with:
           python-version: '3.9'
           cache: 'pip'
-      - name: Install dependencies
-        run: pip install -e ".[test]"
-
-      - name: Test with pytest
-        run: pytest --cov=lsbi tests
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v1
+      - name: Install pydocstyle
+        run: pip install pydocstyle
+      - name: run pydocstyle
+        run: python -m pydocstyle --convention=numpy anesthetic
