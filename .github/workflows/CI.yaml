@@ -31,7 +31,7 @@ jobs:
           python-version: '3.9'
           cache: 'pip'
       - name: Upgrade pip and install linters
-        run: pip install flake8
+        run: pip install black
       - name: Run black
         run: black . --check
 
