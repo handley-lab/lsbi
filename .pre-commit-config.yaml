@@ -18,4 +18,4 @@ repos:
         entry: black
         language: system
         types: [python]
-        files: "lsbi/|tests/"
+        files: "."
