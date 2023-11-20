@@ -50,3 +50,7 @@ version = {attr = "lsbi._version.__version__"}
 [tool.flake8]
 max-line-length = 88
 extend-ignore = ['E203', 'W503']
+
+[tool.isort]
+profile = 'black'
+skip_gitignore = true

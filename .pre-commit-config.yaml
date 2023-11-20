@@ -22,6 +22,7 @@ repos:
       - id: isort
         name: isort
         entry: isort
+        args: [ "--profile", "black", "--filter-files" ]
         language: system
         types: [python]
         files: "."
