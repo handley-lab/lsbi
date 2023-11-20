@@ -1,6 +1,7 @@
-from lsbi.utils import bisect
-from numpy.testing import assert_allclose
 import pytest
+from numpy.testing import assert_allclose
+
+from lsbi.utils import bisect
 
 
 def test_bisect():

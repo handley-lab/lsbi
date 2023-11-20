@@ -1,7 +1,8 @@
 """Gaussian models for linear Bayesian inference."""
 import numpy as np
+from numpy.linalg import inv, solve
+
 from lsbi.stats import mixture_multivariate_normal, multivariate_normal
-from numpy.linalg import solve, inv
 from lsbi.utils import logdet
 
 

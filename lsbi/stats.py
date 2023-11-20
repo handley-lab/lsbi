@@ -1,9 +1,10 @@
 """Extensions to scipy.stats functions."""
 import numpy as np
 import scipy.stats
-from scipy.stats._multivariate import multivariate_normal_frozen
-from scipy.special import logsumexp, erf
 from numpy.linalg import inv
+from scipy.special import erf, logsumexp
+from scipy.stats._multivariate import multivariate_normal_frozen
+
 from lsbi.utils import bisect
 
 

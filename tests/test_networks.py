@@ -1,11 +1,8 @@
-from lsbi.network import (
-    BinaryClassifierBase,
-    BinaryClassifier,
-    BinaryClassifierLPop,
-)
-import torch
 import numpy as np
 import pytest
+import torch
+
+from lsbi.network import BinaryClassifier, BinaryClassifierBase, BinaryClassifierLPop
 
 
 @pytest.mark.parametrize("input_dim", [1, 100])

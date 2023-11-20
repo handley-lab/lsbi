@@ -1,9 +1,10 @@
-import pytest
-from lsbi.stats import mixture_multivariate_normal, multivariate_normal
-from numpy.testing import assert_allclose
 import numpy as np
-from scipy.stats import invwishart, kstest
+import pytest
 import scipy.special
+from numpy.testing import assert_allclose
+from scipy.stats import invwishart, kstest
+
+from lsbi.stats import mixture_multivariate_normal, multivariate_normal
 
 N = 1000
 

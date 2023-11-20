@@ -1,7 +1,8 @@
 #!/usr/bin/env python
-from utils import run
-from packaging import version
 import sys
+
+from packaging import version
+from utils import run
 
 vfile = "lsbi/_version.py"
 README = "README.rst"

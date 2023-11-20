@@ -1,14 +1,15 @@
+import numpy as np
+import pytest
+from numpy.random import rand
+from numpy.testing import assert_allclose
+from scipy.stats import invwishart, kstest
+
 from lsbi.model import (
+    LinearMixtureModel,
     LinearModel,
     ReducedLinearModel,
     ReducedLinearModelUniformPrior,
-    LinearMixtureModel,
 )
-import numpy as np
-from numpy.random import rand
-from scipy.stats import invwishart, kstest
-from numpy.testing import assert_allclose
-import pytest
 
 N = 1000
 

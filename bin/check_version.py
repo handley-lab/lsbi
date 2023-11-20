@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import sys
+
 from packaging import version
-from utils import unit_incremented, run
+from utils import run, unit_incremented
 
 vfile = "lsbi/_version.py"
 README = "README.rst"
