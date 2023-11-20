@@ -1,7 +1,6 @@
 """Gaussian models for linear Bayesian inference."""
 import numpy as np
-from lsbi.stats import (mixture_multivariate_normal,
-                        multivariate_normal)
+from lsbi.stats import mixture_multivariate_normal, multivariate_normal
 from numpy.linalg import solve, inv
 from lsbi.utils import logdet
 
@@ -55,21 +54,21 @@ class LinearModel(object):
 
     def __init__(self, *args, **kwargs):
         # Rationalise input arguments
-        M = self._atleast_2d(kwargs.pop('M', None))
-        m = self._atleast_1d(kwargs.pop('m', None))
-        C = self._atleast_2d(kwargs.pop('C', None))
-        mu = self._atleast_1d(kwargs.pop('mu', None))
-        Sigma = self._atleast_2d(kwargs.pop('Sigma', None))
-        n = kwargs.pop('n', 0)
-        d = kwargs.pop('d', 0)
+        M = self._atleast_2d(kwargs.pop("M", None))
+        m = self._atleast_1d(kwargs.pop("m", None))
+        C = self._atleast_2d(kwargs.pop("C", None))
+        mu = self._atleast_1d(kwargs.pop("mu", None))
+        Sigma = self._atleast_2d(kwargs.pop("Sigma", None))
+        n = kwargs.pop("n", 0)
+        d = kwargs.pop("d", 0)
 
         # Determine dimensions
         n = max([n, M.shape[1], mu.shape[0], Sigma.shape[0], Sigma.shape[1]])
         d = max([d, M.shape[0], m.shape[0], C.shape[0], C.shape[1]])
         if not n:
-            raise ValueError('Unable to determine number of parameters n')
+            raise ValueError("Unable to determine number of parameters n")
         if not d:
-            raise ValueError('Unable to determine data dimensions d')
+            raise ValueError("Unable to determine data dimensions d")
 
         # Set defaults if no argument was passed
         M = M if M.size else np.eye(d, n)
@@ -139,7 +138,7 @@ class LinearModel(object):
         D = np.atleast_1d(D)
         Sigma = inv(inv(self.Sigma) + self.M.T @ inv(self.C) @ self.M)
         D0 = self.m + self.M @ self.mu
-        mu = self.mu + Sigma @ self.M.T @ inv(self.C) @ (D-D0)
+        mu = self.mu + Sigma @ self.M.T @ inv(self.C) @ (D - D0)
         return multivariate_normal(mu, Sigma)
 
     def evidence(self):
@@ -147,8 +146,9 @@ class LinearModel(object):
 
         D ~ N( m + M mu, C + M Sigma M' )
         """
-        return multivariate_normal(self.m + self.M @ self.mu,
-                                   self.C + self.M @ self.Sigma @ self.M.T)
+        return multivariate_normal(
+            self.m + self.M @ self.mu, self.C + self.M @ self.Sigma @ self.M.T
+        )
 
     def joint(self):
         """P(D, theta) as a scipy distribution object.
@@ -159,8 +159,9 @@ class LinearModel(object):
         evidence = self.evidence()
         prior = self.prior()
         mu = np.concatenate([evidence.mean, prior.mean])
-        Sigma = np.block([[evidence.cov, self.M @ self.Sigma],
-                          [self.Sigma @ self.M.T, prior.cov]])
+        Sigma = np.block(
+            [[evidence.cov, self.M @ self.Sigma], [self.Sigma @ self.M.T, prior.cov]]
+        )
         return multivariate_normal(mu, Sigma)
 
     def DKL(self, D):
@@ -174,9 +175,12 @@ class LinearModel(object):
         cov_q = self.prior().cov
         mu_p = self.posterior(D).mean
         mu_q = self.prior().mean
-        return (- logdet(cov_p) + logdet(cov_q)
-                + np.trace(inv(cov_q) @ cov_p - 1)
-                + (mu_q - mu_p) @ inv(cov_q) @ (mu_q - mu_p))/2
+        return (
+            -logdet(cov_p)
+            + logdet(cov_q)
+            + np.trace(inv(cov_q) @ cov_p - 1)
+            + (mu_q - mu_p) @ inv(cov_q) @ (mu_q - mu_p)
+        ) / 2
 
     def reduce(self, D):
         """Reduce the model to a Gaussian in the parameters.
@@ -190,13 +194,23 @@ class LinearModel(object):
         ReducedLinearModel
         """
         Sigma_L = inv(self.M.T @ inv(self.C) @ self.M)
-        mu_L = Sigma_L @ self.M.T @ inv(self.C) @ (D-self.m)
-        logLmax = (- logdet(2 * np.pi * self.C)/2 - (D-self.m) @ inv(self.C) @
-                   (self.C - self.M @ Sigma_L @ self.M.T) @ inv(self.C) @
-                   (D-self.m)/2)
-        return ReducedLinearModel(mu_L=mu_L, Sigma_L=Sigma_L, logLmax=logLmax,
-                                  mu_pi=self.prior().mean,
-                                  Sigma_pi=self.prior().cov)
+        mu_L = Sigma_L @ self.M.T @ inv(self.C) @ (D - self.m)
+        logLmax = (
+            -logdet(2 * np.pi * self.C) / 2
+            - (D - self.m)
+            @ inv(self.C)
+            @ (self.C - self.M @ Sigma_L @ self.M.T)
+            @ inv(self.C)
+            @ (D - self.m)
+            / 2
+        )
+        return ReducedLinearModel(
+            mu_L=mu_L,
+            Sigma_L=Sigma_L,
+            logLmax=logLmax,
+            mu_pi=self.prior().mean,
+            Sigma_pi=self.prior().cov,
+        )
 
     def _atleast_2d(self, x):
         if x is None:
@@ -245,16 +259,15 @@ class ReducedLinearModel(object):
     """
 
     def __init__(self, *args, **kwargs):
-        self.mu_L = np.atleast_1d(kwargs.pop('mu_L'))
-        self.Sigma_L = np.atleast_2d(kwargs.pop('Sigma_L', None))
-        self.logLmax = kwargs.pop('logLmax', 0)
-        self.mu_pi = np.atleast_1d(kwargs.pop('mu_pi',
-                                              np.zeros_like(self.mu_L)))
-        self.Sigma_pi = np.atleast_2d(kwargs.pop('Sigma_pi',
-                                                 np.eye(len(self.mu_pi))))
+        self.mu_L = np.atleast_1d(kwargs.pop("mu_L"))
+        self.Sigma_L = np.atleast_2d(kwargs.pop("Sigma_L", None))
+        self.logLmax = kwargs.pop("logLmax", 0)
+        self.mu_pi = np.atleast_1d(kwargs.pop("mu_pi", np.zeros_like(self.mu_L)))
+        self.Sigma_pi = np.atleast_2d(kwargs.pop("Sigma_pi", np.eye(len(self.mu_pi))))
         self.Sigma_P = inv(inv(self.Sigma_pi) + inv(self.Sigma_L))
-        self.mu_P = self.Sigma_P @ (solve(self.Sigma_pi, self.mu_pi)
-                                    + solve(self.Sigma_L, self.mu_L))
+        self.mu_P = self.Sigma_P @ (
+            solve(self.Sigma_pi, self.mu_pi) + solve(self.Sigma_L, self.mu_L)
+        )
 
     def prior(self):
         """P(theta) as a scipy distribution object."""
@@ -274,24 +287,32 @@ class ReducedLinearModel(object):
 
     def logL(self, theta):
         """P(D|theta) as a scalar."""
-        return (self.logLmax
-                + multivariate_normal(self.mu_L, self.Sigma_L).logpdf(theta)
-                + logdet(2 * np.pi * self.Sigma_L)/2)
+        return (
+            self.logLmax
+            + multivariate_normal(self.mu_L, self.Sigma_L).logpdf(theta)
+            + logdet(2 * np.pi * self.Sigma_L) / 2
+        )
 
     def logZ(self):
         """P(D) as a scalar."""
-        return (self.logLmax + logdet(self.Sigma_P)/2 - logdet(self.Sigma_pi)/2
-                - (self.mu_P - self.mu_pi
-                   ) @ solve(self.Sigma_pi, self.mu_P - self.mu_pi)/2
-                - (self.mu_P - self.mu_L
-                   ) @ solve(self.Sigma_L, self.mu_P - self.mu_L)/2)
+        return (
+            self.logLmax
+            + logdet(self.Sigma_P) / 2
+            - logdet(self.Sigma_pi) / 2
+            - (self.mu_P - self.mu_pi)
+            @ solve(self.Sigma_pi, self.mu_P - self.mu_pi)
+            / 2
+            - (self.mu_P - self.mu_L) @ solve(self.Sigma_L, self.mu_P - self.mu_L) / 2
+        )
 
     def DKL(self):
         """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence."""
-        return (logdet(self.Sigma_pi) - logdet(self.Sigma_P)
-                + np.trace(inv(self.Sigma_pi) @ self.Sigma_P - 1)
-                + (self.mu_P - self.mu_pi
-                   ) @ solve(self.Sigma_pi, self.mu_P - self.mu_pi))/2
+        return (
+            logdet(self.Sigma_pi)
+            - logdet(self.Sigma_P)
+            + np.trace(inv(self.Sigma_pi) @ self.Sigma_P - 1)
+            + (self.mu_P - self.mu_pi) @ solve(self.Sigma_pi, self.mu_P - self.mu_pi)
+        ) / 2
 
 
 class ReducedLinearModelUniformPrior(object):
@@ -323,10 +344,10 @@ class ReducedLinearModelUniformPrior(object):
     """
 
     def __init__(self, *args, **kwargs):
-        self.mu_L = np.atleast_1d(kwargs.pop('mu_L'))
-        self.Sigma_L = np.atleast_2d(kwargs.pop('Sigma_L'))
-        self.logLmax = kwargs.pop('logLmax', 0)
-        self.logV = kwargs.pop('logV', 0)
+        self.mu_L = np.atleast_1d(kwargs.pop("mu_L"))
+        self.Sigma_L = np.atleast_2d(kwargs.pop("Sigma_L"))
+        self.logLmax = kwargs.pop("logLmax", 0)
+        self.logV = kwargs.pop("logV", 0)
         self.Sigma_P = self.Sigma_L
         self.mu_P = self.mu_L
 
@@ -336,7 +357,7 @@ class ReducedLinearModelUniformPrior(object):
 
     def logpi(self, theta):
         """P(theta) as a scalar."""
-        return - self.logV
+        return -self.logV
 
     def logP(self, theta):
         """P(theta|D) as a scalar."""
@@ -344,16 +365,19 @@ class ReducedLinearModelUniformPrior(object):
 
     def logL(self, theta):
         """P(D|theta) as a scalar."""
-        return (self.logLmax + logdet(2 * np.pi * self.Sigma_L)/2
-                + multivariate_normal(self.mu_L, self.Sigma_L).logpdf(theta))
+        return (
+            self.logLmax
+            + logdet(2 * np.pi * self.Sigma_L) / 2
+            + multivariate_normal(self.mu_L, self.Sigma_L).logpdf(theta)
+        )
 
     def logZ(self):
         """P(D) as a scalar."""
-        return self.logLmax + logdet(2*np.pi*self.Sigma_P)/2 - self.logV
+        return self.logLmax + logdet(2 * np.pi * self.Sigma_P) / 2 - self.logV
 
     def DKL(self):
         """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence."""
-        return self.logV - logdet(2*np.pi*np.e*self.Sigma_P)/2
+        return self.logV - logdet(2 * np.pi * np.e * self.Sigma_P) / 2
 
 
 class LinearMixtureModel(object):
@@ -417,25 +441,34 @@ class LinearMixtureModel(object):
 
     def __init__(self, *args, **kwargs):
         # Rationalise input arguments
-        M = self._atleast_3d(kwargs.pop('M', None))
-        m = self._atleast_2d(kwargs.pop('m', None))
-        C = self._atleast_3d(kwargs.pop('C', None))
-        mu = self._atleast_2d(kwargs.pop('mu', None))
-        Sigma = self._atleast_3d(kwargs.pop('Sigma', None))
-        logA = self._atleast_1d(kwargs.pop('logA', None))
-        n = kwargs.pop('n', 0)
-        d = kwargs.pop('d', 0)
-        k = kwargs.pop('k', 0)
+        M = self._atleast_3d(kwargs.pop("M", None))
+        m = self._atleast_2d(kwargs.pop("m", None))
+        C = self._atleast_3d(kwargs.pop("C", None))
+        mu = self._atleast_2d(kwargs.pop("mu", None))
+        Sigma = self._atleast_3d(kwargs.pop("Sigma", None))
+        logA = self._atleast_1d(kwargs.pop("logA", None))
+        n = kwargs.pop("n", 0)
+        d = kwargs.pop("d", 0)
+        k = kwargs.pop("k", 0)
 
         # Determine dimensions
         n = max([n, M.shape[2], mu.shape[1], Sigma.shape[1], Sigma.shape[2]])
         d = max([d, M.shape[1], m.shape[1], C.shape[1], C.shape[2]])
-        k = max([k, M.shape[0], m.shape[0], C.shape[0], mu.shape[0],
-                 Sigma.shape[0], logA.shape[0]])
+        k = max(
+            [
+                k,
+                M.shape[0],
+                m.shape[0],
+                C.shape[0],
+                mu.shape[0],
+                Sigma.shape[0],
+                logA.shape[0],
+            ]
+        )
         if not n:
-            raise ValueError('Unable to determine number of parameters n')
+            raise ValueError("Unable to determine number of parameters n")
         if not d:
-            raise ValueError('Unable to determine data dimensions d')
+            raise ValueError("Unable to determine data dimensions d")
 
         # Set defaults if no argument was passed
         M = M if M.size else np.eye(d, n)
@@ -443,7 +476,7 @@ class LinearMixtureModel(object):
         C = C if C.size else np.eye(d)
         mu = mu if mu.size else np.zeros(n)
         Sigma = Sigma if Sigma.size else np.eye(n)
-        logA = logA if logA.size else - np.log(k)
+        logA = logA if logA.size else -np.log(k)
 
         # Broadcast to correct shape
         self.M = self._broadcast_to(M, (k, d, n))
@@ -459,8 +492,8 @@ class LinearMixtureModel(object):
         mu = means[:, -n:]
         Sigma = covs[:, -n:, -n:]
         M = solve(Sigma, covs[:, -n:, :-n]).transpose(0, 2, 1)
-        m = means[:, :-n] - np.einsum('ija,ia->ij', M, mu)
-        C = covs[:, :-n, :-n] - np.einsum('ija,iab,ikb->ijk', M, Sigma, M)
+        m = means[:, :-n] - np.einsum("ija,ia->ij", M, mu)
+        C = covs[:, :-n, :-n] - np.einsum("ija,iab,ikb->ijk", M, Sigma, M)
         return cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma, logA=logA)
 
     @property
@@ -490,10 +523,9 @@ class LinearMixtureModel(object):
         theta : array_like, shape (n,)
         """
         theta = np.atleast_1d(theta)
-        mu = self.m + np.einsum('ija,a->ij', self.M, theta)
+        mu = self.m + np.einsum("ija,a->ij", self.M, theta)
         prior = self.prior()
-        logA = (prior.logpdf(theta, reduce=False) + self.logA
-                - prior.logpdf(theta))
+        logA = prior.logpdf(theta, reduce=False) + self.logA - prior.logpdf(theta)
         return mixture_multivariate_normal(mu, self.C, logA)
 
     def prior(self):
@@ -517,14 +549,15 @@ class LinearMixtureModel(object):
         D : array_like, shape (d,)
         """
         D = np.atleast_1d(D)
-        Sigma = inv(inv(self.Sigma) + np.einsum('iaj,iab,ibk->ijk',
-                                                self.M, inv(self.C), self.M))
-        D0 = self.m + np.einsum('ija,ia->ij', self.M, self.mu)
-        mu = self.mu + np.einsum('ija,iba,ibc,ic->ij',
-                                 Sigma, self.M, inv(self.C), D-D0)
+        Sigma = inv(
+            inv(self.Sigma) + np.einsum("iaj,iab,ibk->ijk", self.M, inv(self.C), self.M)
+        )
+        D0 = self.m + np.einsum("ija,ia->ij", self.M, self.mu)
+        mu = self.mu + np.einsum(
+            "ija,iba,ibc,ic->ij", Sigma, self.M, inv(self.C), D - D0
+        )
         evidence = self.evidence()
-        logA = (evidence.logpdf(D, reduce=False) + self.logA
-                - evidence.logpdf(D))
+        logA = evidence.logpdf(D, reduce=False) + self.logA - evidence.logpdf(D)
         return mixture_multivariate_normal(mu, Sigma, logA)
 
     def evidence(self):
@@ -533,9 +566,8 @@ class LinearMixtureModel(object):
         D|A ~ N( m + M mu, C + M Sigma M' )
         A   ~ categorical(exp(logA))
         """
-        mu = self.m + np.einsum('ija,ia->ij', self.M, self.mu)
-        Sigma = self.C + np.einsum('ija,iab,ikb->ijk',
-                                   self.M, self.Sigma, self.M)
+        mu = self.m + np.einsum("ija,ia->ij", self.M, self.mu)
+        Sigma = self.C + np.einsum("ija,iab,ikb->ijk", self.M, self.Sigma, self.M)
         return mixture_multivariate_normal(mu, Sigma, self.logA)
 
     def joint(self):
@@ -549,9 +581,8 @@ class LinearMixtureModel(object):
         evidence = self.evidence()
         prior = self.prior()
         mu = np.block([evidence.means, prior.means])
-        corr = np.einsum('ija,ial->ijl', self.M, self.Sigma)
-        Sigma = np.block([[evidence.covs, corr],
-                          [corr.transpose(0, 2, 1), prior.covs]])
+        corr = np.einsum("ija,ial->ijl", self.M, self.Sigma)
+        Sigma = np.block([[evidence.covs, corr], [corr.transpose(0, 2, 1), prior.covs]])
         return mixture_multivariate_normal(mu, Sigma, self.logA)
 
     def _atleast_3d(self, x):

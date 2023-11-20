@@ -5,7 +5,8 @@ import pytest
 
 def test_bisect():
     def f(x):
-        return x-5
+        return x - 5
+
     assert bisect(f, 0, 10) == 5
 
     with pytest.raises(ValueError):

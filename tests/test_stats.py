@@ -1,6 +1,5 @@
 import pytest
-from lsbi.stats import (mixture_multivariate_normal,
-                        multivariate_normal)
+from lsbi.stats import mixture_multivariate_normal, multivariate_normal
 from numpy.testing import assert_allclose
 import numpy as np
 from scipy.stats import invwishart, kstest
@@ -16,7 +15,7 @@ class TestMixtureMultivariateNormal(object):
 
     def random(self, k, d):
         means = np.random.randn(k, d)
-        covs = invwishart(scale=np.eye(d), df=d*10).rvs(k)
+        covs = invwishart(scale=np.eye(d), df=d * 10).rvs(k)
         if k == 1:
             covs = np.array([covs])
         logA = np.log(scipy.stats.dirichlet(np.ones(k)).rvs())[0] + 10
@@ -26,17 +25,19 @@ class TestMixtureMultivariateNormal(object):
         dist = self.random(k, d)
         logA = dist.logA
         logA -= scipy.special.logsumexp(logA)
-        mvns = [scipy.stats.multivariate_normal(dist.means[i],
-                                                dist.covs[i])
-                for i in range(k)]
+        mvns = [
+            scipy.stats.multivariate_normal(dist.means[i], dist.covs[i])
+            for i in range(k)
+        ]
 
         samples_1, logpdfs_1 = [], []
         for _ in range(N):
             i = np.random.choice(k, p=np.exp(logA))
             x = mvns[i].rvs()
             samples_1.append(x)
-            logpdf = scipy.special.logsumexp([mvns[j].logpdf(x) + logA[j]
-                                              for j in range(k)])
+            logpdf = scipy.special.logsumexp(
+                [mvns[j].logpdf(x) + logA[j] for j in range(k)]
+            )
             assert_allclose(logpdf, dist.logpdf(x))
             logpdfs_1.append(logpdf)
         samples_1, logpdfs_1 = np.array(samples_1), np.array(logpdfs_1)
@@ -96,20 +97,20 @@ class TestMixtureMultivariateNormal(object):
         j = np.array([x for x in range(d) if x not in i])
         dist = self.random(k, d)
         mixture_2 = dist.marginalise(i)
-        assert mixture_2.means.shape == (k, d-p)
-        assert mixture_2.covs.shape == (k, d-p, d-p)
+        assert mixture_2.means.shape == (k, d - p)
+        assert mixture_2.covs.shape == (k, d - p, d - p)
         assert_allclose(dist.means[:, j], mixture_2.means)
         assert_allclose(dist.covs[:, j][:, :, j], mixture_2.covs)
 
         v = np.random.randn(k, p)
         mixture_3 = dist.condition(i, v)
-        assert mixture_3.means.shape == (k, d-p)
-        assert mixture_3.covs.shape == (k, d-p, d-p)
+        assert mixture_3.means.shape == (k, d - p)
+        assert mixture_3.covs.shape == (k, d - p, d - p)
 
         v = np.random.randn(p)
         mixture_3 = dist.condition(i, v)
-        assert mixture_3.means.shape == (k, d-p)
-        assert mixture_3.covs.shape == (k, d-p, d-p)
+        assert mixture_3.means.shape == (k, d - p)
+        assert mixture_3.covs.shape == (k, d - p, d - p)
 
 
 @pytest.mark.parametrize("d", [1, 2, 5, 10])
@@ -118,7 +119,7 @@ class TestMultivariateNormal(object):
 
     def random(self, d):
         mean = np.random.randn(d)
-        cov = invwishart(scale=np.eye(d), df=d*10).rvs()
+        cov = invwishart(scale=np.eye(d), df=d * 10).rvs()
         return self.cls(mean, cov)
 
     def test_rvs(self, d):
@@ -183,12 +184,12 @@ class TestMultivariateNormal(object):
         j = np.array([x for x in range(d) if x not in i])
         dist_1 = self.random(d)
         dist_2 = dist_1.marginalise(i)
-        assert dist_2.mean.shape == (d-p,)
-        assert dist_2.cov.shape == (d-p, d-p)
+        assert dist_2.mean.shape == (d - p,)
+        assert dist_2.cov.shape == (d - p, d - p)
         assert_allclose(dist_1.mean[j], dist_2.mean)
         assert_allclose(dist_1.cov[j][:, j], dist_2.cov)
 
         v = np.random.randn(p)
         dist_3 = dist_1.condition(i, v)
-        assert dist_3.mean.shape == (d-p,)
-        assert dist_3.cov.shape == (d-p, d-p)
+        assert dist_3.mean.shape == (d - p,)
+        assert dist_3.cov.shape == (d - p, d - p)
