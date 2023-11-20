@@ -9,6 +9,7 @@ repos:
         files: "lsbi/"
       - id: black
         name: black
+        args: [ "--check"  ]
         entry: black
         language: system
         types: [python]
@@ -16,7 +17,7 @@ repos:
       - id: isort
         name: isort
         entry: isort
-        args: [ "--profile", "black", "--filter-files" ]
+        args: [ "--profile", "black", "--filter-files", "--check-only"  ]
         language: system
         types: [python]
         files: "."
