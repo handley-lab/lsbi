@@ -8,6 +8,8 @@ Fixes # (issue)
 
 - [ ] I have performed a self-review of my own code
 - [ ] My code is PEP8 compliant (`flake8 lsbi tests`)
+- [ ] My code is black compliant (`black lsbi tests`)
+- [ ] My code is isort compliant (`isort lsbi tests`)
 - [ ] My code contains compliant docstrings (`pydocstyle --convention=numpy lsbi`)
 - [ ] New and existing unit tests pass locally with my changes (`python -m pytest`)
 - [ ] I have added tests that prove my fix is effective or that my feature works
