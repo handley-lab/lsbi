@@ -2,6 +2,7 @@
 import sys
 from packaging import version
 from utils import unit_incremented, run
+
 vfile = "lsbi/_version.py"
 README = "README.rst"
 
@@ -19,12 +20,13 @@ if version.parse(current_version) != version.parse(readme_version):
     sys.stderr.write("Version mismatch: {} != {}".format(vfile, README))
     sys.exit(1)
 
-elif previous_version == '':
+elif previous_version == "":
     sys.exit(0)
 
 elif not unit_incremented(current_version, previous_version):
-    sys.stderr.write(("Version must be incremented by one:\n"
-                      "HEAD:   {},\n"
-                      "master: {}.\n"
-                      ).format(current_version, previous_version))
+    sys.stderr.write(
+        (
+            "Version must be incremented by one:\n" "HEAD:   {},\n" "master: {}.\n"
+        ).format(current_version, previous_version)
+    )
     sys.exit(1)
