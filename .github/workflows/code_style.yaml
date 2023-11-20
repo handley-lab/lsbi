@@ -1,4 +1,4 @@
-name: CI
+name: Code style
 
 on:
   push:
@@ -35,22 +35,6 @@ jobs:
       - name: Run isort
         run: isort . --check-only
 
-  sphinx:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-          cache: 'pip'
-      - name: Upgrade pip and install doc requirements
-        run: pip install -e ".[all,docs]"
-      - name: build documentation
-        run: |
-          cd docs
-          make clean
-          make html SPHINXOPTS="-W --keep-going -n"
-
   unittests:
     runs-on: ubuntu-latest
     steps:
@@ -67,23 +51,3 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v1
-
-  test-build-n-publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-          cache: 'pip'
-      - name: Install pypa/build
-        run: pip install build --user
-      - name: Build a binary wheel and a source tarball
-        run: python -m build --sdist --wheel --outdir dist/
-      - name: Publish to Test PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        continue-on-error: true
-        with:
-          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-          repository-url: https://test.pypi.org/legacy/
-          skip-existing: true
