@@ -8,7 +8,7 @@ vfile = "lsbi/_version.py"
 README = "README.rst"
 
 current_version = run("cat", vfile)
-current_version = current_version.split("=")[-1].strip().strip("'")
+current_version = current_version.split("=")[-1].strip().strip('"')
 current_version = version.parse(current_version)
 
 if len(sys.argv) > 1:
