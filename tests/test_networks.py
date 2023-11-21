@@ -1,11 +1,8 @@
-from lsbi.network import (
-    BinaryClassifierBase,
-    BinaryClassifier,
-    BinaryClassifierLPop,
-)
-import torch
 import numpy as np
 import pytest
+import torch
+
+from lsbi.network import BinaryClassifier, BinaryClassifierBase, BinaryClassifierLPop
 
 
 @pytest.mark.parametrize("input_dim", [1, 100])
@@ -24,9 +21,7 @@ class TestClassifierBase:
 
     @pytest.fixture
     def y(self):
-        return torch.tensor(
-            np.random.randint(0, 2, size=(10, 1)), dtype=torch.float32
-        )
+        return torch.tensor(np.random.randint(0, 2, size=(10, 1)), dtype=torch.float32)
 
     def fit_model(self, model, input_dim):
         data_size = 10

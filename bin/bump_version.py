@@ -1,7 +1,8 @@
 #!/usr/bin/env python
-from utils import run
-from packaging import version
 import sys
+
+from packaging import version
+from utils import run
 
 vfile = "lsbi/_version.py"
 README = "README.rst"
@@ -20,14 +21,14 @@ minor = current_version.minor
 micro = current_version.micro
 
 if update_type == "micro":
-    micro+=1
+    micro += 1
 elif update_type == "minor":
-    minor+=1
-    micro=0
+    minor += 1
+    micro = 0
 elif update_type == "major":
-    major+=1
-    minor=0
-    micro=0
+    major += 1
+    minor = 0
+    micro = 0
 
 new_version = version.parse(f"{major}.{minor}.{micro}")
 

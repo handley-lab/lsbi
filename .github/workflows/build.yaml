@@ -1,4 +1,4 @@
-name: Build and push to PyPI on merging to master
+name: Build on merging to master
 on:
   push:
     branches:

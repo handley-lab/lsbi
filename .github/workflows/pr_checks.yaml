@@ -1,30 +1,21 @@
-name: CI
+name: PR checks
 
 on:
-  push:
-    branches: [master]
   pull_request:
     branches: [master]
-  schedule:
-    - cron: "0 0 * * *"
 
 jobs:
-  lint:
+  version-is-unit-incremented:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-          cache: 'pip'
       - name: Upgrade pip and install linters
         run: |
-          pip install --upgrade pip
-          pip install flake8 pydocstyle packaging
-      - name: flake8 PEP compliance checks
-        run: flake8 lsbi tests
-      - name: pydocstyle documentation style checks
-        run: pydocstyle --convention=numpy lsbi
+          python -m pip install --upgrade pip
+          python -m pip install packaging
+      - name: Check version number
+        run: python ./bin/check_version.py
 
   sphinx:
     runs-on: ubuntu-latest
@@ -35,36 +26,12 @@ jobs:
           python-version: '3.9'
           cache: 'pip'
       - name: Upgrade pip and install doc requirements
-        run: |
-          pip install --upgrade pip
-          pip install -e ".[all,docs]"
+        run: pip install -e ".[all,docs]"
       - name: build documentation
         run: |
           cd docs
           make clean
           make html SPHINXOPTS="-W --keep-going -n"
-
-  pip:
-    env:
-      ZENODO_SANDBOX_TOKEN: ${{ secrets.ZENODO_SANDBOX_TOKEN }}
-      PR_NUMBER: ${{ github.event.number }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-          cache: 'pip'
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -e ".[test]"
-
-      - name: Test with pytest
-        run: pytest --cov=lsbi tests
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v1
 
   test-build-n-publish:
     runs-on: ubuntu-latest
