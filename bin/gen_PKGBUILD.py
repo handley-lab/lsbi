@@ -4,7 +4,7 @@ with open("pyproject.toml", "rb") as f:
     pyproject = tomli.load(f)
 
 description = pyproject["project"]["description"]
-version = open("lsbi/_version.py", "r").readlines()[0].split("=")[1].strip().strip("'")
+version = open("lsbi/_version.py", "r").readlines()[0].split("=")[1].strip().strip('"')
 url = pyproject["project"]["urls"]["Homepage"]
 pyproject["project"]["dependencies"]
 rel = 1
