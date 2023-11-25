@@ -67,6 +67,7 @@ jobs:
 #          auto-update-conda: false
 #          show-channel-urls: true
       - name: install dependencies
+        shell: bash -el {0}
         run: conda install grayskull
       - name: Bash
         shell: bash -el {0}
