@@ -6,12 +6,12 @@ on:
 jobs:
   get-version:
     runs-on: ubuntu-latest
-    uses: actions/checkout@v4
     outputs:
       version: ${{ steps.step1.outputs.v }}
     steps:
-      - id: step1
-        name: Get version number
+      - uses: actions/checkout@v4
+      - name: Get version number
+        id: step1 
         run: echo "v=$(grep ':Version:' README.rst | awk '{print $2}')" >> $GITHUB_OUTPUT
 
   git-tag-and-release:
