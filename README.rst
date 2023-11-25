@@ -3,13 +3,16 @@ lsbi: Linear Simulation Based Inference
 =======================================
 :lsbi: Linear Simulation Based Inference
 :Author: Will Handley & David Yallup
-:Version: 0.9.7
+:Version: 0.9.8
 :Homepage: https://github.com/handley-lab/lsbi
 :Documentation: http://lsbi.readthedocs.io/
 
 .. image:: https://github.com/handley-lab/lsbi/actions/workflows/unittests.yaml/badge.svg?branch=master
    :target: https://github.com/handley-lab/lsbi/actions/workflows/unittests.yaml?query=branch%3Amaster
-   :alt: Build Status
+   :alt: Unit test status
+.. image:: https://github.com/handley-lab/lsbi/actions/workflows/build.yaml/badge.svg?branch=master
+   :target: https://github.com/handley-lab/lsbi/actions/workflows/build.yaml?query=branch%3Amaster
+   :alt: Build status
 .. image:: https://codecov.io/gh/handley-lab/lsbi/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/handley-lab/lsbi
    :alt: Test Coverage Status

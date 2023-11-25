@@ -1,4 +1,4 @@
-name: Build on merging to master
+name: Build
 on:
   push:
     branches:
