@@ -3,7 +3,7 @@ lsbi: Linear Simulation Based Inference
 =======================================
 :lsbi: Linear Simulation Based Inference
 :Author: Will Handley & David Yallup
-:Version: 0.8.3
+:Version: 0.9.0
 :Homepage: https://github.com/handley-lab/lsbi
 :Documentation: http://lsbi.readthedocs.io/
 
