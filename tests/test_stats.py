@@ -254,9 +254,12 @@ class TestMultiMultivariateNormal(object):
 
         for shape in [(k, d), (3, k, d), (3, 4, k, d)]:
             xs = np.random.rand(*shape)
-            logpdfs = [mvn.logpdf(xs[..., i, :]) for i, mvn in enumerate(mvns)]
+            logpdfs_1 = [mvn.logpdf(xs[..., i, :]) for i, mvn in enumerate(mvns)]
+            logpdfs_2 = dist.logpdf(xs)
+            if k == 1:
+                logpdfs_2 = np.array(logpdfs_2)[..., None]
             for j in range(k):
-                assert np.shape(logpdfs[j]) == dist.logpdf(xs)[..., j].shape
+                assert np.shape(logpdfs_1[j]) == logpdfs_2[..., j].shape
 
     def test_bijector(self, k, d):
         dist = self.random(k, d)
@@ -280,7 +283,7 @@ class TestMultiMultivariateNormal(object):
                     p = kstest(theta[:, j, i], samples[:, j, i]).pvalue
                 assert p > 1e-5
             if k == 1:
-                p = kstest(logpdf_1, logpdf_2[j]).pvalue
+                p = kstest(logpdf_1, logpdf_2).pvalue
             else:
                 p = kstest(logpdf_1[j], logpdf_2[j]).pvalue
             assert p > 1e-5

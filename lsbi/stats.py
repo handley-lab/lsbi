@@ -105,7 +105,7 @@ class multimultivariate_normal(object):
         chi2 = np.einsum("...ij,ijk,...ik->...i", dx, invcovs, dx)
         norm = -logdet(2 * np.pi * self.covs) / 2
         logpdf = norm - chi2 / 2
-        return logpdf
+        return np.squeeze(logpdf)
 
     def rvs(self, size=1):
         """Random variates."""
