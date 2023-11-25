@@ -20,8 +20,7 @@ lsbi: Linear Simulation Based Inference
    :target: https://badge.fury.io/py/lsbi
    :alt: PyPi location
 .. image:: https://zenodo.org/badge/705730277.svg
-   .. image:: https://zenodo.org/badge/705730277.svg
-     :target: https://zenodo.org/doi/10.5281/zenodo.10009816
+   :target: https://zenodo.org/doi/10.5281/zenodo.10009816
    :alt: Permanent DOI for this release
 .. image:: https://img.shields.io/badge/license-MIT-blue.svg
    :target: https://github.com/handley-lab/lsbi/blob/master/LICENSE
