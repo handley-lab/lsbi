@@ -68,7 +68,13 @@ jobs:
 #          show-channel-urls: true
       - name: install dependencies
         run: conda install grayskull
+      - name: Bash
+        shell: bash -el {0}
+        run: |
+          conda info
+          conda list
       - name: Generate meta.yaml from grayskull
+        shell: bash -el {0}
         run: grayskull pypi --strict-conda-forge lsbi
       - name: Build and upload the conda packages
         uses: uibcdf/action-build-and-upload-conda-packages@v1.2.0
