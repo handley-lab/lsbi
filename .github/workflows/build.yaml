@@ -50,6 +50,8 @@ jobs:
 
   pypi-public:
     needs: pypi-release
+    runs-on: ubuntu-latest
+    steps:
       - name: Get version number
         run: |
           VERSION="$(grep ':Version:' README.rst | awk '{print $2}')"
