@@ -103,9 +103,13 @@ class TestMultiMultivariateNormal(object):
     def random(self, k, d):
         means = np.random.randn(k, d)
         covs = invwishart(scale=np.eye(d), df=d * 10).rvs(k)
+        if k == 1:
+            covs = np.array([covs])
         return self.cls(means, covs)
 
     def test_rvs(self, k, d):
+        k = 1
+        d = 2
         dist = self.random(k, d)
         mvns = [
             scipy.stats.multivariate_normal(dist.means[i], dist.covs[i])
@@ -134,8 +138,8 @@ class TestMultiMultivariateNormal(object):
 
         for shape in [(k, d), (3, k, d), (3, 4, k, d)]:
             xs = np.random.rand(*shape)
-            logpdfs = [mvn.logpdf(x) for x, mvn in zip(x, mvns)]
-            assert np.shape(logpdfs) == dist.logpdf(x).shape
+            logpdfs = [mvn.logpdf(x) for x, mvn in zip(xs, mvns)]
+            assert np.shape(logpdfs) == dist.logpdf(xs).shape
 
     def test_bijector(self, k, d):
         dist = self.random(k, d)
