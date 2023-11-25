@@ -110,7 +110,7 @@ class multimultivariate_normal(object):
     def rvs(self, size=1):
         """Random variates."""
         size = np.atleast_1d(size)
-        x = np.random.randn(*size, *means.shape)
+        x = np.random.randn(*size, *self.means.shape)
         choleskys = np.linalg.cholesky(self.covs)
         return np.squeeze(self.means + np.einsum("ijk,...ik->...ij", choleskys, x))
 
