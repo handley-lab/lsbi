@@ -327,8 +327,8 @@ class TestReducedLinearModelUniformPrior(object):
 
 
 @pytest.mark.parametrize("k", np.arange(1, 6))
-@pytest.mark.parametrize("n", np.arange(1, 6))
 @pytest.mark.parametrize("d", np.arange(1, 6))
+@pytest.mark.parametrize("n", np.arange(1, 6))
 class TestLinearMixtureModel(object):
     cls = LinearMixtureModel
 

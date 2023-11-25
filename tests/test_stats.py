@@ -9,8 +9,8 @@ from lsbi.stats import mixture_multivariate_normal, multivariate_normal
 N = 1000
 
 
-@pytest.mark.parametrize("k", [1, 2, 5, 10])
 @pytest.mark.parametrize("d", [1, 2, 5, 10])
+@pytest.mark.parametrize("k", [1, 2, 5, 10])
 class TestMixtureMultivariateNormal(object):
     cls = mixture_multivariate_normal
 
@@ -61,8 +61,6 @@ class TestMixtureMultivariateNormal(object):
             assert mvns[0].logpdf(x).shape == dist.logpdf(x).shape
 
     def test_bijector(self, k, d):
-        k = 1
-        d = 4
         dist = self.random(k, d)
 
         # Test inversion
@@ -73,7 +71,10 @@ class TestMixtureMultivariateNormal(object):
         # Test sampling
         samples = dist.rvs(N)
         for i in range(d):
-            p = kstest(theta[:, i], samples[:, i]).pvalue
+            if d == 1:
+                p = kstest(np.squeeze(theta), samples).pvalue
+            else:
+                p = kstest(theta[:, i], samples[:, i]).pvalue
             assert p > 1e-5
 
         p = kstest(dist.logpdf(samples), dist.logpdf(theta)).pvalue
