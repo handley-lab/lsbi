@@ -222,10 +222,7 @@ class TestMultiMultivariateNormal(object):
 
         samples_1, logpdfs_1 = [], []
         for _ in range(N):
-            if d == 1:
-                xs = [[mvn.rvs()] for mvn in mvns]
-            else:
-                xs = [mvn.rvs() for mvn in mvns]
+            xs = [mvn.rvs() for mvn in mvns]
             samples_1.append(xs)
             logpdf = [mvn.logpdf(x) for x, mvn in zip(xs, mvns)]
             assert_allclose(logpdf, dist.logpdf(xs))
@@ -239,8 +236,12 @@ class TestMultiMultivariateNormal(object):
 
         for j in range(k):
             for i in range(d):
-                if k == 1:
+                if k == 1 and d == 1:
+                    p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
+                elif k == 1:
                     p = kstest(samples_1[:, j, i], samples_2[:, i]).pvalue
+                elif d == 1:
+                    p = kstest(samples_1[:, j], samples_2[:, j, i]).pvalue
                 else:
                     p = kstest(samples_1[:, j, i], samples_2[:, j, i]).pvalue
                 assert p > 1e-5
