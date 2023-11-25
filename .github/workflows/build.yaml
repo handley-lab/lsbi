@@ -52,6 +52,7 @@ jobs:
     needs: pypi-release
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
       - name: Get version number
         run: |
           VERSION="$(grep ':Version:' README.rst | awk '{print $2}')"
