@@ -56,11 +56,11 @@ jobs:
       - name: Get version number
         run: |
           VERSION="$(grep ':Version:' README.rst | awk '{print $2}')"
-          echo "DIST_VERSION=v${VERSION}" >> $GITHUB_ENV
+          echo "VERSION_NUMBER=${VERSION}" >> $GITHUB_ENV
       - name: Wait for PyPi
         uses: nev7n/wait_for_response@v1
         with:
-          url: "https://files.pythonhosted.org/packages/source/l/lsbi/lsbi-${{ env.DIST_VERSION }}.tar.gz"
+          url: "https://files.pythonhosted.org/packages/source/l/lsbi/lsbi-${{ env.VERSION_NUMBER }}.tar.gz"
           responseCode: 200
           timeout: 600000
           interval: 10000
