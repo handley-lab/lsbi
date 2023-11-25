@@ -80,6 +80,6 @@ jobs:
           meta_yaml_dir: lsbi
           python-version: '3.9'
           user: handley-lab
-          label: 'auto'
+          label: 'main'
           token: ${{ secrets.ANACONDA_TOKEN }} # Replace with the right name of your secret
 
