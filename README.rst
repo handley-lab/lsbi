@@ -3,13 +3,16 @@ lsbi: Linear Simulation Based Inference
 =======================================
 :lsbi: Linear Simulation Based Inference
 :Author: Will Handley & David Yallup
-:Version: 0.9.0
+:Version: 0.9.8
 :Homepage: https://github.com/handley-lab/lsbi
 :Documentation: http://lsbi.readthedocs.io/
 
-.. image:: https://github.com/handley-lab/lsbi/workflows/CI/badge.svg?branch=master
-   :target: https://github.com/handley-lab/lsbi/actions?query=workflow%3ACI+branch%3Amaster
-   :alt: Build Status
+.. image:: https://github.com/handley-lab/lsbi/actions/workflows/unittests.yaml/badge.svg?branch=master
+   :target: https://github.com/handley-lab/lsbi/actions/workflows/unittests.yaml?query=branch%3Amaster
+   :alt: Unit test status
+.. image:: https://github.com/handley-lab/lsbi/actions/workflows/build.yaml/badge.svg?branch=master
+   :target: https://github.com/handley-lab/lsbi/actions/workflows/build.yaml?query=branch%3Amaster
+   :alt: Build status
 .. image:: https://codecov.io/gh/handley-lab/lsbi/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/handley-lab/lsbi
    :alt: Test Coverage Status
@@ -19,6 +22,9 @@ lsbi: Linear Simulation Based Inference
 .. image:: https://badge.fury.io/py/lsbi.svg
    :target: https://badge.fury.io/py/lsbi
    :alt: PyPi location
+.. image:: https://anaconda.org/handley-lab/lsbi/badges/version.svg
+   :target: https://anaconda.org/handley-lab/lsbi
+   :alt: Conda location
 .. image:: https://zenodo.org/badge/705730277.svg
    :target: https://zenodo.org/doi/10.5281/zenodo.10009816
    :alt: Permanent DOI for this release
@@ -27,13 +33,7 @@ lsbi: Linear Simulation Based Inference
    :alt: License information
 
 
-
-
-
-``lsbi`` 
-
 A repository for linear modelling and simulation based inference
-
 
 UNDER CONSTRUCTION
 
@@ -50,7 +50,13 @@ Installation
 
     pip install lsbi
 
-or via the setup.py
+via conda
+
+.. code:: bash
+
+    conda install -c handley-lab lsbi
+
+or via the github repository
 
 .. code:: bash
 
@@ -62,9 +68,9 @@ You can check that things are working by running the test suite:
 
 .. code:: bash
 
-    export MPLBACKEND=Agg     # only necessary for OSX users
     python -m pytest
-    flake8 lsbi tests
+    black .
+    isort --profile black .
     pydocstyle --convention=numpy lsbi
 
 
