@@ -79,9 +79,6 @@ jobs:
         with:
           meta_yaml_dir: lsbi
           python-version: '3.9'
-          platform_linux-64: true
-          platform_osx-64: true
-          platform_win-64: true
           user: handley-lab
           label: auto
           token: ${{ secrets.ANACONDA_TOKEN }} # Replace with the right name of your secret
