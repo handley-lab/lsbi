@@ -56,31 +56,3 @@ jobs:
           password: ${{ secrets.TEST_PYPI_API_TOKEN }}
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
-  
-  test-conda-release:
-    name: Build and deploy to conda
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Conda environment creation and activation
-        uses: conda-incubator/setup-miniconda@v2
-        with:
-          python-version: '3.9'
-          auto-update-conda: false
-          auto-activate-base: false
-          show-channel-urls: true
-      - name: install dependencies
-        shell: bash -el {0}
-        run: conda install grayskull conda-build anaconda-client
-      - name: Generate meta.yaml from grayskull
-        shell: bash -el {0}
-        run: grayskull pypi --strict-conda-forge lsbi
-      - name: Build and upload the conda packages
-        uses: uibcdf/action-build-and-upload-conda-packages@v1.2.0
-        with:
-          meta_yaml_dir: lsbi
-          python-version: '3.9'
-          user: handley-lab
-          label: 'main'
-          token: ${{ secrets.ANACONDA_TOKEN }} # Replace with the right name of your secret
-
