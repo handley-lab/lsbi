@@ -9,7 +9,10 @@ lsbi: Linear Simulation Based Inference
 
 .. image:: https://github.com/handley-lab/lsbi/actions/workflows/unittests.yaml/badge.svg?branch=master
    :target: https://github.com/handley-lab/lsbi/actions/workflows/unittests.yaml?query=branch%3Amaster
-   :alt: Build Status
+   :alt: Unit test status
+.. image:: https://github.com/handley-lab/lsbi/actions/workflows/build.yaml/badge.svg?branch=master
+   :target: https://github.com/handley-lab/lsbi/actions/workflows/build.yaml?query=branch%3Amaster
+   :alt: Build status
 .. image:: https://codecov.io/gh/handley-lab/lsbi/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/handley-lab/lsbi
    :alt: Test Coverage Status
