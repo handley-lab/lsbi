@@ -65,7 +65,9 @@ jobs:
         uses: conda-incubator/setup-miniconda@v2
         with:
           python-version: '3.9'
-          auto-activate-base: true
+          auto-update-conda: false
+          auto-activate-base: false
+          show-channel-urls: true
       - name: install dependencies
         shell: bash -el {0}
         run: conda install grayskull conda-build
