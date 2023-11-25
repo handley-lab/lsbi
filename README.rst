@@ -7,8 +7,8 @@ lsbi: Linear Simulation Based Inference
 :Homepage: https://github.com/handley-lab/lsbi
 :Documentation: http://lsbi.readthedocs.io/
 
-.. image:: https://github.com/handley-lab/lsbi/workflows/CI/badge.svg?branch=master
-   :target: https://github.com/handley-lab/lsbi/actions?query=workflow%3ACI+branch%3Amaster
+.. image:: https://github.com/handley-lab/lsbi/actions/workflows/unittests.yaml/badge.svg?branch=master
+   :target: https://github.com/handley-lab/lsbi/actions/workflows/unittests.yaml?query=branch%3Amaster
    :alt: Build Status
 .. image:: https://codecov.io/gh/handley-lab/lsbi/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/handley-lab/lsbi
@@ -20,7 +20,8 @@ lsbi: Linear Simulation Based Inference
    :target: https://badge.fury.io/py/lsbi
    :alt: PyPi location
 .. image:: https://zenodo.org/badge/705730277.svg
-   :target: https://zenodo.org/doi/10.5281/zenodo.100.9.36
+   .. image:: https://zenodo.org/badge/705730277.svg
+     :target: https://zenodo.org/doi/10.5281/zenodo.10009816
    :alt: Permanent DOI for this release
 .. image:: https://img.shields.io/badge/license-MIT-blue.svg
    :target: https://github.com/handley-lab/lsbi/blob/master/LICENSE
