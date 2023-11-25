@@ -80,13 +80,6 @@ jobs:
           meta_yaml_dir: lsbi
           python-version: '3.9'
           user: handley-lab
-          label: main
+          label: "auto"
           token: ${{ secrets.ANACONDA_TOKEN }} # Replace with the right name of your secret
-      - name: Build and upload the conda packages
-        uses: MichaelsJP/conda-package-publish-action@v1.0.0
-        with:
-          subDir: lsbi
-          AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
-          platforms: 'all'
-          override: true
-          dry_run: true
+
