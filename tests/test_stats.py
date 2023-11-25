@@ -201,8 +201,8 @@ class TestMultivariateNormal(object):
         assert dist_3.cov.shape == (d - p, d - p)
 
 
-@pytest.mark.parametrize("k", [1, 2, 5, 10])
 @pytest.mark.parametrize("d", [1, 2, 5, 10])
+@pytest.mark.parametrize("k", [1, 2, 5, 10])
 class TestMultiMultivariateNormal(object):
     cls = multimultivariate_normal
 
@@ -214,8 +214,6 @@ class TestMultiMultivariateNormal(object):
         return self.cls(means, covs)
 
     def test_rvs(self, k, d):
-        k = 1
-        d = 2
         dist = self.random(k, d)
         mvns = [
             scipy.stats.multivariate_normal(dist.means[i], dist.covs[i])
@@ -224,7 +222,10 @@ class TestMultiMultivariateNormal(object):
 
         samples_1, logpdfs_1 = [], []
         for _ in range(N):
-            xs = [mvn.rvs() for mvn in mvns]
+            if d == 1:
+                xs = [[mvn.rvs()] for mvn in mvns]
+            else:
+                xs = [mvn.rvs() for mvn in mvns]
             samples_1.append(xs)
             logpdf = [mvn.logpdf(x) for x, mvn in zip(xs, mvns)]
             assert_allclose(logpdf, dist.logpdf(xs))
@@ -232,20 +233,29 @@ class TestMultiMultivariateNormal(object):
         samples_1, logpdfs_1 = np.array(samples_1), np.array(logpdfs_1)
 
         samples_2 = dist.rvs(N)
+        if d == 1:
+            samples_2 = samples_2[..., None]
         logpdfs_2 = dist.logpdf(samples_2)
 
         for j in range(k):
             for i in range(d):
-                p = kstest(samples_1[:, j, i], samples_2[:, j, i]).pvalue
+                if k == 1:
+                    p = kstest(samples_1[:, j, i], samples_2[:, i]).pvalue
+                else:
+                    p = kstest(samples_1[:, j, i], samples_2[:, j, i]).pvalue
                 assert p > 1e-5
 
-            p = kstest(logpdfs_1[j], logpdfs_2[j]).pvalue
+            if k == 1:
+                p = kstest(logpdfs_1[j], logpdfs_2).pvalue
+            else:
+                p = kstest(logpdfs_1[j], logpdfs_2[j]).pvalue
             assert p > 1e-5
 
         for shape in [(k, d), (3, k, d), (3, 4, k, d)]:
             xs = np.random.rand(*shape)
-            logpdfs = [mvn.logpdf(x) for x, mvn in zip(xs, mvns)]
-            assert np.shape(logpdfs) == dist.logpdf(xs).shape
+            logpdfs = [mvn.logpdf(xs[..., i, :]) for i, mvn in enumerate(mvns)]
+            for j in range(k):
+                assert np.shape(logpdfs[j]) == dist.logpdf(xs)[..., j].shape
 
     def test_bijector(self, k, d):
         dist = self.random(k, d)
@@ -257,13 +267,21 @@ class TestMultiMultivariateNormal(object):
 
         # Test sampling
         samples = dist.rvs(N)
+        if d == 1:
+            samples = samples[..., None]
         logpdf_1 = dist.logpdf(samples)
         logpdf_2 = dist.logpdf(theta)
         for j in range(k):
             for i in range(d):
-                p = kstest(theta[:, j, i], samples[:, j, i]).pvalue
+                if k == 1:
+                    p = kstest(theta[:, j, i], samples[:, i]).pvalue
+                else:
+                    p = kstest(theta[:, j, i], samples[:, j, i]).pvalue
                 assert p > 1e-5
-            p = kstest(logpdf_1[j], logpdf_2[j]).pvalue
+            if k == 1:
+                p = kstest(logpdf_1, logpdf_2[j]).pvalue
+            else:
+                p = kstest(logpdf_1[j], logpdf_2[j]).pvalue
             assert p > 1e-5
 
         # Test shapes

@@ -99,7 +99,7 @@ class multimultivariate_normal(object):
     def logpdf(self, x):
         """Log of the probability density function."""
         process_quantiles = scipy.stats.multivariate_normal._process_quantiles
-        x = process_quantiles(x, self.means.shape)
+        x = process_quantiles(x, self.means.shape[-1])
         dx = self.means - x[..., :, :]
         invcovs = np.linalg.inv(self.covs)
         chi2 = np.einsum("...ij,ijk,...ik->...i", dx, invcovs, dx)
