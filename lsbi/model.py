@@ -2,7 +2,11 @@
 import numpy as np
 from numpy.linalg import inv, solve
 
-from lsbi.stats import mixture_multivariate_normal, multivariate_normal
+from lsbi.stats import (
+    mixture_multivariate_normal,
+    multimultivariate_normal,
+    multivariate_normal,
+)
 from lsbi.utils import logdet
 
 
@@ -606,6 +610,218 @@ class LinearMixtureModel(object):
         if x is None:
             return np.zeros(shape=(0,))
         return np.atleast_1d(x)
+
+    def _broadcast_to(self, x, shape):
+        if x.shape == shape:
+            return x
+        if x.shape[1:] == shape[1:]:
+            return np.broadcast_to(x, shape)
+        return x * np.ones(shape) * np.eye(shape[1], shape[2])[None, ...]
+
+
+class MultiLinearModel(object):
+    """A multilinear model.
+
+    D|theta ~ N( m + M theta, C )
+    theta   ~ N( mu, Sigma )
+
+    Defined by:
+        Parameters:       theta (k, n,)
+        Data:             D     (k, d,)
+        Prior mean:       mu    (k, n,)
+        Prior covariance: Sigma (k, n, n)
+        Data mean:        m     (k, d,)
+        Data covariance:  C     (k, d, d)
+
+    i.e. the same as a LinearModel, but with k copies of each parameter.
+    Fully vectorised so k may in principle be very large.
+
+    Parameters
+    ----------
+    M : array_like, optional
+        if ndim==3: model matrices
+        if ndim==2: model matrix with same matrix for all components
+        if ndim==1: model matrix with vector diagonal for all components
+        if scalar: scalar * rectangular identity matrix for all components
+        Defaults to k copies of rectangular identity matrices
+    m : array_like, optional
+        if ndim==2: data means
+        if ndim==1: data mean with same vector for all components
+        if scalar: scalar * unit vector for all components
+        Defaults to 0 for all components
+    C : array_like, optional
+        if ndim==3: data covariances
+        if ndim==2: data covariance with same matrix for all components
+        if ndim==1: data covariance with vector diagonal for all components
+        if scalar: scalar * identity matrix for all components
+        Defaults to k copies of identity matrices
+    mu : array_like, optional
+        if ndim==2: prior means
+        if ndim==1: prior mean with same vector for all components
+        if scalar: scalar * unit vector for all components
+        Defaults to 0 for all components
+        Prior mean, defaults to zero vector
+    Sigma : array_like, optional
+        if ndim==3: prior covariances
+        if ndim==2: prior covariance with same matrix for all components
+        if ndim==1: prior covariance with vector diagonal for all components
+        if scalar: scalar * identity matrix for all components
+        Defaults to k copies of identity matrices
+    n : int, optional
+        Number of parameters, defaults to automatically inferred value
+    d : int, optional
+        Number of data dimensions, defaults to automatically inferred value
+    k : int, optional
+        Number of mixture components, defaults to automatically inferred value
+    """
+
+    def __init__(self, *args, **kwargs):
+        # Rationalise input arguments
+        M = self._atleast_3d(kwargs.pop("M", None))
+        m = self._atleast_2d(kwargs.pop("m", None))
+        C = self._atleast_3d(kwargs.pop("C", None))
+        mu = self._atleast_2d(kwargs.pop("mu", None))
+        Sigma = self._atleast_3d(kwargs.pop("Sigma", None))
+        n = kwargs.pop("n", 0)
+        d = kwargs.pop("d", 0)
+        k = kwargs.pop("k", 0)
+
+        # Determine dimensions
+        n = max([n, M.shape[2], mu.shape[1], Sigma.shape[1], Sigma.shape[2]])
+        d = max([d, M.shape[1], m.shape[1], C.shape[1], C.shape[2]])
+        k = max(
+            [
+                k,
+                M.shape[0],
+                m.shape[0],
+                C.shape[0],
+                mu.shape[0],
+                Sigma.shape[0],
+            ]
+        )
+        if not n:
+            raise ValueError("Unable to determine number of parameters n")
+        if not d:
+            raise ValueError("Unable to determine data dimensions d")
+
+        # Set defaults if no argument was passed
+        M = M if M.size else np.eye(d, n)
+        m = m if m.size else np.zeros(d)
+        C = C if C.size else np.eye(d)
+        mu = mu if mu.size else np.zeros(n)
+        Sigma = Sigma if Sigma.size else np.eye(n)
+
+        # Broadcast to correct shape
+        self.M = self._broadcast_to(M, (k, d, n))
+        self.m = np.broadcast_to(m, (k, d))
+        self.C = self._broadcast_to(C, (k, d, d))
+        self.mu = np.broadcast_to(mu, (k, n))
+        self.Sigma = self._broadcast_to(Sigma, (k, n, n))
+
+    @classmethod
+    def from_joint(cls, means, covs, n):
+        """Construct model from joint distribution."""
+        mu = means[:, -n:]
+        Sigma = covs[:, -n:, -n:]
+        M = solve(Sigma, covs[:, -n:, :-n]).transpose(0, 2, 1)
+        m = means[:, :-n] - np.einsum("ija,ia->ij", M, mu)
+        C = covs[:, :-n, :-n] - np.einsum("ija,iab,ikb->ijk", M, Sigma, M)
+        return cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
+
+    @property
+    def n(self):
+        """Dimensionality of parameter space len(theta)."""
+        return self.M.shape[2]
+
+    @property
+    def d(self):
+        """Dimensionality of data space len(D)."""
+        return self.M.shape[1]
+
+    @property
+    def k(self):
+        """Number of copies."""
+        return self.M.shape[0]
+
+    def likelihood(self, theta):
+        """P(D|theta) as a scipy distribution object.
+
+        D|theta ~ N( m + M theta, C )
+        theta   ~ N( mu, Sigma )
+
+        Parameters
+        ----------
+        theta : array_like, shape (k, n)
+        """
+        theta = np.array(theta).reshape(self.k, self.n)
+        mu = self.m + np.einsum("ija,ia->ij", self.M, theta)
+        return multimultivariate_normal(mu, self.C)
+
+    def prior(self):
+        """P(theta) as a scipy distribution object.
+
+        theta ~ N( mu, Sigma )
+        """
+        return multimultivariate_normal(self.mu, self.Sigma)
+
+    def posterior(self, D):
+        """P(theta|D) as a scipy distribution object.
+
+        theta|D ~ N( mu + S M'C^{-1}(D - m - M mu), S )
+        D       ~ N( m + M mu, C + M Sigma M' )
+        S = (Sigma^{-1} + M'C^{-1}M)^{-1}
+
+        Parameters
+        ----------
+        D : array_like, shape (d,)
+        """
+        D = D.reshape(self.k, self.d)
+        Sigma = inv(
+            inv(self.Sigma) + np.einsum("iaj,iab,ibk->ijk", self.M, inv(self.C), self.M)
+        )
+        D0 = self.m + np.einsum("ija,ia->ij", self.M, self.mu)
+        mu = self.mu + np.einsum(
+            "ija,iba,ibc,ic->ij", Sigma, self.M, inv(self.C), D - D0
+        )
+        return multimultivariate_normal(mu, Sigma)
+
+    def evidence(self):
+        """P(D) as a scipy distribution object.
+
+        D|A ~ N( m + M mu, C + M Sigma M' )
+        """
+        mu = self.m + np.einsum("ija,ia->ij", self.M, self.mu)
+        Sigma = self.C + np.einsum("ija,iab,ikb->ijk", self.M, self.Sigma, self.M)
+        return multimultivariate_normal(mu, Sigma)
+
+    def joint(self):
+        """P(D, theta) as a scipy distribution object.
+
+        [  D  ] | A ~ N( [m + M mu]   [C + M Sigma M'  M Sigma] )
+        [theta] |      ( [   mu   ] , [   Sigma M'      Sigma ] )
+        """
+        evidence = self.evidence()
+        prior = self.prior()
+        mu = np.block([evidence.means, prior.means])
+        corr = np.einsum("ija,ial->ijl", self.M, self.Sigma)
+        Sigma = np.block([[evidence.covs, corr], [corr.transpose(0, 2, 1), prior.covs]])
+        return multimultivariate_normal(mu, Sigma)
+
+    def _atleast_3d(self, x):
+        if x is None:
+            return np.zeros(shape=(0, 0, 0))
+        x = np.array(x)
+        if x.ndim == 3:
+            return x
+        return np.atleast_2d(x)[None, ...]
+
+    def _atleast_2d(self, x):
+        if x is None:
+            return np.zeros(shape=(0, 0))
+        x = np.array(x)
+        if x.ndim == 2:
+            return x
+        return np.atleast_1d(x)[None, ...]
 
     def _broadcast_to(self, x, shape):
         if x.shape == shape:

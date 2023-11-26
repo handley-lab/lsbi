@@ -7,6 +7,7 @@ from scipy.stats import invwishart, kstest
 from lsbi.model import (
     LinearMixtureModel,
     LinearModel,
+    MultiLinearModel,
     ReducedLinearModel,
     ReducedLinearModelUniformPrior,
 )
@@ -707,6 +708,403 @@ class TestLinearMixtureModel(object):
         assert_allclose(model_1.means, model_2.means)
         assert_allclose(model_1.covs, model_2.covs, rtol=1e-6, atol=1e-6)
         assert_allclose(model_1.logA, model_2.logA)
+
+    def test_bayes_theorem(self, k, d, n):
+        model = self.random(k, d, n)
+        theta = model.prior().rvs()
+        D = model.evidence().rvs()
+        assert_allclose(
+            model.posterior(D).logpdf(theta) + model.evidence().logpdf(D),
+            model.likelihood(theta).logpdf(D) + model.prior().logpdf(theta),
+        )
+
+
+@pytest.mark.parametrize("k", np.arange(1, 6))
+@pytest.mark.parametrize("d", np.arange(1, 6))
+@pytest.mark.parametrize("n", np.arange(1, 6))
+class TestMultiLinearModel(object):
+    cls = MultiLinearModel
+
+    def random(self, k, d, n):
+        M = rand(k, d, n)
+        m = rand(k, d)
+        C = np.array(
+            [
+                np.atleast_2d(invwishart(scale=np.eye(d), df=d * 10).rvs())
+                for _ in range(k)
+            ]
+        )
+
+        mu = rand(k, n)
+        Sigma = np.array(
+            [
+                np.atleast_2d(invwishart(scale=np.eye(n), df=d * 10).rvs())
+                for _ in range(k)
+            ]
+        )
+        return self.cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
+
+    def _test_shape(self, model, k, d, n):
+        assert model.n == n
+        assert model.d == d
+        assert model.k == k
+        assert model.M.shape == (k, d, n)
+        assert model.m.shape == (
+            k,
+            d,
+        )
+        assert model.C.shape == (k, d, d)
+        assert model.mu.shape == (
+            k,
+            n,
+        )
+        assert model.Sigma.shape == (k, n, n)
+
+    def test_init_M(self, k, d, n):
+        self._test_shape(self.cls(M=rand()), 1, 1, 1)
+        self._test_shape(self.cls(M=rand(), n=n), 1, 1, n)
+        self._test_shape(self.cls(M=rand(), d=d), 1, d, 1)
+        self._test_shape(self.cls(M=rand(), k=k), k, 1, 1)
+        self._test_shape(self.cls(M=rand(), d=d, n=n), 1, d, n)
+        self._test_shape(self.cls(M=rand(), k=k, n=n), k, 1, n)
+        self._test_shape(self.cls(M=rand(), k=k, d=d), k, d, 1)
+        self._test_shape(self.cls(M=rand(), k=k, d=d, n=n), k, d, n)
+        self._test_shape(self.cls(M=rand(n)), 1, 1, n)
+        self._test_shape(self.cls(M=rand(n), d=d), 1, d, n)
+        self._test_shape(self.cls(M=rand(n), k=k), k, 1, n)
+        self._test_shape(self.cls(M=rand(n), k=k, d=d), k, d, n)
+
+        self._test_shape(self.cls(M=rand(d, 1)), 1, d, 1)
+        self._test_shape(self.cls(M=rand(d, 1), k=k), k, d, 1)
+        self._test_shape(self.cls(M=rand(d, 1), n=n), 1, d, n)
+        self._test_shape(self.cls(M=rand(d, 1), k=k, n=n), k, d, n)
+
+        self._test_shape(self.cls(M=rand(k, 1, 1)), k, 1, 1)
+        self._test_shape(self.cls(M=rand(k, 1, 1), d=d), k, d, 1)
+        self._test_shape(self.cls(M=rand(k, 1, 1), n=n), k, 1, n)
+        self._test_shape(self.cls(M=rand(k, 1, 1), d=d, n=n), k, d, n)
+
+        self._test_shape(self.cls(M=rand(k, d, 1)), k, d, 1)
+        self._test_shape(self.cls(M=rand(k, d, 1), n=n), k, d, n)
+
+        self._test_shape(self.cls(M=rand(k, 1, n)), k, 1, n)
+        self._test_shape(self.cls(M=rand(k, 1, n), d=d), k, d, n)
+
+        self._test_shape(self.cls(M=rand(1, d, n)), 1, d, n)
+        self._test_shape(self.cls(M=rand(1, d, n), k=k), k, d, n)
+
+        self._test_shape(self.cls(M=rand(d, n)), 1, d, n)
+        self._test_shape(self.cls(M=rand(d, n), k=k), k, d, n)
+
+        self._test_shape(self.cls(M=rand(k, d, n)), k, d, n)
+
+        M = rand()
+        model = self.cls(M=M, d=d, n=n)
+        assert_allclose(np.diag(model.M[0]), M)
+
+        M = rand(n)
+        model = self.cls(M=M, d=d)
+        assert_allclose(np.diag(model.M[0]), M[: min(d, n)])
+
+        M = rand(d, n)
+        model = self.cls(M=M)
+        assert_allclose(model.M[0], M)
+
+        M = rand()
+        model = self.cls(M=M, k=k, d=d, n=n)
+        for M_ in model.M:
+            assert_allclose(M_, model.M[0])
+            assert_allclose(np.diag(M_), M)
+
+        M = rand(n)
+        model = self.cls(M=M, d=d)
+        for M_ in model.M:
+            assert_allclose(M_, model.M[0])
+            assert_allclose(np.diag(M_), M[: min(d, n)])
+
+        M = rand(d, n)
+        model = self.cls(M=M)
+        for M_ in model.M:
+            assert_allclose(M_, model.M[0])
+            assert_allclose(M_, M)
+
+        M = rand(k, d, n)
+        model = self.cls(M=M)
+        assert_allclose(model.M, M)
+
+    def test_init_mu(self, k, d, n):
+        self._test_shape(self.cls(mu=rand(), d=d), 1, d, 1)
+        self._test_shape(self.cls(mu=rand(), k=k, d=d), k, d, 1)
+        self._test_shape(self.cls(mu=rand(), d=d, n=n), 1, d, n)
+        self._test_shape(self.cls(mu=rand(), k=k, d=d, n=n), k, d, n)
+        self._test_shape(self.cls(mu=rand(n), d=d), 1, d, n)
+        self._test_shape(self.cls(mu=rand(n), k=k, d=d), k, d, n)
+        self._test_shape(self.cls(mu=rand(k, n), d=d), k, d, n)
+
+        mu = rand()
+        model = self.cls(mu=mu, d=d, n=n)
+        assert_allclose(model.mu, mu)
+
+        mu = rand(n)
+        model = self.cls(mu=mu, d=d)
+        assert_allclose(model.mu[0], mu)
+
+        mu = rand()
+        model = self.cls(mu=mu, k=k, d=d, n=n)
+        assert_allclose(model.mu, mu)
+
+        mu = rand(n)
+        model = self.cls(mu=mu, k=k, d=d)
+        for mu_ in model.mu:
+            assert_allclose(mu_, mu)
+
+        mu = rand(k, n)
+        model = self.cls(mu=mu, d=d)
+        assert_allclose(model.mu, mu)
+
+    def test_init_Sigma(self, k, d, n):
+        self._test_shape(self.cls(Sigma=rand(), d=d), 1, d, 1)
+        self._test_shape(self.cls(Sigma=rand(), k=k, d=d), k, d, 1)
+        self._test_shape(self.cls(Sigma=rand(), d=d, n=n), 1, d, n)
+        self._test_shape(self.cls(Sigma=rand(), k=k, d=d, n=n), k, d, n)
+        self._test_shape(self.cls(Sigma=rand(n), d=d), 1, d, n)
+        self._test_shape(self.cls(Sigma=rand(n), k=k, d=d), k, d, n)
+        self._test_shape(self.cls(Sigma=rand(n, n), d=d), 1, d, n)
+        self._test_shape(self.cls(Sigma=rand(n, n), k=k, d=d), k, d, n)
+        self._test_shape(self.cls(Sigma=rand(k, n, n), d=d), k, d, n)
+
+        Sigma = rand()
+        model = self.cls(Sigma=Sigma, d=d, n=n)
+        assert_allclose(np.diag(model.Sigma[0]), Sigma)
+
+        Sigma = rand(n)
+        model = self.cls(Sigma=Sigma, d=d)
+        assert_allclose(np.diag(model.Sigma[0]), Sigma)
+
+        Sigma = rand(n, n)
+        model = self.cls(Sigma=Sigma, d=d)
+        assert_allclose(model.Sigma[0], Sigma)
+
+        Sigma = rand()
+        model = self.cls(Sigma=Sigma, k=k, d=d, n=n)
+        for Sigma_ in model.Sigma:
+            assert_allclose(np.diag(Sigma_), Sigma)
+
+        Sigma = rand(n)
+        model = self.cls(Sigma=Sigma, k=k, d=d)
+        for Sigma_ in model.Sigma:
+            assert_allclose(np.diag(Sigma_), Sigma)
+
+        Sigma = rand(n, n)
+        model = self.cls(Sigma=Sigma, k=k, d=d)
+        for Sigma_ in model.Sigma:
+            assert_allclose(Sigma_, Sigma)
+
+        Sigma = rand(k, n, n)
+        model = self.cls(Sigma=Sigma, d=d)
+        assert_allclose(model.Sigma, Sigma)
+
+    def test_init_m(self, k, d, n):
+        self._test_shape(self.cls(m=rand(), n=n), 1, 1, n)
+        self._test_shape(self.cls(m=rand(), k=k, n=n), k, 1, n)
+        self._test_shape(self.cls(m=rand(), n=n, d=d), 1, d, n)
+        self._test_shape(self.cls(m=rand(), k=k, n=n, d=d), k, d, n)
+        self._test_shape(self.cls(m=rand(d), n=n), 1, d, n)
+        self._test_shape(self.cls(m=rand(d), k=k, n=n), k, d, n)
+        self._test_shape(self.cls(m=rand(k, d), n=n), k, d, n)
+
+        m = rand()
+        model = self.cls(m=m, d=d, n=n)
+        assert_allclose(model.m, m)
+
+        m = rand(d)
+        model = self.cls(m=m, n=n)
+        assert_allclose(model.m[0], m)
+
+        m = rand()
+        model = self.cls(m=m, k=k, d=d, n=n)
+        assert_allclose(model.m, m)
+
+        m = rand(d)
+        model = self.cls(m=m, k=k, n=n)
+        for mu_ in model.m:
+            assert_allclose(mu_, m)
+
+        m = rand(k, d)
+        model = self.cls(m=m, n=n)
+        assert_allclose(model.m, m)
+
+    def test_init_C(self, k, d, n):
+        self._test_shape(self.cls(C=rand(), n=n), 1, 1, n)
+        self._test_shape(self.cls(C=rand(), k=k, n=n), k, 1, n)
+        self._test_shape(self.cls(C=rand(), n=n, d=d), 1, d, n)
+        self._test_shape(self.cls(C=rand(), k=k, n=n, d=d), k, d, n)
+        self._test_shape(self.cls(C=rand(d), n=n), 1, d, n)
+        self._test_shape(self.cls(C=rand(d), k=k, n=n), k, d, n)
+        self._test_shape(self.cls(C=rand(d, d), n=n), 1, d, n)
+        self._test_shape(self.cls(C=rand(d, d), k=k, n=n), k, d, n)
+        self._test_shape(self.cls(C=rand(k, d, d), n=n), k, d, n)
+
+        C = rand()
+        model = self.cls(C=C, d=d, n=n)
+        assert_allclose(np.diag(model.C[0]), C)
+
+        C = rand(d)
+        model = self.cls(C=C, n=n)
+        assert_allclose(np.diag(model.C[0]), C)
+
+        C = rand(d, d)
+        model = self.cls(C=C, n=n)
+        assert_allclose(model.C[0], C)
+
+        C = rand()
+        model = self.cls(C=C, k=k, d=d, n=n)
+        for Sigma_ in model.C:
+            assert_allclose(np.diag(Sigma_), C)
+
+        C = rand(d)
+        model = self.cls(C=C, k=k, n=n)
+        for Sigma_ in model.C:
+            assert_allclose(np.diag(Sigma_), C)
+
+        C = rand(d, d)
+        model = self.cls(C=C, k=k, n=n)
+        for Sigma_ in model.C:
+            assert_allclose(Sigma_, C)
+
+        C = rand(k, d, d)
+        model = self.cls(C=C, n=n)
+        assert_allclose(model.C, C)
+
+    def test_failure(self, k, d, n):
+        with pytest.raises(ValueError) as excinfo:
+            self.cls(m=rand(d))
+        string = "Unable to determine number of parameters n"
+        assert string in str(excinfo.value)
+
+        with pytest.raises(ValueError) as excinfo:
+            self.cls(mu=rand(n))
+        string = "Unable to determine data dimensions d"
+        assert string in str(excinfo.value)
+
+    def test_joint(self, k, d, n):
+        model = self.random(k, d, n)
+        prior = model.prior()
+        evidence = model.evidence()
+        joint = model.joint()
+
+        samples_1 = prior.rvs(N)
+        samples_2 = joint.rvs(N)[..., -n:]
+        samples_1.shape
+
+        if n == 1:
+            samples_1 = samples_1[..., None]
+
+        for j in range(k):
+            for i in range(n):
+                if k == 1:
+                    p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
+                else:
+                    p = kstest(samples_1[:, j, i], samples_2[:, j, i]).pvalue
+                assert p > 1e-5
+
+            if k == 1:
+                p = kstest(prior.logpdf(samples_2), prior.logpdf(samples_1)).pvalue
+            else:
+                p = kstest(
+                    prior.logpdf(samples_2)[:, j], prior.logpdf(samples_1)[:, j]
+                ).pvalue
+            assert p > 1e-5
+
+        samples_1 = evidence.rvs(N)
+        samples_2 = joint.rvs(N)[..., :d]
+
+        if d == 1:
+            samples_1 = samples_1[..., None]
+
+        for j in range(k):
+            for i in range(d):
+                if k == 1:
+                    p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
+                else:
+                    p = kstest(samples_1[:, j, i], samples_2[:, j, i]).pvalue
+                assert p > 1e-5
+
+            if k == 1:
+                p = kstest(
+                    evidence.logpdf(samples_2), evidence.logpdf(samples_1)
+                ).pvalue
+            else:
+                p = kstest(
+                    evidence.logpdf(samples_2)[:, j], evidence.logpdf(samples_1)[:, j]
+                ).pvalue
+            assert p > 1e-5
+
+    def test_likelihood_posterior(self, k, d, n):
+        model = self.random(k, d, n)
+        joint = model.joint()
+
+        samples = []
+        theta = model.prior().rvs()
+        for _ in range(N):
+            data = np.atleast_1d(model.likelihood(theta).rvs()).reshape(k, d)
+            theta = np.atleast_1d(model.posterior(data).rvs()).reshape(k, n)
+            samples.append(np.concatenate([data, theta], axis=1)[:])
+
+        samples_1 = np.array(samples)[::100]
+        samples_2 = joint.rvs(len(samples_1)).reshape(len(samples_1), k, d + n)
+
+        for j in range(k):
+            for i in range(n + d):
+                p = kstest(samples_1[:, j, i], samples_2[:, j, i]).pvalue
+
+            if k == 1:
+                p = kstest(joint.logpdf(samples_2), joint.logpdf(samples_1)).pvalue
+            else:
+                p = kstest(
+                    joint.logpdf(samples_2)[:, j], joint.logpdf(samples_1)[:, j]
+                ).pvalue
+            assert p > 1e-5
+
+    def test_from_joint(self, k, d, n):
+        model = self.random(k, d, n)
+        joint = model.joint()
+        means = joint.means
+        covs = joint.covs
+        model2 = self.cls.from_joint(means, covs, n)
+        assert model2.n == model.n
+        assert model2.d == model.d
+        assert_allclose(model2.M, model.M)
+        assert_allclose(model2.m, model.m)
+        assert_allclose(model2.C, model.C)
+        assert_allclose(model2.mu, model.mu)
+        assert_allclose(model2.Sigma, model.Sigma)
+
+    def test_marginal_conditional(self, k, d, n):
+        model = self.random(k, d, n)
+        i = np.arange(d + n)[-n:]
+        model_1 = model.evidence()
+        model_2 = model.joint().marginalise(i)
+        assert_allclose(model_1.means, model_2.means)
+        assert_allclose(model_1.covs, model_2.covs, rtol=1e-6, atol=1e-6)
+
+        theta = model.prior().rvs()
+        model_1 = model.likelihood(theta)
+        model_2 = model.joint().condition(i, theta)
+        assert_allclose(model_1.means, model_2.means)
+        assert_allclose(model_1.covs, model_2.covs, rtol=1e-6, atol=1e-6)
+
+        i = np.arange(d + n)[:d]
+        model_1 = model.prior()
+        model_2 = model.joint().marginalise(i)
+        assert_allclose(model_1.means, model_2.means)
+        assert_allclose(model_1.covs, model_2.covs, rtol=1e-6, atol=1e-6)
+
+        D = model.evidence().rvs()
+        model_1 = model.posterior(D)
+        model_2 = model.joint().condition(i, D)
+        assert_allclose(model_1.means, model_2.means)
+        assert_allclose(model_1.covs, model_2.covs, rtol=1e-6, atol=1e-6)
 
     def test_bayes_theorem(self, k, d, n):
         model = self.random(k, d, n)
