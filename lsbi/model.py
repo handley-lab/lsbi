@@ -633,8 +633,8 @@ class MultiLinearModel(object):
         Data mean:        m     (k, d,)
         Data covariance:  C     (k, d, d)
 
-    i.e. the same as a LinearModel, but with k copies of each parameter. Fully
-    vectorised so k may in principle very large
+    i.e. the same as a LinearModel, but with k copies of each parameter.
+    Fully vectorised so k may in principle be very large.
 
     Parameters
     ----------
@@ -822,11 +822,6 @@ class MultiLinearModel(object):
         if x.ndim == 2:
             return x
         return np.atleast_1d(x)[None, ...]
-
-    def _atleast_1d(self, x):
-        if x is None:
-            return np.zeros(shape=(0,))
-        return np.atleast_1d(x)
 
     def _broadcast_to(self, x, shape):
         if x.shape == shape:
