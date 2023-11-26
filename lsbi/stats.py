@@ -168,6 +168,10 @@ class multimultivariate_normal(object):
         ----------
         indices : array_like
             Indices to marginalise.
+
+        Returns
+        -------
+        marginalised distribution: multimultivariate_normal
         """
         i = self._bar(indices)
         means = self.means[:, i]
@@ -183,6 +187,10 @@ class multimultivariate_normal(object):
             Indices to condition over.
         values : array_like
             Values to condition on.
+
+        Returns
+        -------
+        conditional distribution: multimultivariate_normal
         """
         i = self._bar(indices)
         k = indices
@@ -224,6 +232,10 @@ class multimultivariate_normal(object):
         inverse : bool, optional, default=False
             If True: compute the inverse transformation from physical to
             hypercube space.
+
+        Returns
+        -------
+        transformed x or theta: array_like, shape (..., d)
         """
         Ls = np.linalg.cholesky(self.covs)
         if inverse:
@@ -312,6 +324,10 @@ class mixture_multivariate_normal(object):
         ----------
         indices : array_like
             Indices to marginalise.
+
+        Returns
+        -------
+        marginalised distribution: mixture_multivariate_normal
         """
         i = self._bar(indices)
         means = self.means[:, i]
@@ -328,6 +344,10 @@ class mixture_multivariate_normal(object):
             Indices to condition over.
         values : array_like
             Values to condition on.
+
+        Returns
+        -------
+        conditional distribution: mixture_multivariate_normal
         """
         i = self._bar(indices)
         k = indices
@@ -373,6 +393,10 @@ class mixture_multivariate_normal(object):
         inverse : bool, optional, default=False
             If True: compute the inverse transformation from physical to
             hypercube space.
+
+        Returns
+        -------
+        transformed x or theta: array_like, shape (..., d)
         """
         theta = np.empty_like(x)
         if inverse:
