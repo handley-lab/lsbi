@@ -242,9 +242,9 @@ class multimultivariate_normal(object):
 
         Parameters
         ----------
-        A : array_like, shape (..., k, n)
+        A : array_like, shape (k, q, n)
             Linear transformation matrix.
-        b : array_like, shape (..., k,), optional
+        b : array_like, shape (k, q), optional
             Linear transformation vector.
 
         Returns
@@ -252,9 +252,9 @@ class multimultivariate_normal(object):
         predicted distribution: mixture_multivariate_normal
         """
         if b is None:
-            b = np.zeros(A.shape[0:-1])
-        means = np.einsum("...kn,kn->...k", A, self.means) + b
-        covs = np.einsum("...kn,knm,...km->...k", A, self.covs, A)
+            b = np.zeros(A.shape[:-1])
+        means = np.einsum("kqn,kn->kq", A, self.means) + b
+        covs = np.einsum("kpn,knm,kqm->kpq", A, self.covs, A)
         return multimultivariate_normal(means, covs)
 
 
@@ -441,9 +441,9 @@ class mixture_multivariate_normal(object):
 
         Parameters
         ----------
-        A : array_like, shape (..., k, n)
+        A : array_like, shape (k, q, n)
             Linear transformation matrix.
-        b : array_like, shape (..., k,), optional
+        b : array_like, shape (k, q,), optional
             Linear transformation vector.
 
         Returns
@@ -451,8 +451,8 @@ class mixture_multivariate_normal(object):
         predicted distribution: mixture_multivariate_normal
         """
         if b is None:
-            b = np.zeros(A.shape[0:-1])
-        means = np.einsum("...kn,kn->...k", A, self.means) + b
-        covs = np.einsum("...kn,knm,...km->...k", A, self.covs, A)
+            b = np.zeros(A.shape[:-1])
+        means = np.einsum("kqn,kn->kq", A, self.means) + b
+        covs = np.einsum("kqn,knm,kpm->kqp", A, self.covs, A)
         logA = self.logA
         return mixture_multivariate_normal(means, covs, logA)
