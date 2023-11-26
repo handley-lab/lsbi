@@ -96,10 +96,22 @@ class multimultivariate_normal(object):
         self.means = np.array([np.atleast_1d(m) for m in means])
         self.covs = np.array([np.atleast_2d(c) for c in covs])
 
+    def _process_quantiles(self, x, dim):
+        x = np.asarray(x, dtype=float)
+
+        if x.ndim == 0:
+            x = x[np.newaxis, np.newaxis]
+        elif x.ndim == 1:
+            if dim == 1:
+                x = x[:, np.newaxis]
+            else:
+                x = x[np.newaxis, :]
+
+        return x
+
     def logpdf(self, x):
         """Log of the probability density function."""
-        process_quantiles = scipy.stats.multivariate_normal._process_quantiles
-        x = process_quantiles(x, self.means.shape[-1])
+        x = self._process_quantiles(x, self.means.shape[-1])
         dx = self.means - x[..., :, :]
         invcovs = np.linalg.inv(self.covs)
         chi2 = np.einsum("...ij,ijk,...ik->...i", dx, invcovs, dx)
@@ -139,6 +151,7 @@ class multimultivariate_normal(object):
         """
         i = self._bar(indices)
         k = indices
+        values = values.reshape(self.means[:, k].shape)
         means = self.means[:, i] + np.einsum(
             "ija,iab,ib->ij",
             self.covs[:, i][:, :, k],
@@ -211,8 +224,7 @@ class mixture_multivariate_normal(object):
 
     def logpdf(self, x, reduce=True, keepdims=False):
         """Log of the probability density function."""
-        process_quantiles = scipy.stats.multivariate_normal._process_quantiles
-        x = process_quantiles(x, self.means.shape[-1])
+        x = self._process_quantiles(x, self.means.shape[-1])
         dx = self.means - x[..., None, :]
         invcovs = np.linalg.inv(self.covs)
         chi2 = np.einsum("...ij,ijk,...ik->...i", dx, invcovs, dx)
@@ -349,3 +361,16 @@ class mixture_multivariate_normal(object):
             return x
         else:
             return theta
+
+    def _process_quantiles(self, x, dim):
+        x = np.asarray(x, dtype=float)
+
+        if x.ndim == 0:
+            x = x[np.newaxis, np.newaxis]
+        elif x.ndim == 1:
+            if dim == 1:
+                x = x[:, np.newaxis]
+            else:
+                x = x[np.newaxis, :]
+
+        return x

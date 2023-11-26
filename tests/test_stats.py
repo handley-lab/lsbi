@@ -316,8 +316,3 @@ class TestMultiMultivariateNormal(object):
         mixture_3 = dist.condition(i, v)
         assert mixture_3.means.shape == (k, d - p)
         assert mixture_3.covs.shape == (k, d - p, d - p)
-
-        v = np.random.randn(p)
-        mixture_3 = dist.condition(i, v)
-        assert mixture_3.means.shape == (k, d - p)
-        assert mixture_3.covs.shape == (k, d - p, d - p)

@@ -2,7 +2,11 @@
 import numpy as np
 from numpy.linalg import inv, solve
 
-from lsbi.stats import mixture_multivariate_normal, multivariate_normal
+from lsbi.stats import (
+    mixture_multivariate_normal,
+    multimultivariate_normal,
+    multivariate_normal,
+)
 from lsbi.utils import logdet
 
 
@@ -747,10 +751,10 @@ class MultiLinearModel(object):
 
         Parameters
         ----------
-        theta : array_like, shape (n,)
+        theta : array_like, shape (k, n)
         """
-        theta = np.atleast_1d(theta)
-        mu = self.m + np.einsum("ija,a->ij", self.M, theta)
+        theta = np.array(theta).reshape(self.k, self.n)
+        mu = self.m + np.einsum("ija,ia->ij", self.M, theta)
         return multimultivariate_normal(mu, self.C)
 
     def prior(self):
@@ -758,7 +762,7 @@ class MultiLinearModel(object):
 
         theta ~ N( mu, Sigma )
         """
-        return multivariate_normal(self.mu, self.Sigma)
+        return multimultivariate_normal(self.mu, self.Sigma)
 
     def posterior(self, D):
         """P(theta|D) as a scipy distribution object.
@@ -771,7 +775,7 @@ class MultiLinearModel(object):
         ----------
         D : array_like, shape (d,)
         """
-        D = np.atleast_1d(D)
+        D = D.reshape(self.k, self.d)
         Sigma = inv(
             inv(self.Sigma) + np.einsum("iaj,iab,ibk->ijk", self.M, inv(self.C), self.M)
         )
@@ -788,7 +792,7 @@ class MultiLinearModel(object):
         """
         mu = self.m + np.einsum("ija,ia->ij", self.M, self.mu)
         Sigma = self.C + np.einsum("ija,iab,ikb->ijk", self.M, self.Sigma, self.M)
-        return multmultivariate_normal(mu, Sigma)
+        return multimultivariate_normal(mu, Sigma)
 
     def joint(self):
         """P(D, theta) as a scipy distribution object.
@@ -801,7 +805,7 @@ class MultiLinearModel(object):
         mu = np.block([evidence.means, prior.means])
         corr = np.einsum("ija,ial->ijl", self.M, self.Sigma)
         Sigma = np.block([[evidence.covs, corr], [corr.transpose(0, 2, 1), prior.covs]])
-        return multivariate_normal(mu, Sigma)
+        return multimultivariate_normal(mu, Sigma)
 
     def _atleast_3d(self, x):
         if x is None:
