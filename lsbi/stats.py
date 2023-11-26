@@ -109,7 +109,7 @@ class multivariate_normal(multivariate_normal_frozen):  # noqa: D101
             b = np.zeros(A.shape[0])
         mean = A @ self.mean + b
         cov = A @ self.cov @ A.T
-        return multivariate_normal(mean, cov)
+        return multivariate_normal(mean, cov, allow_singular=True)
 
 
 class multimultivariate_normal(object):
