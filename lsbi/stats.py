@@ -16,6 +16,10 @@ class multivariate_normal(multivariate_normal_frozen):  # noqa: D101
         ----------
         indices : array_like
             Indices to marginalise.
+
+        Returns
+        -------
+        marginalised distribution: multivariate_normal
         """
         i = self._bar(indices)
         mean = self.mean[i]
@@ -31,6 +35,10 @@ class multivariate_normal(multivariate_normal_frozen):  # noqa: D101
             Indices to condition over.
         values : array_like
             Values to condition on.
+
+        Returns
+        -------
+        conditional distribution: multivariate_normal
         """
         i = self._bar(indices)
         k = indices
@@ -66,6 +74,10 @@ class multivariate_normal(multivariate_normal_frozen):  # noqa: D101
         inverse : bool, optional, default=False
             If True: compute the inverse transformation from physical to
             hypercube space.
+
+        Returns
+        -------
+        transformed x or theta: array_like, shape (..., d)
         """
         L = np.linalg.cholesky(self.cov)
         if inverse:
@@ -75,6 +87,29 @@ class multivariate_normal(multivariate_normal_frozen):  # noqa: D101
         else:
             y = scipy.stats.norm.ppf(x)
             return self.mean + np.einsum("ij,...j->...i", L, y)
+
+    def predict(self, A, b=None):
+        """Predict the mean and covariance of a linear transformation.
+
+        if:         x ~ N(mu, Sigma)
+        then:  Ax + b ~ N(A mu + b, A Sigma A^T)
+
+        Parameters
+        ----------
+        A : array_like, shape (q, n)
+            Linear transformation matrix.
+        b : array_like, shape (q,), optional
+            Linear transformation vector.
+
+        Returns
+        -------
+        predicted distribution: multivariate_normal
+        """
+        if b is None:
+            b = np.zeros(A.shape[0])
+        mean = A @ self.mean + b
+        cov = A @ self.cov @ A.T
+        return multivariate_normal(mean, cov, allow_singular=True)
 
 
 class multimultivariate_normal(object):
@@ -133,6 +168,10 @@ class multimultivariate_normal(object):
         ----------
         indices : array_like
             Indices to marginalise.
+
+        Returns
+        -------
+        marginalised distribution: multimultivariate_normal
         """
         i = self._bar(indices)
         means = self.means[:, i]
@@ -148,6 +187,10 @@ class multimultivariate_normal(object):
             Indices to condition over.
         values : array_like
             Values to condition on.
+
+        Returns
+        -------
+        conditional distribution: multimultivariate_normal
         """
         i = self._bar(indices)
         k = indices
@@ -189,6 +232,10 @@ class multimultivariate_normal(object):
         inverse : bool, optional, default=False
             If True: compute the inverse transformation from physical to
             hypercube space.
+
+        Returns
+        -------
+        transformed x or theta: array_like, shape (..., d)
         """
         Ls = np.linalg.cholesky(self.covs)
         if inverse:
@@ -198,6 +245,29 @@ class multimultivariate_normal(object):
         else:
             y = scipy.stats.norm.ppf(x)
             return self.means + np.einsum("ijk,...ik->...ij", Ls, y)
+
+    def predict(self, A, b=None):
+        """Predict the mean and covariance of a linear transformation.
+
+        if:         x ~ N(mu, Sigma)
+        then:  Ax + b ~ N(A mu + b, A Sigma A^T)
+
+        Parameters
+        ----------
+        A : array_like, shape (k, q, n)
+            Linear transformation matrix.
+        b : array_like, shape (k, q), optional
+            Linear transformation vector.
+
+        Returns
+        -------
+        predicted distribution: mixture_multivariate_normal
+        """
+        if b is None:
+            b = np.zeros(A.shape[:-1])
+        means = np.einsum("kqn,kn->kq", A, self.means) + b
+        covs = np.einsum("kpn,knm,kqm->kpq", A, self.covs, A)
+        return multimultivariate_normal(means, covs)
 
 
 class mixture_multivariate_normal(object):
@@ -254,6 +324,10 @@ class mixture_multivariate_normal(object):
         ----------
         indices : array_like
             Indices to marginalise.
+
+        Returns
+        -------
+        marginalised distribution: mixture_multivariate_normal
         """
         i = self._bar(indices)
         means = self.means[:, i]
@@ -270,6 +344,10 @@ class mixture_multivariate_normal(object):
             Indices to condition over.
         values : array_like
             Values to condition on.
+
+        Returns
+        -------
+        conditional distribution: mixture_multivariate_normal
         """
         i = self._bar(indices)
         k = indices
@@ -315,6 +393,10 @@ class mixture_multivariate_normal(object):
         inverse : bool, optional, default=False
             If True: compute the inverse transformation from physical to
             hypercube space.
+
+        Returns
+        -------
+        transformed x or theta: array_like, shape (..., d)
         """
         theta = np.empty_like(x)
         if inverse:
@@ -374,3 +456,27 @@ class mixture_multivariate_normal(object):
                 x = x[np.newaxis, :]
 
         return x
+
+    def predict(self, A, b=None):
+        """Predict the mean and covariance of a linear transformation.
+
+        if:         x ~ mixN(mu, Sigma, logA)
+        then:  Ax + b ~ mixN(A mu + b, A Sigma A^T, logA)
+
+        Parameters
+        ----------
+        A : array_like, shape (k, q, n)
+            Linear transformation matrix.
+        b : array_like, shape (k, q,), optional
+            Linear transformation vector.
+
+        Returns
+        -------
+        predicted distribution: mixture_multivariate_normal
+        """
+        if b is None:
+            b = np.zeros(A.shape[:-1])
+        means = np.einsum("kqn,kn->kq", A, self.means) + b
+        covs = np.einsum("kqn,knm,kpm->kqp", A, self.covs, A)
+        logA = self.logA
+        return mixture_multivariate_normal(means, covs, logA)

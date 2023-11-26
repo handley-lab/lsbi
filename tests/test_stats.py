@@ -96,13 +96,14 @@ class TestMixtureMultivariateNormal(object):
         assert dist.bijector(theta, inverse=True).shape == x.shape
 
     @pytest.mark.parametrize("p", np.arange(1, 5))
-    def test_marginalise_condition(self, d, k, p):
+    def test_marginalise_condition(self, k, d, p):
         if d <= p:
             pytest.skip("d <= p")
         i = np.random.choice(d, p, replace=False)
         j = np.array([x for x in range(d) if x not in i])
         dist = self.random(k, d)
         mixture_2 = dist.marginalise(i)
+        assert isinstance(mixture_2, self.cls)
         assert mixture_2.means.shape == (k, d - p)
         assert mixture_2.covs.shape == (k, d - p, d - p)
         assert_allclose(dist.means[:, j], mixture_2.means)
@@ -110,6 +111,7 @@ class TestMixtureMultivariateNormal(object):
 
         v = np.random.randn(k, p)
         mixture_3 = dist.condition(i, v)
+        assert isinstance(mixture_3, self.cls)
         assert mixture_3.means.shape == (k, d - p)
         assert mixture_3.covs.shape == (k, d - p, d - p)
 
@@ -117,6 +119,24 @@ class TestMixtureMultivariateNormal(object):
         mixture_3 = dist.condition(i, v)
         assert mixture_3.means.shape == (k, d - p)
         assert mixture_3.covs.shape == (k, d - p, d - p)
+
+    @pytest.mark.parametrize("q", [1, 2, 5, 10])
+    def test_predict(self, q, k, d):
+        dist = self.random(k, d)
+        A = np.random.randn(k, q, d)
+        y = dist.predict(A)
+        assert isinstance(y, self.cls)
+        assert y.means.shape == (k, q)
+        assert y.covs.shape == (k, q, q)
+
+        b = np.random.randn(q)
+        y = dist.predict(A, b)
+        assert isinstance(y, self.cls)
+        assert y.means.shape == (
+            k,
+            q,
+        )
+        assert y.covs.shape == (k, q, q)
 
 
 @pytest.mark.parametrize("d", [1, 2, 5, 10])
@@ -190,6 +210,7 @@ class TestMultivariateNormal(object):
         j = np.array([x for x in range(d) if x not in i])
         dist_1 = self.random(d)
         dist_2 = dist_1.marginalise(i)
+        assert isinstance(dist_2, self.cls)
         assert dist_2.mean.shape == (d - p,)
         assert dist_2.cov.shape == (d - p, d - p)
         assert_allclose(dist_1.mean[j], dist_2.mean)
@@ -197,8 +218,24 @@ class TestMultivariateNormal(object):
 
         v = np.random.randn(p)
         dist_3 = dist_1.condition(i, v)
+        assert isinstance(dist_3, self.cls)
         assert dist_3.mean.shape == (d - p,)
         assert dist_3.cov.shape == (d - p, d - p)
+
+    @pytest.mark.parametrize("q", [1, 2, 5, 10])
+    def test_predict(self, q, d):
+        dist = self.random(d)
+        A = np.random.randn(q, d)
+        y = dist.predict(A)
+        assert isinstance(y, self.cls)
+        assert y.mean.shape == (q,)
+        assert y.cov.shape == (q, q)
+
+        b = np.random.randn(q)
+        y = dist.predict(A, b)
+        assert isinstance(y, self.cls)
+        assert y.mean.shape == (q,)
+        assert y.cov.shape == (q, q)
 
 
 @pytest.mark.parametrize("d", [1, 2, 5, 10])
@@ -300,13 +337,14 @@ class TestMultiMultivariateNormal(object):
         assert dist.bijector(theta, inverse=True).shape == xs.shape
 
     @pytest.mark.parametrize("p", np.arange(1, 5))
-    def test_marginalise_condition(self, d, k, p):
+    def test_marginalise_condition(self, k, d, p):
         if d <= p:
             pytest.skip("d <= p")
         i = np.random.choice(d, p, replace=False)
         j = np.array([x for x in range(d) if x not in i])
         dist = self.random(k, d)
         mixture_2 = dist.marginalise(i)
+        assert isinstance(mixture_2, self.cls)
         assert mixture_2.means.shape == (k, d - p)
         assert mixture_2.covs.shape == (k, d - p, d - p)
         assert_allclose(dist.means[:, j], mixture_2.means)
@@ -314,5 +352,24 @@ class TestMultiMultivariateNormal(object):
 
         v = np.random.randn(k, p)
         mixture_3 = dist.condition(i, v)
+        assert isinstance(mixture_3, self.cls)
         assert mixture_3.means.shape == (k, d - p)
         assert mixture_3.covs.shape == (k, d - p, d - p)
+
+    @pytest.mark.parametrize("q", [1, 2, 5, 10])
+    def test_predict(self, q, k, d):
+        dist = self.random(k, d)
+        A = np.random.randn(k, q, d)
+        y = dist.predict(A)
+        assert isinstance(y, self.cls)
+        assert y.means.shape == (k, q)
+        assert y.covs.shape == (k, q, q)
+
+        b = np.random.randn(q)
+        y = dist.predict(A, b)
+        assert isinstance(y, self.cls)
+        assert y.means.shape == (
+            k,
+            q,
+        )
+        assert y.covs.shape == (k, q, q)
