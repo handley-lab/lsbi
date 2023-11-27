@@ -197,6 +197,13 @@ class TestLinearModel(object):
         Info = posterior.logpdf(samples) - prior.logpdf(samples)
         assert_allclose(Info.mean(), model.DKL(data), atol=5 * Info.std() / np.sqrt(N))
 
+    @pytest.mark.parametrize("N", [1, 100])
+    def test_model(self, d, n, N):
+        model = self.random(d, n)
+        theta = model.prior().rvs(N)
+        D = model.model(theta)
+        assert D.shape == (N, d)
+
     def test_from_joint(self, d, n):
         model = self.random(d, n)
         joint = model.joint()
@@ -272,14 +279,19 @@ class TestReducedLinearModel(object):
         logLmax = np.random.randn()
 
         return ReducedLinearModel(
-            mu_pi=mu_pi, Sigma_pi=Sigma_pi, logLmax=logLmax, mu_L=mu_L, Sigma_L=Sigma_L
+            mu_pi=mu_pi,
+            Sigma_pi=Sigma_pi,
+            logLmax=logLmax,
+            mu_L=mu_L,
+            Sigma_L=Sigma_L,
         )
 
     def test_bayes_theorem(self, n):
         model = self.random(n)
         theta = model.prior().rvs()
         assert_allclose(
-            model.logP(theta) + model.logZ(), model.logL(theta) + model.logpi(theta)
+            model.logP(theta) + model.logZ(),
+            model.logL(theta) + model.logpi(theta),
         )
 
 
@@ -299,7 +311,8 @@ class TestReducedLinearModelUniformPrior(object):
         model = self.random(n)
         theta = model.posterior().rvs(N)
         assert_allclose(
-            model.logpi(theta) + model.logL(theta), model.logP(theta) + model.logZ()
+            model.logpi(theta) + model.logL(theta),
+            model.logP(theta) + model.logZ(),
         )
 
         logV = 50
@@ -313,7 +326,10 @@ class TestReducedLinearModelUniformPrior(object):
         )
 
         model = ReducedLinearModelUniformPrior(
-            logLmax=model.logLmax, mu_L=model.mu_L, Sigma_L=model.Sigma_L, logV=logV
+            logLmax=model.logLmax,
+            mu_L=model.mu_L,
+            Sigma_L=model.Sigma_L,
+            logV=logV,
         )
 
         assert_allclose(reduced_model.logZ(), model.logZ())
@@ -323,7 +339,8 @@ class TestReducedLinearModelUniformPrior(object):
         model = self.random(n)
         theta = model.posterior().rvs()
         assert_allclose(
-            model.logP(theta) + model.logZ(), model.logL(theta) + model.logpi(theta)
+            model.logP(theta) + model.logZ(),
+            model.logL(theta) + model.logpi(theta),
         )
 
 
@@ -1012,7 +1029,8 @@ class TestMultiLinearModel(object):
                 p = kstest(prior.logpdf(samples_2), prior.logpdf(samples_1)).pvalue
             else:
                 p = kstest(
-                    prior.logpdf(samples_2)[:, j], prior.logpdf(samples_1)[:, j]
+                    prior.logpdf(samples_2)[:, j],
+                    prior.logpdf(samples_1)[:, j],
                 ).pvalue
             assert p > 1e-5
 
@@ -1036,7 +1054,8 @@ class TestMultiLinearModel(object):
                 ).pvalue
             else:
                 p = kstest(
-                    evidence.logpdf(samples_2)[:, j], evidence.logpdf(samples_1)[:, j]
+                    evidence.logpdf(samples_2)[:, j],
+                    evidence.logpdf(samples_1)[:, j],
                 ).pvalue
             assert p > 1e-5
 
@@ -1062,7 +1081,8 @@ class TestMultiLinearModel(object):
                 p = kstest(joint.logpdf(samples_2), joint.logpdf(samples_1)).pvalue
             else:
                 p = kstest(
-                    joint.logpdf(samples_2)[:, j], joint.logpdf(samples_1)[:, j]
+                    joint.logpdf(samples_2)[:, j],
+                    joint.logpdf(samples_1)[:, j],
                 ).pvalue
             assert p > 1e-5
 

@@ -9,15 +9,15 @@ repos:
         files: "lsbi/"
       - id: black
         name: black
-        args: [ "--check"  ]
+        # args: [ "--check"  ]
         entry: black
         language: system
         types: [python]
-        files: "."
       - id: isort
         name: isort
         entry: isort
         args: [ "--profile", "black", "--filter-files", "--check-only"  ]
         language: system
         types: [python]
-        files: "."
+
+

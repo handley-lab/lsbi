@@ -165,7 +165,10 @@ class LinearModel(object):
         prior = self.prior()
         mu = np.concatenate([evidence.mean, prior.mean])
         Sigma = np.block(
-            [[evidence.cov, self.M @ self.Sigma], [self.Sigma @ self.M.T, prior.cov]]
+            [
+                [evidence.cov, self.M @ self.Sigma],
+                [self.Sigma @ self.M.T, prior.cov],
+            ]
         )
         return multivariate_normal(mu, Sigma)
 
@@ -186,6 +189,23 @@ class LinearModel(object):
             + np.trace(inv(cov_q) @ cov_p - 1)
             + (mu_q - mu_p) @ inv(cov_q) @ (mu_q - mu_p)
         ) / 2
+
+    def model(self, theta):
+        """Parameter model excluding the data noise.
+
+        E[P(D|theta)].
+
+        Parameters
+        ----------
+        theta : array_like, shape (n,)
+
+        Returns
+        -------
+        array_like, shape (d,)
+        """
+        # N = theta[...,None].shape[0]
+        # theta= np.atleast_2d(theta).reshape(N, -1)
+        return self.m + np.einsum("ij,kj->ki", self.M, np.atleast_2d(theta))
 
     def reduce(self, D):
         """Reduce the model to a Gaussian in the parameters.
