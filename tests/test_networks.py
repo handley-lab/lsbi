@@ -60,36 +60,22 @@ class TestClassifier(TestClassifierBase):
         assert loss.detach().numpy().shape == ()
 
     @pytest.mark.filterwarnings("ignore::UserWarning")
-    def test_predict(self, model, x):
-        y = model.predict(x)
-        assert y.shape == (10, 1)
-        assert isinstance(y, np.ndarray)
-
-    @pytest.mark.filterwarnings("ignore::UserWarning")
     def test_fit(self, model, x):
         y_start, y_end = self.fit_model(model, x.shape[1])
         assert (y_start != y_end).any()
 
+    @pytest.mark.parametrize("size", [-1, 1])
+    @pytest.mark.filterwarnings("ignore::UserWarning")
+    def test_predict(self, model, x, size):
+        y = model.predict(x[:size].squeeze(0))
+        assert y.shape == (len(x[:size]), 1)
+        assert isinstance(y, np.ndarray)
+
 
 @pytest.mark.parametrize("alpha", [2, 5])
-class TestClassifierLPop(TestClassifierBase):
+class TestClassifierLPop(TestClassifier):
     CLS = BinaryClassifierLPop
 
     @pytest.fixture
     def model(self, input_dim, internal_dim, initial_dim, alpha):
         return self.CLS(input_dim, internal_dim, initial_dim, alpha=alpha)
-
-    def test_loss(self, model, x, y):
-        loss = model.loss(x, y)
-        assert loss.detach().numpy().shape == ()
-
-    @pytest.mark.filterwarnings("ignore::UserWarning")
-    def test_predict(self, model, x):
-        y = model.predict(x)
-        assert y.shape == (10, 1)
-        assert isinstance(y, np.ndarray)
-
-    @pytest.mark.filterwarnings("ignore::UserWarning")
-    def test_fit(self, model, x):
-        y_start, y_end = self.fit_model(model, x.shape[1])
-        assert (y_start != y_end).any()

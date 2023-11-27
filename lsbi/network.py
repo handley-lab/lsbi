@@ -151,7 +151,11 @@ class BinaryClassifier(BinaryClassifierBase):
 
         log K = lnP(Class 1) - lnP(Class 0)
         """
+        # ensure model is in eval just in case
+        self.model.eval()
+
         x = torch.tensor(x, dtype=torch.float32)
+        x = torch.atleast_2d(x)
         pred = self.forward(x)
         pred = nn.Sigmoid()(pred)
         return (torch.log(pred) - torch.log(1 - pred)).detach().numpy()
@@ -190,7 +194,11 @@ class BinaryClassifierLPop(BinaryClassifierBase):
 
         log K = lnP(Class 1) - lnP(Class 0)
         """
+        # ensure model is in eval just in case
+        self.model.eval()
+
         x = torch.tensor(x, dtype=torch.float32)
+        x = torch.atleast_2d(x)
         pred = self.forward(x)
         pred = self.lpop(pred)
         return pred.detach().numpy()
