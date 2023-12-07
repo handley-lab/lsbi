@@ -48,27 +48,23 @@ class multivariate_normal(object):
 
     @shape.setter
     def shape(self, shape):
-        self._shape = shape
+        self._shape = np.broadcast_shapes(
+            self.mean.shape[:-1], self.cov.shape[:-2], shape
+        )
 
     @property
     def dim(self):
         """Dimension of the distribution."""
         return self.mean.shape[-1]
 
-    def _flatten_1d(self, x):
+    def _flatten(self, x, *args):
         """Flatten the distribution parameters."""
-        return np.broadcast_to(x, (*self.shape, self.dim)).reshape(-1, self.dim)
-
-    def _flatten_2d(self, x):
-        """Flatten the distribution parameters."""
-        return np.broadcast_to(x, (*self.shape, self.dim, self.dim)).reshape(
-            -1, self.dim, self.dim
-        )
+        return np.broadcast_to(x, (*self.shape, *args)).reshape(-1, *args)
 
     def logpdf(self, x):
         """Log of the probability density function."""
-        dx = x.reshape(-1, 1, self.dim) - self._flatten_1d(self.mean)
-        invcov = self._flatten_2d(np.linalg.inv(self.cov))
+        dx = x.reshape(-1, 1, self.dim) - self._flatten(self.mean, self.dim)
+        invcov = self._flatten(np.linalg.inv(self.cov), self.dim, self.dim)
         chi2 = np.einsum("xaj,ajk,xak->xa", dx, invcov, dx)
         norm = -logdet(2 * np.pi * self.cov) / 2
         logpdf = norm - chi2.reshape((*x.shape[:-1], *self.shape)) / 2
@@ -78,8 +74,8 @@ class multivariate_normal(object):
         """Random variates."""
         size = np.atleast_1d(np.array(size, dtype=int))
         x = np.random.randn(np.prod(size), np.prod(self.shape, dtype=int), self.dim)
-        cholesky = self._flatten_2d(np.linalg.cholesky(self.cov))
-        t = self._flatten_1d(self.mean) + np.einsum("ajk,xak->xaj", cholesky, x)
+        cholesky = self._flatten(np.linalg.cholesky(self.cov), self.dim, self.dim)
+        t = self._flatten(self.mean, self.dim) + np.einsum("ajk,xak->xaj", cholesky, x)
         return t.reshape(*size, *self.shape, self.dim)
 
     def marginalise(self, indices):
@@ -95,9 +91,9 @@ class multivariate_normal(object):
         marginalised distribution: multimultivariate_normal
         """
         i = self._bar(indices)
-        means = self.means[:, i]
-        covs = self.covs[:, i][:, :, i]
-        return multimultivariate_normal(means, covs)
+        mean = self.mean[..., i]
+        cov = self.cov[..., i, :][..., i]
+        return multivariate_normal(mean, cov, self.shape)
 
     def condition(self, indices, values):
         """Condition on indices with values.
@@ -115,24 +111,30 @@ class multivariate_normal(object):
         """
         i = self._bar(indices)
         k = indices
-        values = values.reshape(self.means[:, k].shape)
-        means = self.means[:, i] + np.einsum(
+        kdim = len(k)
+        idim = self.dim - kdim
+        old_shape = self.shape
+        self.shape = np.broadcast_shapes(values.shape[:-1], self.shape)
+        mean = self._flatten(self.mean[..., i], idim) + np.einsum(
             "ija,iab,ib->ij",
-            self.covs[:, i][:, :, k],
-            inv(self.covs[:, k][:, :, k]),
-            (values - self.means[:, k]),
+            self._flatten(self.cov[..., i, :][..., :, k], idim, kdim),
+            self._flatten(inv(self.cov[..., k, :][..., :, k]), kdim, kdim),
+            self._flatten(values, kdim) - self._flatten(self.mean[..., k], kdim),
         )
-        covs = self.covs[:, i][:, :, i] - np.einsum(
+        cov = self._flatten(self.cov[..., i, :][..., :, i], idim, idim) - np.einsum(
             "ija,iab,ibk->ijk",
-            self.covs[:, i][:, :, k],
-            inv(self.covs[:, k][:, :, k]),
-            self.covs[:, k][:, :, i],
+            self._flatten(self.cov[..., i, :][..., :, k], idim, kdim),
+            self._flatten(inv(self.cov[..., k, :][..., :, k]), kdim, kdim),
+            self._flatten(self.cov[..., k, :][..., :, i], kdim, idim),
         )
-        return multimultivariate_normal(means, covs)
+        mean = mean.reshape(*self.shape, idim)
+        cov = cov.reshape(*self.shape, idim, idim)
+        self.shape = old_shape
+        return multivariate_normal(mean, cov, self.shape)
 
     def _bar(self, indices):
         """Return the indices not in the given indices."""
-        k = np.ones(self.means.shape[-1], dtype=bool)
+        k = np.ones(self.dim, dtype=bool)
         k[indices] = False
         return k
 
@@ -175,20 +177,28 @@ class multivariate_normal(object):
 
         Parameters
         ----------
-        A : array_like, shape (k, q, n)
+        A : array_like, shape (..., k, n)
             Linear transformation matrix.
-        b : array_like, shape (k, q), optional
+        b : array_like, shape (..., k), optional
             Linear transformation vector.
 
         Returns
         -------
         predicted distribution: mixture_multivariate_normal
+        shape (..., k)
         """
+        k = A.shape[-2]
         if b is None:
             b = np.zeros(A.shape[:-1])
-        means = np.einsum("kqn,kn->kq", A, self.means) + b
-        covs = np.einsum("kpn,knm,kqm->kpq", A, self.covs, A)
-        return multimultivariate_normal(means, covs)
+        A = self._flatten(A, k, self.dim)
+        b = self._flatten(b, k)
+        mean = np.einsum("kqn,kn->kq", A, self._flatten(self.mean, self.dim)) + b
+        cov = np.einsum(
+            "kqn,knm,kpm->kqp", A, self._flatten(self.cov, self.dim, self.dim), A
+        )
+        mean = mean.reshape(*self.shape, k)
+        cov = cov.reshape(*self.shape, k, k)
+        return multivariate_normal(mean, cov)
 
 
 class mixture_multivariate_normal(object):
