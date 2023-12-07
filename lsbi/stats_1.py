@@ -33,10 +33,10 @@ class multivariate_normal(object):
 
     """
 
-    def __init__(self, mean, cov):
+    def __init__(self, mean, cov, shape=()):
         self.mean = mean
         self.cov = cov
-        self.shape = ()
+        self.shape = shape
         assert self.cov.shape[-2:] == (self.dim, self.dim)
 
     @property
@@ -55,10 +55,20 @@ class multivariate_normal(object):
         """Dimension of the distribution."""
         return self.mean.shape[-1]
 
+    def _flatten_1d(self, x):
+        """Flatten the distribution parameters."""
+        return np.broadcast_to(x, (*self.shape, self.dim)).reshape(-1, self.dim)
+
+    def _flatten_2d(self, x):
+        """Flatten the distribution parameters."""
+        return np.broadcast_to(x, (*self.shape, self.dim, self.dim)).reshape(
+            -1, self.dim, self.dim
+        )
+
     def logpdf(self, x):
         """Log of the probability density function."""
-        dx = x.reshape(-1, 1, self.dim) - self.mean.reshape(-1, self.dim)
-        invcov = np.linalg.inv(self.cov).reshape(-1, self.dim, self.dim)
+        dx = x.reshape(-1, 1, self.dim) - self._flatten_1d(self.mean)
+        invcov = self._flatten_2d(np.linalg.inv(self.cov))
         chi2 = np.einsum("xaj,ajk,xak->xa", dx, invcov, dx)
         norm = -logdet(2 * np.pi * self.cov) / 2
         logpdf = norm - chi2.reshape((*x.shape[:-1], *self.shape)) / 2
@@ -68,8 +78,8 @@ class multivariate_normal(object):
         """Random variates."""
         size = np.atleast_1d(np.array(size, dtype=int))
         x = np.random.randn(np.prod(size), np.prod(self.shape, dtype=int), self.dim)
-        cholesky = np.linalg.cholesky(self.cov).reshape(-1, self.dim, self.dim)
-        t = self.mean.reshape(-1, self.dim) + np.einsum("ajk,xak->xaj", cholesky, x)
+        cholesky = self._flatten_2d(np.linalg.cholesky(self.cov))
+        t = self._flatten_1d(self.mean) + np.einsum("ajk,xak->xaj", cholesky, x)
         return t.reshape(*size, *self.shape, self.dim)
 
     def marginalise(self, indices):
