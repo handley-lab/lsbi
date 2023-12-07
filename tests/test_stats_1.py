@@ -82,3 +82,17 @@ class TestMultivariateNormal(object):
         assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert dist_2.shape == np.broadcast_shapes(dist.shape, values_shape)
         assert dist_2.dim == dim - p
+
+    @pytest.mark.parametrize("x_shape", shapes)
+    def test_bijector(self, dim, shape, mean_shape, cov_shape, x_shape):
+        dist = self.random(dim, shape, mean_shape, cov_shape)
+        x = np.random.rand(*x_shape, dim)
+        y = dist.bijector(x)
+        assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
+        assert y.shape == np.broadcast_shapes(dist.shape + (dim,), x.shape)
+
+        y = np.random.rand(*x_shape, dim)
+        x = dist.bijector(y, inverse=True)
+
+        assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
+        assert x.shape == np.broadcast_shapes(dist.shape + (dim,), x.shape)

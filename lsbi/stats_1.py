@@ -74,8 +74,8 @@ class multivariate_normal(object):
         """Random variates."""
         size = np.atleast_1d(np.array(size, dtype=int))
         x = np.random.randn(np.prod(size), np.prod(self.shape, dtype=int), self.dim)
-        cholesky = self._flatten(np.linalg.cholesky(self.cov), self.dim, self.dim)
-        t = self._flatten(self.mean, self.dim) + np.einsum("ajk,xak->xaj", cholesky, x)
+        L = self._flatten(np.linalg.cholesky(self.cov), self.dim, self.dim)
+        t = self._flatten(self.mean, self.dim) + np.einsum("ajk,xak->xaj", L, x)
         return t.reshape(*size, *self.shape, self.dim)
 
     def marginalise(self, indices):
@@ -160,14 +160,29 @@ class multivariate_normal(object):
         -------
         transformed x or theta: array_like, shape (..., d)
         """
-        Ls = np.linalg.cholesky(self.covs)
+        L = np.linalg.cholesky(self.cov)
+        old_shape = self.shape
+        self.shape = np.broadcast_shapes(x.shape[:-1], self.shape)
         if inverse:
-            Linvs = inv(Ls)
-            y = np.einsum("ijk,...ik->...ij", Linvs, x - self.means)
+            invL = inv(L)
+            y = np.einsum(
+                "ajk,ak->aj",
+                self._flatten(invL, self.dim, self.dim),
+                self._flatten(x, self.dim) - self._flatten(self.mean, self.dim),
+            )
+            y = y.reshape(*self.shape, self.dim)
+            self.shape = old_shape
             return scipy.stats.norm.cdf(y)
         else:
             y = scipy.stats.norm.ppf(x)
-            return self.means + np.einsum("ijk,...ik->...ij", Ls, y)
+            z = self._flatten(self.mean, self.dim) + np.einsum(
+                "ajk,ak->aj",
+                self._flatten(L, self.dim, self.dim),
+                self._flatten(y, self.dim),
+            )
+            z = z.reshape(*self.shape, self.dim)
+            self.shape = old_shape
+            return z
 
     def predict(self, A, b=None):
         """Predict the mean and covariance of a linear transformation.
