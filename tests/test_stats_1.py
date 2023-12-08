@@ -4,7 +4,7 @@ import scipy.special
 from numpy.testing import assert_allclose
 from scipy.stats import kstest
 
-from lsbi.stats_1 import multivariate_normal
+from lsbi.stats_1 import mixture_normal, multivariate_normal
 
 shapes = [(2, 3, 4), (3, 4), (4,), ()]
 sizes = [(8, 7, 6), (7, 6), (6,), ()]
@@ -123,3 +123,33 @@ class TestMultivariateNormal(object):
 
         assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert x.shape == np.broadcast_shapes(dist.shape + (dim,), x.shape)
+
+
+@pytest.mark.parametrize("shape", shapes)
+@pytest.mark.parametrize("logA_shape", shapes)
+@pytest.mark.parametrize("mean_shape", shapes)
+@pytest.mark.parametrize("cov_shape", shapes)
+@pytest.mark.parametrize("dim", dims)
+class TestMixtureNormal(object):
+    cls = mixture_normal
+
+    def random(self, dim, shape, logA_shape, mean_shape, cov_shape):
+        logA = np.random.randn(*logA_shape)
+        mean = np.random.randn(*mean_shape, dim)
+        cov = np.random.randn(*cov_shape, dim, dim)
+        cov = np.einsum("...ij,...kj->...ik", cov, cov) + dim * np.eye(dim)
+        return self.cls(logA, mean, cov, shape)
+
+    def test_properties(self, dim, shape, logA_shape, mean_shape, cov_shape):
+        dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
+        assert dist.dim == dim
+        assert dist.shape == np.broadcast_shapes(
+            shape, mean_shape, cov_shape, logA_shape
+        )
+
+    @pytest.mark.parametrize("size", sizes)
+    def test_logpdf(self, dim, shape, logA_shape, mean_shape, cov_shape, size):
+        dist = self.random(dim, logA_shape, shape, mean_shape, cov_shape)
+        x = np.random.randn(*size, dim)
+        logpdf = dist.logpdf(x)
+        assert logpdf.shape == size + dist.shape[:-1]
