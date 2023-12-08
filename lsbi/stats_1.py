@@ -34,8 +34,8 @@ class multivariate_normal(object):
     """
 
     def __init__(self, mean, cov, shape=()):
-        self.mean = mean
-        self.cov = cov
+        self.mean = np.atleast_1d(mean)
+        self.cov = np.atleast_2d(cov)
         self.shape = shape
         assert self.cov.shape[-2:] == (self.dim, self.dim)
 
@@ -48,9 +48,8 @@ class multivariate_normal(object):
 
     @shape.setter
     def shape(self, shape):
-        self._shape = np.broadcast_shapes(
-            self.mean.shape[:-1], self.cov.shape[:-2], shape
-        )
+        self._shape = shape
+        self._shape = self.shape
 
     @property
     def dim(self):
@@ -203,8 +202,10 @@ class multivariate_normal(object):
         shape (..., k)
         """
         k = A.shape[-2]
+        old_shape = self.shape
         if b is None:
             b = np.zeros(A.shape[:-1])
+        self.shape = np.broadcast_shapes(self.shape, A.shape[:-2], b.shape[:-1])
         A = self._flatten(A, k, self.dim)
         b = self._flatten(b, k)
         mean = np.einsum("kqn,kn->kq", A, self._flatten(self.mean, self.dim)) + b
@@ -213,45 +214,49 @@ class multivariate_normal(object):
         )
         mean = mean.reshape(*self.shape, k)
         cov = cov.reshape(*self.shape, k, k)
-        return multivariate_normal(mean, cov)
+        ans = multivariate_normal(mean, cov, self.shape)
+        self.shape = old_shape
+        return ans
 
 
-class mixture_multivariate_normal(object):
+class mixture_normal(multivariate_normal):
     """Mixture of multivariate normal distributions.
 
-    Implemented with the same style as scipy.stats.multivariate_normal
+    Broadcastable multivariate mixture model.
 
     Parameters
     ----------
-    means : array_like, shape (n_components, n_features)
+    mean : array_like, shape (..., n, dim)
         Mean of each component.
 
-    covs: array_like, shape (n_components, n_features, n_features)
+    cov: array_like, shape (..., n, dim, dim)
         Covariance matrix of each component.
 
-    logA: array_like, shape (n_components,)
+    logA: array_like, shape (..., n,)
         Log of the mixing weights.
     """
 
-    def __init__(self, means, covs, logA):
-        self.means = np.array([np.atleast_1d(m) for m in means])
-        self.covs = np.array([np.atleast_2d(c) for c in covs])
-        self.logA = np.atleast_1d(logA)
+    def __init__(self, logA, mean, cov, shape=()):
+        self.logA = np.array(logA)
+        super().__init__(mean, cov, shape)
 
-    def logpdf(self, x, reduce=True, keepdims=False):
+    @property
+    def shape(self):
+        """Shape of the distribution."""
+        return np.broadcast_shapes(
+            self.logA.shape, self.mean.shape[:-1], self.cov.shape[:-2], self._shape
+        )
+
+    @shape.setter
+    def shape(self, shape):
+        self._shape = shape
+        self._shape = self.shape
+
+    def logpdf(self, x):
         """Log of the probability density function."""
-        x = self._process_quantiles(x, self.means.shape[-1])
-        dx = self.means - x[..., None, :]
-        invcovs = np.linalg.inv(self.covs)
-        chi2 = np.einsum("...ij,ijk,...ik->...i", dx, invcovs, dx)
-        norm = -logdet(2 * np.pi * self.covs) / 2
-        logpdf = norm - chi2 / 2
-        if reduce:
-            logA = self.logA - scipy.special.logsumexp(self.logA)
-            logpdf = np.squeeze(scipy.special.logsumexp(logpdf + logA, axis=-1))
-        if not keepdims:
-            logpdf = np.squeeze(logpdf)
-        return logpdf
+        logpdf = super().logpdf(x)
+        logA = self.logA - scipy.special.logsumexp(self.logA)
+        return scipy.special.logsumexp(logpdf + logA, axis=-1)
 
     def rvs(self, size=1):
         """Random variates."""
