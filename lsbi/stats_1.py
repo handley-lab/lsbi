@@ -110,25 +110,18 @@ class multivariate_normal(object):
         """
         i = self._bar(indices)
         k = indices
-        kdim = len(k)
-        idim = self.dim - kdim
-        old_shape = self.shape
-        self.shape = np.broadcast_shapes(values.shape[:-1], self.shape)
-        mean = self._flatten(self.mean[..., i], idim) + np.einsum(
-            "ija,iab,ib->ij",
-            self._flatten(self.cov[..., i, :][..., :, k], idim, kdim),
-            self._flatten(inv(self.cov[..., k, :][..., :, k]), kdim, kdim),
-            self._flatten(values, kdim) - self._flatten(self.mean[..., k], kdim),
+        mean = self.mean[..., i] + np.einsum(
+            "...ja,...ab,...b->...j",
+            self.cov[..., i, :][..., :, k],
+            inv(self.cov[..., k, :][..., :, k]),
+            values - self.mean[..., k],
         )
-        cov = self._flatten(self.cov[..., i, :][..., :, i], idim, idim) - np.einsum(
-            "ija,iab,ibk->ijk",
-            self._flatten(self.cov[..., i, :][..., :, k], idim, kdim),
-            self._flatten(inv(self.cov[..., k, :][..., :, k]), kdim, kdim),
-            self._flatten(self.cov[..., k, :][..., :, i], kdim, idim),
+        cov = self.cov[..., i, :][..., :, i] - np.einsum(
+            "...ja,...ab,...bk->...jk",
+            self.cov[..., i, :][..., :, k],
+            inv(self.cov[..., k, :][..., :, k]),
+            self.cov[..., k, :][..., :, i],
         )
-        mean = mean.reshape(*self.shape, idim)
-        cov = cov.reshape(*self.shape, idim, idim)
-        self.shape = old_shape
         return multivariate_normal(mean, cov, self.shape)
 
     def _bar(self, indices):
@@ -183,7 +176,7 @@ class multivariate_normal(object):
             self.shape = old_shape
             return z
 
-    def predict(self, A, b=None):
+    def predict(self, A, b=0):
         """Predict the mean and covariance of a linear transformation.
 
         if:         x ~ N(mu, Sigma)
@@ -201,22 +194,9 @@ class multivariate_normal(object):
         predicted distribution: mixture_multivariate_normal
         shape (..., k)
         """
-        k = A.shape[-2]
-        old_shape = self.shape
-        if b is None:
-            b = np.zeros(A.shape[:-1])
-        self.shape = np.broadcast_shapes(self.shape, A.shape[:-2], b.shape[:-1])
-        A = self._flatten(A, k, self.dim)
-        b = self._flatten(b, k)
-        mean = np.einsum("kqn,kn->kq", A, self._flatten(self.mean, self.dim)) + b
-        cov = np.einsum(
-            "kqn,knm,kpm->kqp", A, self._flatten(self.cov, self.dim, self.dim), A
-        )
-        mean = mean.reshape(*self.shape, k)
-        cov = cov.reshape(*self.shape, k, k)
-        ans = multivariate_normal(mean, cov, self.shape)
-        self.shape = old_shape
-        return ans
+        mean = np.einsum("...qn,...n->...q", A, self.mean) + b
+        cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
+        return multivariate_normal(mean, cov, self.shape)
 
 
 class mixture_multivariate_normal(object):

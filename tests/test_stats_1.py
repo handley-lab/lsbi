@@ -52,15 +52,28 @@ class TestMultivariateNormal(object):
 
         dist_2 = dist.predict(A, b)
         assert isinstance(dist_2, self.cls)
+        assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert dist_2.shape == np.broadcast_shapes(
             dist.shape, A.shape[:-2], b.shape[:-1]
         )
-        # assert dist_2.cov.shape[:-2] == np.broadcast_shapes(cov.shape[:-2], A.shape[:-2], b.shape[:-1], (k, k))
+        assert dist_2.cov.shape[:-2] == np.broadcast_shapes(
+            dist.cov.shape[:-2], A.shape[:-2]
+        )
+        assert dist_2.mean.shape[:-1] == np.broadcast_shapes(
+            dist.mean.shape[:-1], A.shape[:-2], b.shape[:-1]
+        )
         assert dist_2.dim == k
 
         dist_2 = dist.predict(A)
         assert isinstance(dist_2, self.cls)
+        assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert dist_2.shape == np.broadcast_shapes(dist.shape, A.shape[:-2])
+        assert dist_2.cov.shape[:-2] == np.broadcast_shapes(
+            dist.cov.shape[:-2], A.shape[:-2]
+        )
+        assert dist_2.mean.shape[:-1] == np.broadcast_shapes(
+            dist.mean.shape[:-1], A.shape[:-2]
+        )
         assert dist_2.dim == k
 
     @pytest.mark.parametrize("p", dims)
@@ -72,7 +85,10 @@ class TestMultivariateNormal(object):
         dist_2 = dist.marginalise(i)
 
         assert isinstance(dist_2, self.cls)
+        assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert dist_2.shape == dist.shape
+        assert dist_2.cov.shape[:-2] == dist.cov.shape[:-2]
+        assert dist_2.mean.shape[:-1] == dist.mean.shape[:-1]
         assert dist_2.dim == dim - p
 
     @pytest.mark.parametrize("values_shape", shapes)
@@ -88,6 +104,10 @@ class TestMultivariateNormal(object):
         assert isinstance(dist_2, self.cls)
         assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert dist_2.shape == np.broadcast_shapes(dist.shape, values_shape)
+        assert dist_2.cov.shape[:-2] == dist.cov.shape[:-2]
+        assert dist_2.mean.shape[:-1] == np.broadcast_shapes(
+            dist.mean.shape[:-1], dist.cov.shape[:-2], values_shape
+        )
         assert dist_2.dim == dim - p
 
     @pytest.mark.parametrize("x_shape", shapes)
