@@ -153,3 +153,9 @@ class TestMixtureNormal(object):
         x = np.random.randn(*size, dim)
         logpdf = dist.logpdf(x)
         assert logpdf.shape == size + dist.shape[:-1]
+
+    @pytest.mark.parametrize("size", sizes)
+    def test_rvs(self, dim, shape, logA_shape, mean_shape, cov_shape, size):
+        dist = self.random(dim, logA_shape, shape, mean_shape, cov_shape)
+        x = dist.rvs(size)
+        assert x.shape == size + dist.shape[:-1] + (dim,)

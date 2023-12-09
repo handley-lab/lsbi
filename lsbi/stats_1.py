@@ -8,6 +8,13 @@ from scipy.stats._multivariate import multivariate_normal_frozen
 from lsbi.utils import bisect, logdet
 
 
+def choice(size, p):
+    """Vectorised choice function."""
+    cump = np.cumsum(p, axis=-1)
+    u = np.random.rand(*size, *p.shape)
+    return np.argmin(u > cump, axis=-1)
+
+
 class multivariate_normal(object):
     """Vectorised multivariate normal distribution.
 
@@ -235,18 +242,26 @@ class mixture_normal(multivariate_normal):
     def logpdf(self, x):
         """Log of the probability density function."""
         logpdf = super().logpdf(x)
-        logA = self.logA - scipy.special.logsumexp(self.logA)
-        return scipy.special.logsumexp(logpdf + logA, axis=-1)
+        if self.shape == ():
+            return logpdf
+        logA = self.logA - logsumexp(self.logA, axis=-1)[..., None]
+        return logsumexp(logpdf + logA, axis=-1)
 
     def rvs(self, size=1):
         """Random variates."""
-        size = np.atleast_1d(size)
-        p = np.exp(self.logA - self.logA.max())
-        p /= p.sum()
-        i = np.random.choice(len(p), size, p=p)
-        x = np.random.randn(*size, self.means.shape[-1])
-        choleskys = np.linalg.cholesky(self.covs)
-        return np.squeeze(self.means[i, ..., None] + choleskys[i] @ x[..., None])
+        if self.shape == ():
+            return super().rvs(size)
+        size = np.atleast_1d(np.array(size, dtype=int))
+        p = np.exp(self.logA - logsumexp(self.logA, axis=-1)[..., None])
+        p = np.broadcast_to(p, self.shape)
+        i = choice(size, p)
+        L = np.linalg.cholesky(self.cov)
+        L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
+        L = np.choose(i[..., None, None], np.moveaxis(L, -3, 0))
+        mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
+        mean = np.choose(i[..., None], np.moveaxis(mean, -2, 0))
+        x = np.random.randn(*size, *self.shape[:-1], self.dim)
+        return mean + np.einsum("...ij,...j->...i", L, x)
 
     def marginalise(self, indices):
         """Marginalise over indices.
