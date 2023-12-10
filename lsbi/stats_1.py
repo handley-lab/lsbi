@@ -7,11 +7,19 @@ from scipy.special import erf, logsumexp
 from lsbi.utils import bisect, choice, logdet
 
 
+def _broadcast_to(x, shape):
+    if x.shape == shape:
+        return x
+    if x.shape[1:] == shape[1:]:
+        return np.broadcast_to(x, shape)
+    return x * np.ones(shape) * np.eye(shape[1], shape[2])[None, ...]
+
+
 class multivariate_normal(object):
     """Vectorised multivariate normal distribution.
 
     This extends scipy.stats.multivariate_normal to allow for vectorisation across
-    the distribution parameters.
+    the distribution parameters mean and cov.
 
     Implemented with the same style as scipy.stats.multivariate_normal, except that
     results are not squeezed.
@@ -35,7 +43,8 @@ class multivariate_normal(object):
         self.mean = np.atleast_1d(mean)
         self.cov = np.atleast_2d(cov)
         self._shape = shape
-        assert self.cov.shape[-2:] == (self.dim, self.dim)
+        self.mean = self.mean + np.zeros(self.dim)
+        self.cov = self.cov * np.eye(self.dim)
 
     @property
     def shape(self):
