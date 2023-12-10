@@ -65,6 +65,7 @@ class multivariate_normal(object):
 
     def logpdf(self, x):
         """Log of the probability density function."""
+        x = np.array(x)
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
         dx = x.reshape(*x.shape[:-1], *np.ones_like(self.shape), self.dim) - mean
         invcov = np.linalg.inv(self.cov)
@@ -79,6 +80,28 @@ class multivariate_normal(object):
         L = np.linalg.cholesky(self.cov)
         return self.mean + np.einsum("...jk,...k->...j", L, x)
 
+    def predict(self, A, b=0):
+        """Predict the mean and covariance of a linear transformation.
+
+        if:         x ~ N(mu, Sigma)
+        then:  Ax + b ~ N(A mu + b, A Sigma A^T)
+
+        Parameters
+        ----------
+        A : array_like, shape (..., k, n)
+            Linear transformation matrix.
+        b : array_like, shape (..., k), optional
+            Linear transformation vector.
+
+        Returns
+        -------
+        predicted distribution: multivariate_normal
+        shape (..., k)
+        """
+        mean = np.einsum("...qn,...n->...q", A, self.mean) + b
+        cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
+        return multivariate_normal(mean, cov, self.shape)
+
     def marginalise(self, indices):
         """Marginalise over indices.
 
@@ -89,7 +112,7 @@ class multivariate_normal(object):
 
         Returns
         -------
-        marginalised distribution: multimultivariate_normal
+        marginalised distribution: multivariate_normal
         """
         i = self._bar(indices)
         mean = self.mean[..., i]
@@ -108,7 +131,7 @@ class multivariate_normal(object):
 
         Returns
         -------
-        conditional distribution: multimultivariate_normal
+        conditional distribution: multivariate_normal
         """
         i = self._bar(indices)
         k = indices
@@ -154,6 +177,7 @@ class multivariate_normal(object):
         -------
         transformed x or theta: array_like, shape (..., d)
         """
+        x = np.array(x)
         L = np.linalg.cholesky(self.cov)
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
         if inverse:
@@ -164,28 +188,6 @@ class multivariate_normal(object):
             L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
             y = scipy.stats.norm.ppf(x)
             return mean + np.einsum("...jk,...k->...j", L, y)
-
-    def predict(self, A, b=0):
-        """Predict the mean and covariance of a linear transformation.
-
-        if:         x ~ N(mu, Sigma)
-        then:  Ax + b ~ N(A mu + b, A Sigma A^T)
-
-        Parameters
-        ----------
-        A : array_like, shape (..., k, n)
-            Linear transformation matrix.
-        b : array_like, shape (..., k), optional
-            Linear transformation vector.
-
-        Returns
-        -------
-        predicted distribution: mixture_multivariate_normal
-        shape (..., k)
-        """
-        mean = np.einsum("...qn,...n->...q", A, self.mean) + b
-        cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
-        return multivariate_normal(mean, cov, self.shape)
 
 
 class mixture_normal(multivariate_normal):
@@ -245,6 +247,26 @@ class mixture_normal(multivariate_normal):
         x = np.random.randn(*size, *self.shape[:-1], self.dim)
         return mean + np.einsum("...ij,...j->...i", L, x)
 
+    def predict(self, A, b=None):
+        """Predict the mean and covariance of a linear transformation.
+
+        if:         x ~ mixN(mu, Sigma, logA)
+        then:  Ax + b ~ mixN(A mu + b, A Sigma A^T, logA)
+
+        Parameters
+        ----------
+        A : array_like, shape (k, q, n)
+            Linear transformation matrix.
+        b : array_like, shape (k, q,), optional
+            Linear transformation vector.
+
+        Returns
+        -------
+        predicted distribution: multivariate_normal
+        """
+        dist = super().predict(A, b)
+        return multivariate_normal(self.logA, dist.mean, dist.cov, dist.shape)
+
     def marginalise(self, indices):
         """Marginalise over indices.
 
@@ -255,13 +277,10 @@ class mixture_normal(multivariate_normal):
 
         Returns
         -------
-        marginalised distribution: mixture_multivariate_normal
+        marginalised distribution: mixture_normal
         """
-        i = self._bar(indices)
-        means = self.means[:, i]
-        covs = self.covs[:, i][:, :, i]
-        logA = self.logA
-        return mixture_multivariate_normal(means, covs, logA)
+        dist = super().marginalise(indices)
+        return mixture_normal(self.logA, dist.mean, dist.cov, self.shape)
 
     def condition(self, indices, values):
         """Condition on indices with values.
@@ -275,34 +294,15 @@ class mixture_normal(multivariate_normal):
 
         Returns
         -------
-        conditional distribution: mixture_multivariate_normal
+        conditional distribution: mixture_normal
         """
-        i = self._bar(indices)
-        k = indices
-        marginal = self.marginalise(i)
-
-        means = self.means[:, i] + np.einsum(
-            "ija,iab,ib->ij",
-            self.covs[:, i][:, :, k],
-            inv(self.covs[:, k][:, :, k]),
-            (values - self.means[:, k]),
-        )
-        covs = self.covs[:, i][:, :, i] - np.einsum(
-            "ija,iab,ibk->ijk",
-            self.covs[:, i][:, :, k],
-            inv(self.covs[:, k][:, :, k]),
-            self.covs[:, k][:, :, i],
-        )
-        logA = (
-            marginal.logpdf(values, reduce=False) + self.logA - marginal.logpdf(values)
-        )
-        return mixture_multivariate_normal(means, covs, logA)
-
-    def _bar(self, indices):
-        """Return the indices not in the given indices."""
-        k = np.ones(self.means.shape[-1], dtype=bool)
-        k[indices] = False
-        return k
+        dist = super().condition(indices, values)
+        marginal = self.marginalise(self._bar(indices))
+        marginal.mean = marginal.mean - values
+        logA = super(marginal.__class__, marginal).logpdf(0.0)
+        logA -= logsumexp(logA, axis=-1)[..., None]
+        logA += self.logA
+        return mixture_normal(logA, dist.mean, dist.cov, dist.shape)
 
     def bijector(self, x, inverse=False):
         """Bijector between U([0, 1])^d and the distribution.
@@ -326,6 +326,7 @@ class mixture_normal(multivariate_normal):
         -------
         transformed x or theta: array_like, shape (..., d)
         """
+        x = np.array(x)
         theta = np.empty_like(x)
         if inverse:
             theta[:] = x
@@ -344,9 +345,7 @@ class mixture_normal(multivariate_normal):
                 inv(self.covs[:, :i, :i]),
                 self.covs[:, i, :i],
             )
-            dist = mixture_multivariate_normal(
-                self.means[:, :i], self.covs[:, :i, :i], self.logA
-            )
+            dist = mixture_normal(self.means[:, :i], self.covs[:, :i, :i], self.logA)
             logA = (
                 self.logA
                 + dist.logpdf(theta[..., :i], reduce=False, keepdims=True)
@@ -371,40 +370,3 @@ class mixture_normal(multivariate_normal):
             return x
         else:
             return theta
-
-    def _process_quantiles(self, x, dim):
-        x = np.asarray(x, dtype=float)
-
-        if x.ndim == 0:
-            x = x[np.newaxis, np.newaxis]
-        elif x.ndim == 1:
-            if dim == 1:
-                x = x[:, np.newaxis]
-            else:
-                x = x[np.newaxis, :]
-
-        return x
-
-    def predict(self, A, b=None):
-        """Predict the mean and covariance of a linear transformation.
-
-        if:         x ~ mixN(mu, Sigma, logA)
-        then:  Ax + b ~ mixN(A mu + b, A Sigma A^T, logA)
-
-        Parameters
-        ----------
-        A : array_like, shape (k, q, n)
-            Linear transformation matrix.
-        b : array_like, shape (k, q,), optional
-            Linear transformation vector.
-
-        Returns
-        -------
-        predicted distribution: mixture_multivariate_normal
-        """
-        if b is None:
-            b = np.zeros(A.shape[:-1])
-        means = np.einsum("kqn,kn->kq", A, self.means) + b
-        covs = np.einsum("kqn,knm,kpm->kqp", A, self.covs, A)
-        logA = self.logA
-        return mixture_multivariate_normal(means, covs, logA)

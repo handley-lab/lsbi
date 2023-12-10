@@ -143,13 +143,56 @@ class TestMixtureNormal(object):
 
     @pytest.mark.parametrize("size", sizes)
     def test_logpdf(self, dim, shape, logA_shape, mean_shape, cov_shape, size):
-        dist = self.random(dim, logA_shape, shape, mean_shape, cov_shape)
+        dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
         x = np.random.randn(*size, dim)
         logpdf = dist.logpdf(x)
         assert logpdf.shape == size + dist.shape[:-1]
 
     @pytest.mark.parametrize("size", sizes)
     def test_rvs(self, dim, shape, logA_shape, mean_shape, cov_shape, size):
-        dist = self.random(dim, logA_shape, shape, mean_shape, cov_shape)
+        dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
         x = dist.rvs(size)
         assert x.shape == size + dist.shape[:-1] + (dim,)
+
+    @pytest.mark.parametrize("p", dims)
+    def test_marginalise(self, dim, shape, logA_shape, mean_shape, cov_shape, p):
+        if dim <= p:
+            pytest.skip("dim <= p")
+        i = np.random.choice(dim, p, replace=False)
+        dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
+        dist_2 = dist.marginalise(i)
+
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == dist.shape
+        assert dist_2.cov.shape[:-2] == dist.cov.shape[:-2]
+        assert dist_2.mean.shape[:-1] == dist.mean.shape[:-1]
+        assert dist_2.logA.shape == dist.logA.shape
+        assert dist_2.dim == dim - p
+
+    @pytest.mark.parametrize("values_shape", shapes)
+    @pytest.mark.parametrize("p", dims)
+    def test_condition(
+        self, dim, shape, logA_shape, mean_shape, cov_shape, p, values_shape
+    ):
+        dim = 2
+        shape = (4,)
+        logA_shape = (3, 4)
+        mean_shape = ()
+        cov_shape = (3, 4)
+        p = 1
+        values_shape = (2, 3, 4)
+
+        if dim <= p:
+            pytest.skip("dim <= p")
+        indices = np.random.choice(dim, p, replace=False)
+        values = np.random.randn(*values_shape, p)
+        dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
+        dist_2 = dist.condition(indices, values)
+
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == np.broadcast_shapes(dist.shape, values_shape)
+        assert dist_2.cov.shape[:-2] == dist.cov.shape[:-2]
+        assert dist_2.mean.shape[:-1] == np.broadcast_shapes(
+            dist.mean.shape[:-1], dist.cov.shape[:-2], values_shape
+        )
+        assert dist_2.dim == dim - p
