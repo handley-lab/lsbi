@@ -69,20 +69,19 @@ class multivariate_normal(object):
 
     def logpdf(self, x):
         """Log of the probability density function."""
-        dx = x.reshape(-1, 1, self.dim) - self._flatten(self.mean, self.dim)
-        invcov = self._flatten(np.linalg.inv(self.cov), self.dim, self.dim)
-        chi2 = np.einsum("xaj,ajk,xak->xa", dx, invcov, dx)
+        mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
+        dx = x.reshape(*x.shape[:-1], *np.ones_like(self.shape), self.dim) - mean
+        invcov = np.linalg.inv(self.cov)
+        chi2 = np.einsum("...j,...jk,...k->...", dx, invcov, dx)
         norm = -logdet(2 * np.pi * self.cov) / 2
-        logpdf = norm - chi2.reshape((*x.shape[:-1], *self.shape)) / 2
-        return logpdf
+        return norm - chi2 / 2
 
     def rvs(self, size=1):
         """Random variates."""
-        size = np.atleast_1d(np.array(size, dtype=int))
-        x = np.random.randn(np.prod(size), np.prod(self.shape, dtype=int), self.dim)
-        L = self._flatten(np.linalg.cholesky(self.cov), self.dim, self.dim)
-        t = self._flatten(self.mean, self.dim) + np.einsum("ajk,xak->xaj", L, x)
-        return t.reshape(*size, *self.shape, self.dim)
+        size = np.atleast_1d(size)
+        x = np.random.randn(*size, *self.shape, self.dim)
+        L = np.linalg.cholesky(self.cov)
+        return self.mean + np.einsum("...jk,...k->...j", L, x)
 
     def marginalise(self, indices):
         """Marginalise over indices.
