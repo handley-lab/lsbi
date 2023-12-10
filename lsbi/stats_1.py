@@ -7,14 +7,6 @@ from scipy.special import erf, logsumexp
 from lsbi.utils import bisect, choice, logdet
 
 
-def _broadcast_to(x, shape):
-    if x.shape == shape:
-        return x
-    if x.shape[1:] == shape[1:]:
-        return np.broadcast_to(x, shape)
-    return x * np.ones(shape) * np.eye(shape[1], shape[2])[None, ...]
-
-
 class multivariate_normal(object):
     """Vectorised multivariate normal distribution.
 
@@ -39,12 +31,14 @@ class multivariate_normal(object):
         inferred by mean and cov shapes
     """
 
-    def __init__(self, mean, cov, shape=()):
+    def __init__(self, mean=0, cov=1, shape=(), dim=1):
         self.mean = np.atleast_1d(mean)
-        self.cov = np.atleast_2d(cov)
+        self.cov = np.atleast_1d(cov)
         self._shape = shape
-        self.mean = self.mean + np.zeros(self.dim)
-        self.cov = self.cov * np.eye(self.dim)
+        dim = np.max([dim, self.mean.shape[-1], self.cov.shape[-1]])
+        self.mean = self.mean + np.zeros(dim)
+        if self.cov.ndim < 2:
+            self.cov = self.cov * np.eye(dim)
 
     @property
     def shape(self):
@@ -306,7 +300,7 @@ class mixture_normal(multivariate_normal):
         -------
         mixture_normal shape (..., k)
         """
-        if b is 0:
+        if b == 0:
             dist = super().predict(A[..., None, :, :])
         else:
             dist = super().predict(A[..., None, :, :], b[..., None, :])

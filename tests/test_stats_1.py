@@ -19,12 +19,82 @@ class TestMultivariateNormal(object):
         mean = np.random.randn(*mean_shape, dim)
         cov = np.random.randn(*cov_shape, dim, dim)
         cov = np.einsum("...ij,...kj->...ik", cov, cov) + dim * np.eye(dim)
-        return self.cls(mean, cov, shape)
-
-    def test_properties(self, dim, shape, mean_shape, cov_shape):
-        dist = self.random(dim, shape, mean_shape, cov_shape)
+        dist = self.cls(mean, cov, shape)
         assert dist.dim == dim
         assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
+        assert (dist.mean == mean).all()
+        assert (dist.cov == cov).all()
+        return dist
+
+    def test_defaults(self, dim, shape, mean_shape, cov_shape):
+        dist_0 = self.random(dim, shape, mean_shape, cov_shape)
+
+        # Default arguments
+        dist = self.cls()
+        assert dist.shape == ()
+        assert dist.dim == 1
+        assert (dist.mean == np.zeros(1)).all()
+        assert (dist.cov == np.eye(1)).all()
+
+        dist = self.cls(dim=dim)
+        assert dist.shape == ()
+        assert dist.dim == dim
+        assert (dist.mean == np.zeros(dim)).all()
+        assert (dist.cov == np.eye(dim)).all()
+
+        dist = self.cls(shape=shape)
+        assert dist.shape == shape
+        assert dist.dim == 1
+        assert (dist.mean == np.zeros(1)).all()
+        assert (dist.cov == np.eye(1)).all()
+
+        dist = self.cls(shape=shape, dim=dim)
+        assert dist.shape == shape
+        assert dist.dim == dim
+        assert (dist.mean == np.zeros(dim)).all()
+        assert (dist.cov == np.eye(dim)).all()
+
+        # inference from mean or cov
+        dist = self.cls(mean=dist_0.mean)
+        assert dist.shape == dist_0.mean.shape[:-1]
+        assert dist.dim == dim
+        assert (dist.mean == dist_0.mean).all()
+        assert (dist.cov == np.eye(dim)).all()
+
+        dist = self.cls(cov=dist_0.cov)
+        assert dist.shape == dist_0.cov.shape[:-2]
+        assert dist.dim == dim
+        assert (dist.mean == np.zeros(dim)).all()
+        assert (dist.cov == dist_0.cov).all()
+
+        # mean broadcasting
+        mean = np.random.randn()
+        dist = self.cls(mean, shape=shape, dim=dim)
+        assert dist.dim == dim
+        assert dist.shape == shape
+        assert (dist.mean == np.ones(dim) * mean).all()
+        assert (dist.cov == np.eye(dim)).all()
+
+        dist = self.cls(mean, dist_0.cov)
+        assert dist.dim == dim
+        assert dist.shape == dist_0.cov.shape[:-2]
+        assert (dist.mean == np.ones(dim) * mean).all()
+        assert (dist.cov == dist_0.cov).all()
+
+        # cov broadcasting
+        cov = np.random.randn() ** 2
+        dist = self.cls(dist_0.mean, cov)
+        assert dist.dim == dim
+        assert dist.shape == dist_0.mean.shape[:-1]
+        assert (dist.mean == dist_0.mean).all()
+        assert (dist.cov == cov * np.eye(dim)).all()
+
+        cov = np.random.randn(dim) ** 2
+        dist = self.cls(dist_0.mean, cov)
+        assert dist.dim == dim
+        assert dist.shape == dist_0.mean.shape[:-1]
+        assert (dist.mean == dist_0.mean).all()
+        assert (dist.cov == np.diag(cov)).all()
 
     @pytest.mark.parametrize("size", sizes)
     def test_logpdf(self, dim, shape, mean_shape, cov_shape, size):
@@ -129,14 +199,17 @@ class TestMixtureNormal(object):
         mean = np.random.randn(*mean_shape, dim)
         cov = np.random.randn(*cov_shape, dim, dim)
         cov = np.einsum("...ij,...kj->...ik", cov, cov) + dim * np.eye(dim)
-        return self.cls(logA, mean, cov, shape)
 
-    def test_properties(self, dim, shape, logA_shape, mean_shape, cov_shape):
-        dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
+        dist = self.cls(logA, mean, cov, shape)
+
         assert dist.dim == dim
         assert dist.shape == np.broadcast_shapes(
-            shape, mean_shape, cov_shape, logA_shape
+            shape, logA_shape, mean_shape, cov_shape
         )
+        assert (dist.logA == logA).all()
+        assert (dist.mean == mean).all()
+        assert (dist.cov == cov).all()
+        return dist
 
     @pytest.mark.parametrize("size", sizes)
     def test_logpdf(self, dim, shape, logA_shape, mean_shape, cov_shape, size):
