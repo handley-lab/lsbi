@@ -1,8 +1,5 @@
 import numpy as np
 import pytest
-import scipy.special
-from numpy.testing import assert_allclose
-from scipy.stats import kstest
 
 from lsbi.stats_1 import mixture_normal, multivariate_normal
 
@@ -153,6 +150,40 @@ class TestMixtureNormal(object):
         dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
         x = dist.rvs(size)
         assert x.shape == size + dist.shape[:-1] + (dim,)
+
+    @pytest.mark.parametrize("A_shape", shapes)
+    @pytest.mark.parametrize("b_shape", shapes)
+    @pytest.mark.parametrize("k", dims)
+    def test_predict(
+        self, dim, shape, logA_shape, mean_shape, cov_shape, k, A_shape, b_shape
+    ):
+        dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
+        A = np.random.randn(*A_shape[:-1], k, dim)
+        b = np.random.randn(*b_shape[:-1], k)
+
+        dist_2 = dist.predict(A, b)
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == np.broadcast_shapes(
+            dist.shape, A.shape[:-2] + (1,), b.shape[:-1] + (1,)
+        )
+        assert dist_2.cov.shape[:-2] == np.broadcast_shapes(
+            dist.cov.shape[:-2], A.shape[:-2] + (1,)
+        )
+        assert dist_2.mean.shape[:-1] == np.broadcast_shapes(
+            dist.mean.shape[:-1], A.shape[:-2] + (1,), b.shape[:-1] + (1,)
+        )
+        assert dist_2.dim == k
+
+        dist_2 = dist.predict(A)
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == np.broadcast_shapes(dist.shape, A.shape[:-2] + (1,))
+        assert dist_2.cov.shape[:-2] == np.broadcast_shapes(
+            dist.cov.shape[:-2], A.shape[:-2] + (1,)
+        )
+        assert dist_2.mean.shape[:-1] == np.broadcast_shapes(
+            dist.mean.shape[:-1], A.shape[:-2] + (1,)
+        )
+        assert dist_2.dim == k
 
     @pytest.mark.parametrize("p", dims)
     def test_marginalise(self, dim, shape, logA_shape, mean_shape, cov_shape, p):

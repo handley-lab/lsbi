@@ -55,3 +55,23 @@ def bisect(f, a, b, args=(), tol=1e-8):
         b = np.where(fq == 0, q, b)
         b = np.where(fb * fq > 0, q, b)
     return (a + b) / 2
+
+
+def choice(size, p):
+    """Vectorised choice function.
+
+    Parameters
+    ----------
+    size : int or tuple of ints
+        Shape of the output.
+    p : array_like
+        Probability array
+
+    Returns
+    -------
+    out : ndarray
+        Output array of shape (*size, *p.shape[:-1]).
+    """
+    cump = np.cumsum(p, axis=-1)
+    u = np.random.rand(*size, *p.shape)
+    return np.argmin(u > cump, axis=-1)

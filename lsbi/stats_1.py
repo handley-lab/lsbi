@@ -4,26 +4,19 @@ import scipy.stats
 from numpy.linalg import inv
 from scipy.special import erf, logsumexp
 
-from lsbi.utils import bisect, logdet
-
-
-def choice(size, p):
-    """Vectorised choice function."""
-    cump = np.cumsum(p, axis=-1)
-    u = np.random.rand(*size, *p.shape)
-    return np.argmin(u > cump, axis=-1)
+from lsbi.utils import bisect, choice, logdet
 
 
 class multivariate_normal(object):
     """Vectorised multivariate normal distribution.
 
     This extends scipy.stats.multivariate_normal to allow for vectorisation across
-    the distribution parameters. mean can be an array of shape (..., dim) and cov
-    can be an array of shape (..., dim, dim) where ... represent arbitrary broadcastable
-    shapes.
+    the distribution parameters.
 
     Implemented with the same style as scipy.stats.multivariate_normal, except that
     results are not squeezed.
+
+    mean and cov are lazily broadcasted to the same shape to improve performance.
 
     Parameters
     ----------
@@ -36,13 +29,12 @@ class multivariate_normal(object):
     shape: tuple, optional, default=()
         Shape of the distribution. Useful for forcing a broadcast beyond that
         inferred by mean and cov shapes
-
     """
 
     def __init__(self, mean, cov, shape=()):
         self.mean = np.atleast_1d(mean)
         self.cov = np.atleast_2d(cov)
-        self.shape = shape
+        self._shape = shape
         assert self.cov.shape[-2:] == (self.dim, self.dim)
 
     @property
@@ -52,28 +44,47 @@ class multivariate_normal(object):
             self.mean.shape[:-1], self.cov.shape[:-2], self._shape
         )
 
-    @shape.setter
-    def shape(self, shape):
-        self._shape = shape
-        self._shape = self.shape
-
     @property
     def dim(self):
         """Dimension of the distribution."""
         return self.mean.shape[-1]
 
     def logpdf(self, x):
-        """Log of the probability density function."""
+        """Log of the probability density function.
+
+        Parameters
+        ----------
+        x : array_like, shape (*size, dim)
+            Points at which to evaluate the log of the probability density
+            function.
+
+        Returns
+        -------
+        logpdf : array_like, shape (*size, *shape)
+            Log of the probability density function evaluated at x.
+        """
         x = np.array(x)
+        size = x.shape[:-1]
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
-        dx = x.reshape(*x.shape[:-1], *np.ones_like(self.shape), self.dim) - mean
-        invcov = np.linalg.inv(self.cov)
+        dx = x.reshape(*size, *np.ones_like(self.shape), self.dim) - mean
+        invcov = inv(self.cov)
         chi2 = np.einsum("...j,...jk,...k->...", dx, invcov, dx)
         norm = -logdet(2 * np.pi * self.cov) / 2
         return norm - chi2 / 2
 
     def rvs(self, size=1):
-        """Random variates."""
+        """Draw random samples from the distribution.
+
+        Parameters
+        ----------
+        size : int or tuple of ints, optional, default=1
+            Number of samples to draw.
+
+        Returns
+        -------
+        rvs : ndarray, shape (*size, *shape, dim)
+            Random samples from the distribution.
+        """
         size = np.atleast_1d(size)
         x = np.random.randn(*size, *self.shape, self.dim)
         L = np.linalg.cholesky(self.cov)
@@ -87,15 +98,16 @@ class multivariate_normal(object):
 
         Parameters
         ----------
-        A : array_like, shape (..., k, n)
+        A : array_like, shape (..., k, dim)
             Linear transformation matrix.
         b : array_like, shape (..., k), optional
             Linear transformation vector.
 
+        where self.shape is broadcastable to ...
+
         Returns
         -------
-        predicted distribution: multivariate_normal
-        shape (..., k)
+        multivariate_normal shape (..., k)
         """
         mean = np.einsum("...qn,...n->...q", A, self.mean) + b
         cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
@@ -111,7 +123,7 @@ class multivariate_normal(object):
 
         Returns
         -------
-        marginalised distribution: multivariate_normal
+        multivariate_normal shape (*shape, dim - len(indices))
         """
         i = self._bar(indices)
         mean = self.mean[..., i]
@@ -125,12 +137,14 @@ class multivariate_normal(object):
         ----------
         indices : array_like
             Indices to condition over.
-        values : array_like
+        values : array_like shape (..., len(indices))
             Values to condition on.
+
+        where where self.shape is broadcastable to ...
 
         Returns
         -------
-        conditional distribution: multivariate_normal
+        multivariate_normal shape (..., len(indices))
         """
         i = self._bar(indices)
         k = indices
@@ -165,16 +179,18 @@ class multivariate_normal(object):
 
         Parameters
         ----------
-        x : array_like, shape (..., d)
+        x : array_like, shape (..., dim)
             if inverse: x is theta
             else: x is x
         inverse : bool, optional, default=False
             If True: compute the inverse transformation from physical to
             hypercube space.
 
+        where self.shape is broadcastable to ...
+
         Returns
         -------
-        transformed x or theta: array_like, shape (..., d)
+        transformed x or theta: array_like, shape (..., dim)
         """
         x = np.array(x)
         L = np.linalg.cholesky(self.cov)
@@ -202,7 +218,7 @@ class mixture_normal(multivariate_normal):
     cov: array_like, shape (..., n, dim, dim)
         Covariance matrix of each component.
 
-    logA: array_like, shape (..., n,)
+    logA: array_like, shape (..., n)
         Log of the mixing weights.
     """
 
@@ -217,13 +233,20 @@ class mixture_normal(multivariate_normal):
             self.logA.shape, self.mean.shape[:-1], self.cov.shape[:-2], self._shape
         )
 
-    @shape.setter
-    def shape(self, shape):
-        self._shape = shape
-        self._shape = self.shape
-
     def logpdf(self, x):
-        """Log of the probability density function."""
+        """Log of the probability density function.
+
+        Parameters
+        ----------
+        x : array_like, shape (*size, dim)
+            Points at which to evaluate the log of the probability density
+            function.
+
+        Returns
+        -------
+        logpdf : array_like, shape (*size, *shape[:-1])
+            Log of the probability density function evaluated at x.
+        """
         logpdf = super().logpdf(x)
         if self.shape == ():
             return logpdf
@@ -231,7 +254,16 @@ class mixture_normal(multivariate_normal):
         return logsumexp(logpdf + logA, axis=-1)
 
     def rvs(self, size=1):
-        """Random variates."""
+        """Draw random samples from the distribution.
+
+        Parameters
+        ----------
+        size : int or tuple of ints, optional, default=1
+
+        Returns
+        -------
+        rvs : array_like, shape (*size, *shape[:-1], dim)
+        """
         if self.shape == ():
             return super().rvs(size)
         size = np.atleast_1d(np.array(size, dtype=int))
@@ -246,7 +278,7 @@ class mixture_normal(multivariate_normal):
         x = np.random.randn(*size, *self.shape[:-1], self.dim)
         return mean + np.einsum("...ij,...j->...i", L, x)
 
-    def predict(self, A, b=None):
+    def predict(self, A, b=0):
         """Predict the mean and covariance of a linear transformation.
 
         if:         x ~ mixN(mu, Sigma, logA)
@@ -254,17 +286,22 @@ class mixture_normal(multivariate_normal):
 
         Parameters
         ----------
-        A : array_like, shape (k, q, n)
+        A : array_like, shape (..., k, dim)
             Linear transformation matrix.
-        b : array_like, shape (k, q,), optional
+        b : array_like, shape (..., k), optional
             Linear transformation vector.
+
+        where self.shape[:-1] is broadcastable to ...
 
         Returns
         -------
-        predicted distribution: multivariate_normal
+        mixture_normal shape (..., k)
         """
-        dist = super().predict(A, b)
-        return multivariate_normal(self.logA, dist.mean, dist.cov, dist.shape)
+        if b is 0:
+            dist = super().predict(A[..., None, :, :])
+        else:
+            dist = super().predict(A[..., None, :, :], b[..., None, :])
+        return mixture_normal(self.logA, dist.mean, dist.cov, dist.shape)
 
     def marginalise(self, indices):
         """Marginalise over indices.
@@ -276,7 +313,7 @@ class mixture_normal(multivariate_normal):
 
         Returns
         -------
-        marginalised distribution: mixture_normal
+        mixture_normal shape (*shape, dim - len(indices))
         """
         dist = super().marginalise(indices)
         return mixture_normal(self.logA, dist.mean, dist.cov, self.shape)
@@ -288,12 +325,14 @@ class mixture_normal(multivariate_normal):
         ----------
         indices : array_like
             Indices to condition over.
-        values : array_like
+        values : array_like shape (..., len(indices))
             Values to condition on.
+
+        where self.shape[:-1] is broadcastable to ...
 
         Returns
         -------
-        conditional distribution: mixture_normal
+        mixture_normal shape (*shape, len(indices))
         """
         dist = super().condition(indices, values[..., None, :])
         marginal = self.marginalise(self._bar(indices))
@@ -320,6 +359,8 @@ class mixture_normal(multivariate_normal):
         inverse : bool, optional, default=False
             If True: compute the inverse transformation from physical to
             hypercube space.
+
+        where self.shape[:-1] is broadcastable to ...
 
         Returns
         -------
