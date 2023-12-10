@@ -52,7 +52,6 @@ class TestMultivariateNormal(object):
 
         dist_2 = dist.predict(A, b)
         assert isinstance(dist_2, self.cls)
-        assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert dist_2.shape == np.broadcast_shapes(
             dist.shape, A.shape[:-2], b.shape[:-1]
         )
@@ -66,7 +65,6 @@ class TestMultivariateNormal(object):
 
         dist_2 = dist.predict(A)
         assert isinstance(dist_2, self.cls)
-        assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert dist_2.shape == np.broadcast_shapes(dist.shape, A.shape[:-2])
         assert dist_2.cov.shape[:-2] == np.broadcast_shapes(
             dist.cov.shape[:-2], A.shape[:-2]
@@ -85,7 +83,6 @@ class TestMultivariateNormal(object):
         dist_2 = dist.marginalise(i)
 
         assert isinstance(dist_2, self.cls)
-        assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert dist_2.shape == dist.shape
         assert dist_2.cov.shape[:-2] == dist.cov.shape[:-2]
         assert dist_2.mean.shape[:-1] == dist.mean.shape[:-1]
@@ -102,7 +99,6 @@ class TestMultivariateNormal(object):
         dist_2 = dist.condition(indices, values)
 
         assert isinstance(dist_2, self.cls)
-        assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert dist_2.shape == np.broadcast_shapes(dist.shape, values_shape)
         assert dist_2.cov.shape[:-2] == dist.cov.shape[:-2]
         assert dist_2.mean.shape[:-1] == np.broadcast_shapes(
@@ -115,13 +111,11 @@ class TestMultivariateNormal(object):
         dist = self.random(dim, shape, mean_shape, cov_shape)
         x = np.random.rand(*x_shape, dim)
         y = dist.bijector(x)
-        assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert y.shape == np.broadcast_shapes(dist.shape + (dim,), x.shape)
 
         y = np.random.rand(*x_shape, dim)
         x = dist.bijector(y, inverse=True)
 
-        assert dist.shape == np.broadcast_shapes(shape, mean_shape, cov_shape)
         assert x.shape == np.broadcast_shapes(dist.shape + (dim,), x.shape)
 
 

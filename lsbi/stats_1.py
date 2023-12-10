@@ -63,10 +63,6 @@ class multivariate_normal(object):
         """Dimension of the distribution."""
         return self.mean.shape[-1]
 
-    def _flatten(self, x, *args):
-        """Flatten the distribution parameters."""
-        return np.broadcast_to(x, (*self.shape, *args)).reshape(-1, *args)
-
     def logpdf(self, x):
         """Log of the probability density function."""
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
@@ -159,28 +155,15 @@ class multivariate_normal(object):
         transformed x or theta: array_like, shape (..., d)
         """
         L = np.linalg.cholesky(self.cov)
-        old_shape = self.shape
-        self.shape = np.broadcast_shapes(x.shape[:-1], self.shape)
+        mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
         if inverse:
-            invL = inv(L)
-            y = np.einsum(
-                "ajk,ak->aj",
-                self._flatten(invL, self.dim, self.dim),
-                self._flatten(x, self.dim) - self._flatten(self.mean, self.dim),
-            )
-            y = y.reshape(*self.shape, self.dim)
-            self.shape = old_shape
+            invL = np.broadcast_to(inv(L), (*self.shape, self.dim, self.dim))
+            y = np.einsum("...jk,...k->...j", invL, x - mean)
             return scipy.stats.norm.cdf(y)
         else:
+            L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
             y = scipy.stats.norm.ppf(x)
-            z = self._flatten(self.mean, self.dim) + np.einsum(
-                "ajk,ak->aj",
-                self._flatten(L, self.dim, self.dim),
-                self._flatten(y, self.dim),
-            )
-            z = z.reshape(*self.shape, self.dim)
-            self.shape = old_shape
-            return z
+            return mean + np.einsum("...jk,...k->...j", L, y)
 
     def predict(self, A, b=0):
         """Predict the mean and covariance of a linear transformation.
