@@ -3,7 +3,6 @@ import numpy as np
 import scipy.stats
 from numpy.linalg import inv
 from scipy.special import erf, logsumexp
-from scipy.stats._multivariate import multivariate_normal_frozen
 
 from lsbi.utils import bisect, logdet
 
@@ -296,10 +295,10 @@ class mixture_normal(multivariate_normal):
         -------
         conditional distribution: mixture_normal
         """
-        dist = super().condition(indices, values)
+        dist = super().condition(indices, values[..., None, :])
         marginal = self.marginalise(self._bar(indices))
-        marginal.mean = marginal.mean - values
-        logA = super(marginal.__class__, marginal).logpdf(0.0)
+        marginal.mean = marginal.mean - values[..., None, :]
+        logA = super(marginal.__class__, marginal).logpdf(np.zeros(marginal.dim))
         logA -= logsumexp(logA, axis=-1)[..., None]
         logA += self.logA
         return mixture_normal(logA, dist.mean, dist.cov, dist.shape)
@@ -327,31 +326,20 @@ class mixture_normal(multivariate_normal):
         transformed x or theta: array_like, shape (..., d)
         """
         x = np.array(x)
-        theta = np.empty_like(x)
+        theta = np.empty(np.broadcast_shapes(x.shape, self.shape[:-1] + (self.dim,)))
+
         if inverse:
             theta[:] = x
-            x = np.empty_like(x)
+            x = np.empty(np.broadcast_shapes(x.shape, self.shape[:-1] + (self.dim,)))
 
-        for i in range(x.shape[-1]):
-            m = self.means[..., :, i] + np.einsum(
-                "ia,iab,...ib->...i",
-                self.covs[:, i, :i],
-                inv(self.covs[:, :i, :i]),
-                theta[..., None, :i] - self.means[:, :i],
+        for i in range(self.dim):
+            dist = self.marginalise(np.s_[i + 1 :]).condition(
+                np.s_[:-1], theta[..., :i]
             )
-            c = self.covs[:, i, i] - np.einsum(
-                "ia,iab,ib->i",
-                self.covs[:, i, :i],
-                inv(self.covs[:, :i, :i]),
-                self.covs[:, i, :i],
-            )
-            dist = mixture_normal(self.means[:, :i], self.covs[:, :i, :i], self.logA)
-            logA = (
-                self.logA
-                + dist.logpdf(theta[..., :i], reduce=False, keepdims=True)
-                - dist.logpdf(theta[..., :i], keepdims=True)[..., None]
-            )
-            A = np.exp(logA - logsumexp(logA, axis=-1)[..., None])
+            m = dist.mean[..., 0]
+            c = dist.cov[..., 0, 0]
+            A = np.exp(dist.logA - logsumexp(dist.logA, axis=-1)[..., None])
+            m = np.broadcast_to(m, dist.shape)
 
             def f(t):
                 return (A * 0.5 * (1 + erf((t[..., None] - m) / np.sqrt(2 * c)))).sum(

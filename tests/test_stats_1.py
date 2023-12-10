@@ -174,25 +174,28 @@ class TestMixtureNormal(object):
     def test_condition(
         self, dim, shape, logA_shape, mean_shape, cov_shape, p, values_shape
     ):
-        dim = 2
-        shape = (4,)
-        logA_shape = (3, 4)
-        mean_shape = ()
-        cov_shape = (3, 4)
-        p = 1
-        values_shape = (2, 3, 4)
-
         if dim <= p:
             pytest.skip("dim <= p")
         indices = np.random.choice(dim, p, replace=False)
-        values = np.random.randn(*values_shape, p)
+        values = np.random.randn(*values_shape[:-1], p)
         dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
         dist_2 = dist.condition(indices, values)
 
         assert isinstance(dist_2, self.cls)
-        assert dist_2.shape == np.broadcast_shapes(dist.shape, values_shape)
+        assert dist_2.shape == np.broadcast_shapes(dist.shape, values_shape[:-1] + (1,))
         assert dist_2.cov.shape[:-2] == dist.cov.shape[:-2]
         assert dist_2.mean.shape[:-1] == np.broadcast_shapes(
-            dist.mean.shape[:-1], dist.cov.shape[:-2], values_shape
+            dist.mean.shape[:-1], dist.cov.shape[:-2], values_shape[:-1] + (1,)
         )
         assert dist_2.dim == dim - p
+
+    @pytest.mark.parametrize("x_shape", shapes)
+    def test_bijector(self, dim, shape, logA_shape, mean_shape, cov_shape, x_shape):
+        dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
+        x = np.random.rand(*x_shape[:-1], dim)
+        y = dist.bijector(x)
+        assert y.shape == np.broadcast_shapes(x.shape, dist.shape[:-1] + (dim,))
+
+        y = np.random.rand(*x_shape[:-1], dim)
+        x = dist.bijector(y, inverse=True)
+        assert x.shape == np.broadcast_shapes(y.shape, dist.shape[:-1] + (dim,))
