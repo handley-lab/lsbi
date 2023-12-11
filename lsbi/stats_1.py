@@ -93,7 +93,7 @@ class multivariate_normal(object):
         L = np.linalg.cholesky(self.cov)
         return self.mean + np.einsum("...jk,...k->...j", L, x)
 
-    def predict(self, A, b=0):
+    def predict(self, A, b=np.zeros(1)):
         """Predict the mean and covariance of a linear transformation.
 
         if:         x ~ N(mu, Sigma)
@@ -281,7 +281,7 @@ class mixture_normal(multivariate_normal):
         x = np.random.randn(*size, *self.shape[:-1], self.dim)
         return mean + np.einsum("...ij,...j->...i", L, x)
 
-    def predict(self, A, b=0):
+    def predict(self, A, b=np.zeros(1)):
         """Predict the mean and covariance of a linear transformation.
 
         if:         x ~ mixN(mu, Sigma, logA)
@@ -300,10 +300,9 @@ class mixture_normal(multivariate_normal):
         -------
         mixture_normal shape (..., k)
         """
-        if b == 0:
-            dist = super().predict(A[..., None, :, :])
-        else:
-            dist = super().predict(A[..., None, :, :], b[..., None, :])
+        A = np.array(A)
+        b = np.array(b)
+        dist = super().predict(A[..., None, :, :], b[..., None, :])
         return mixture_normal(self.logA, dist.mean, dist.cov, dist.shape)
 
     def marginalise(self, indices):
