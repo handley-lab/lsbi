@@ -320,17 +320,17 @@ class mixture_normal(multivariate_normal):
         p = np.exp(self.logA - logsumexp(self.logA, axis=-1)[..., None])
         p = np.broadcast_to(p, self.shape)
         i = choice(size, p)
+        mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
+        mean = np.choose(i[..., None], np.moveaxis(mean, -2, 0))
+        x = np.random.randn(*size, *self.shape[:-1], self.dim)
         if len(np.shape(self.cov)) > 1:
             L = cholesky(self.cov)
             L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
             L = np.choose(i[..., None, None], np.moveaxis(L, -3, 0))
-            mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
-            mean = np.choose(i[..., None], np.moveaxis(mean, -2, 0))
-            x = np.random.randn(*size, *self.shape[:-1], self.dim)
             return mean + np.einsum("...ij,...j->...i", L, x)
+        elif len(np.shape(self.cov)) == 1:
+            return mean + np.choose(i[..., None], np.sqrt(self.cov)) * x
         else:
-            # TODO Fix this for self.cov and self.logA
-            x = np.random.randn(*size, *self.shape[:-1], self.dim)
             return mean + np.sqrt(self.cov) * x
 
     def predict(self, A, b=0):
@@ -432,8 +432,8 @@ class mixture_normal(multivariate_normal):
             dist = self.marginalise(np.s_[i + 1 :]).condition(
                 np.s_[:-1], theta[..., :i]
             )
-            m = dist.mean[..., 0]
-            c = dist.cov[..., 0, 0]
+            m = np.atleast_1d(dist.mean)[..., 0]
+            c = np.atleast_2d(dist.cov)[..., 0, 0]
             A = np.exp(dist.logA - logsumexp(dist.logA, axis=-1)[..., None])
             m = np.broadcast_to(m, dist.shape)
 
