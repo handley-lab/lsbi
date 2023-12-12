@@ -195,13 +195,15 @@ class multivariate_normal(object):
                 inv(self.cov[..., k, :][..., :, k]),
                 self.cov[..., k, :][..., :, i],
             )
+            return multivariate_normal(mean, cov, self.shape, sum(i))
         else:
             mean = mean_i
             if len(np.shape(self.cov)) == 1:
                 cov = self.cov[i]
             else:
                 cov = self.cov
-        return multivariate_normal(mean, cov, self.shape, sum(i))
+            shape = np.broadcast_shapes(self.shape, values.shape[:-1])
+            return multivariate_normal(mean, cov, shape, sum(i))
 
     def _bar(self, indices):
         """Return the indices not in the given indices."""
@@ -239,7 +241,7 @@ class multivariate_normal(object):
             if len(np.shape(self.cov)) > 1:
                 y = np.einsum("...jk,...k->...j", inv(cholesky(self.cov)), x - mean)
             else:
-                y = (x - mean) / sqrt(self.cov)
+                y = (x - mean) / np.sqrt(self.cov)
             return scipy.stats.norm.cdf(y)
         else:
             y = scipy.stats.norm.ppf(x)
@@ -312,20 +314,24 @@ class mixture_normal(multivariate_normal):
         -------
         rvs : array_like, shape (*size, *shape[:-1], dim)
         """
-        # TODO Fix this for self.cov and self.logA
         if self.shape == ():
             return super().rvs(size)
         size = np.atleast_1d(np.array(size, dtype=int))
         p = np.exp(self.logA - logsumexp(self.logA, axis=-1)[..., None])
         p = np.broadcast_to(p, self.shape)
         i = choice(size, p)
-        L = cholesky(self.cov)
-        L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
-        L = np.choose(i[..., None, None], np.moveaxis(L, -3, 0))
-        mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
-        mean = np.choose(i[..., None], np.moveaxis(mean, -2, 0))
-        x = np.random.randn(*size, *self.shape[:-1], self.dim)
-        return mean + np.einsum("...ij,...j->...i", L, x)
+        if len(np.shape(self.cov)) > 1:
+            L = cholesky(self.cov)
+            L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
+            L = np.choose(i[..., None, None], np.moveaxis(L, -3, 0))
+            mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
+            mean = np.choose(i[..., None], np.moveaxis(mean, -2, 0))
+            x = np.random.randn(*size, *self.shape[:-1], self.dim)
+            return mean + np.einsum("...ij,...j->...i", L, x)
+        else:
+            # TODO Fix this for self.cov and self.logA
+            x = np.random.randn(*size, *self.shape[:-1], self.dim)
+            return mean + np.sqrt(self.cov) * x
 
     def predict(self, A, b=0):
         """Predict the mean and covariance of a linear transformation.
