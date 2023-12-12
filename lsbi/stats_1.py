@@ -134,7 +134,7 @@ class multivariate_normal(object):
                 cov = A[:, None] * self.cov * A
             else:
                 cov = A * self.cov * A
-        dim = np.max([*np.shape(mean)[-1:], *np.shape(cov)[-2:], -1])
+        dim = np.max([*np.shape(A)[-2:-1], *np.shape(b)[-1:], -1])
         if dim == -1:
             dim = self.dim
         return multivariate_normal(mean, cov, self.shape, dim)
@@ -343,7 +343,7 @@ class mixture_normal(multivariate_normal):
         else:
             return mean + np.sqrt(self.cov) * x
 
-    def predict(self, A, b=0):
+    def predict(self, A=1, b=0):
         """Predict the mean and covariance of a linear transformation.
 
         if:         x ~ mixN(mu, Sigma, logA)
@@ -362,10 +362,12 @@ class mixture_normal(multivariate_normal):
         -------
         mixture_normal shape (..., k)
         """
-        dist = super().predict(
-            np.expand_dims(np.atleast_2d(A), axis=-3),
-            np.expand_dims(np.atleast_1d(b), axis=-2),
-        )
+        # TODO this is not what we want
+        if len(np.shape(A)) > 1:
+            A = np.expand_dims(A, axis=-3)
+        if len(np.shape(b)) > 0:
+            b = np.expand_dims(b, axis=-2)
+        dist = super().predict(A, b)
         return mixture_normal(self.logA, dist.mean, dist.cov, dist.shape, dist.dim)
 
     def marginalise(self, indices):

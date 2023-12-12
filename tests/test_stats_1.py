@@ -5,7 +5,7 @@ from lsbi.stats_1 import mixture_normal, multivariate_normal
 
 shapes = [(2, 3, 4), (3, 4), (4,), ()]
 sizes = [(8, 7, 6), (7, 6), (6,), ()]
-dims = [1, 5]
+dims = [1, 2, 5]
 
 
 @pytest.mark.parametrize("dim", dims)
@@ -55,14 +55,19 @@ class TestMultivariateNormal(object):
     @pytest.mark.parametrize("b_shape", shapes + ["scalar"])
     @pytest.mark.parametrize("k", dims)
     def test_predict(self, dim, shape, mean_shape, cov_shape, k, A_shape, b_shape):
-        dim = 2
-        shape = (2, 3, 4)
-        mean_shape = (4,)
-        cov_shape = (2, 3, 4)
-        k = 1
-        A_shape = (2, 3, 4)
-        b_shape = (2, 3, 4)
+        if (A_shape == "vector" or A_shape == "scalar") and (
+            b_shape != "scalar" or k != dim
+        ):
+            pytest.skip("Non broadcastable A and b")
+
         dist = self.random(dim, shape, mean_shape, cov_shape)
+
+        if b_shape == "scalar":
+            b = np.random.randn()
+            b_shape = shape
+        else:
+            b = np.random.randn(*b_shape, k)
+
         if A_shape == "scalar":
             A = np.random.randn()
             A_shape = shape
@@ -71,12 +76,6 @@ class TestMultivariateNormal(object):
             A_shape = shape
         else:
             A = np.random.randn(*A_shape, k, dim)
-
-        if b_shape == "scalar":
-            b = np.random.randn()
-            b_shape = shape
-        else:
-            b = np.random.randn(*b_shape, k)
 
         dist_2 = dist.predict(A, b)
         assert isinstance(dist_2, self.cls)
@@ -151,11 +150,11 @@ class TestMultivariateNormal(object):
         assert x.shape == np.broadcast_shapes(dist.shape + (dim,), x.shape)
 
 
+@pytest.mark.parametrize("dim", dims)
 @pytest.mark.parametrize("shape", shapes)
 @pytest.mark.parametrize("logA_shape", shapes)
 @pytest.mark.parametrize("mean_shape", shapes + ["scalar"])
 @pytest.mark.parametrize("cov_shape", shapes + ["scalar", "vector"])
-@pytest.mark.parametrize("dim", dims)
 class TestMixtureNormal(object):
     cls = mixture_normal
 
@@ -207,7 +206,19 @@ class TestMixtureNormal(object):
     def test_predict(
         self, dim, shape, logA_shape, mean_shape, cov_shape, k, A_shape, b_shape
     ):
+        if (A_shape == "vector" or A_shape == "scalar") and (
+            b_shape != "scalar" or k != dim
+        ):
+            pytest.skip("Non broadcastable A and b")
+
         dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
+
+        if b_shape == "scalar":
+            b = np.random.randn()
+            b_shape = shape
+        else:
+            b = np.random.randn(*b_shape[:-1], k)
+
         if A_shape == "scalar":
             A = np.random.randn()
             A_shape = shape
@@ -216,12 +227,6 @@ class TestMixtureNormal(object):
             A_shape = shape
         else:
             A = np.random.randn(*A_shape[:-1], k, dim)
-
-        if b_shape == "scalar":
-            b = np.random.randn()
-            b_shape = shape
-        else:
-            b = np.random.randn(*b_shape[:-1], k)
 
         dist_2 = dist.predict(A, b)
         assert isinstance(dist_2, self.cls)
