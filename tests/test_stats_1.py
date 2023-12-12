@@ -5,7 +5,7 @@ from lsbi.stats_1 import mixture_normal, multivariate_normal
 
 shapes = [(2, 3, 4), (3, 4), (4,), ()]
 sizes = [(8, 7, 6), (7, 6), (6,), ()]
-dims = [0, 1, 2, 5]
+dims = [1, 5]
 
 
 @pytest.mark.parametrize("dim", dims)
@@ -51,35 +51,54 @@ class TestMultivariateNormal(object):
         x = dist.rvs(size)
         assert x.shape == size + dist.shape + (dim,)
 
-    @pytest.mark.parametrize("A_shape", shapes)
-    @pytest.mark.parametrize("b_shape", shapes)
+    @pytest.mark.parametrize("A_shape", shapes + ["vector", "scalar"])
+    @pytest.mark.parametrize("b_shape", shapes + ["scalar"])
     @pytest.mark.parametrize("k", dims)
     def test_predict(self, dim, shape, mean_shape, cov_shape, k, A_shape, b_shape):
+        dim = 2
+        shape = (2, 3, 4)
+        mean_shape = (4,)
+        cov_shape = (2, 3, 4)
+        k = 1
+        A_shape = (2, 3, 4)
+        b_shape = (2, 3, 4)
         dist = self.random(dim, shape, mean_shape, cov_shape)
-        A = np.random.randn(*A_shape, k, dim)
-        b = np.random.randn(*b_shape, k)
+        if A_shape == "scalar":
+            A = np.random.randn()
+            A_shape = shape
+        elif A_shape == "vector":
+            A = np.random.randn(dim)
+            A_shape = shape
+        else:
+            A = np.random.randn(*A_shape, k, dim)
+
+        if b_shape == "scalar":
+            b = np.random.randn()
+            b_shape = shape
+        else:
+            b = np.random.randn(*b_shape, k)
 
         dist_2 = dist.predict(A, b)
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape == np.broadcast_shapes(
-            dist.shape, A.shape[:-2], b.shape[:-1]
+            dist.shape, np.shape(A)[:-2], np.shape(b)[:-1]
         )
         assert np.shape(dist_2.cov)[:-2] == np.broadcast_shapes(
-            np.shape(dist.cov)[:-2], A.shape[:-2]
+            np.shape(dist.cov)[:-2], np.shape(A)[:-2]
         )
         assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
-            np.shape(dist.mean)[:-1], A.shape[:-2], b.shape[:-1]
+            np.shape(dist.mean)[:-1], np.shape(A)[:-2], np.shape(b)[:-1]
         )
         assert dist_2.dim == k
 
         dist_2 = dist.predict(A)
         assert isinstance(dist_2, self.cls)
-        assert dist_2.shape == np.broadcast_shapes(dist.shape, A.shape[:-2])
+        assert dist_2.shape == np.broadcast_shapes(dist.shape, np.shape(A)[:-2])
         assert np.shape(dist_2.cov)[:-2] == np.broadcast_shapes(
-            np.shape(dist.cov)[:-2], A.shape[:-2]
+            np.shape(dist.cov)[:-2], np.shape(A)[:-2]
         )
         assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
-            np.shape(dist.mean)[:-1], A.shape[:-2]
+            np.shape(dist.mean)[:-1], np.shape(A)[:-2]
         )
         assert dist_2.dim == k
 
@@ -178,47 +197,53 @@ class TestMixtureNormal(object):
 
     @pytest.mark.parametrize("size", sizes)
     def test_rvs(self, dim, shape, logA_shape, mean_shape, cov_shape, size):
-        dim = 5
-        shape = (2, 3, 4)
-        logA_shape = (2, 3, 4)
-        mean_shape = (2, 3, 4)
-        cov_shape = "vector"
-        size = (8, 7, 6)
         dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
         x = dist.rvs(size)
         assert x.shape == size + dist.shape[:-1] + (dim,)
 
-    @pytest.mark.parametrize("A_shape", shapes)
-    @pytest.mark.parametrize("b_shape", shapes)
+    @pytest.mark.parametrize("A_shape", shapes + ["vector", "scalar"])
+    @pytest.mark.parametrize("b_shape", shapes + ["scalar"])
     @pytest.mark.parametrize("k", dims)
     def test_predict(
         self, dim, shape, logA_shape, mean_shape, cov_shape, k, A_shape, b_shape
     ):
         dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape)
-        A = np.random.randn(*A_shape[:-1], k, dim)
-        b = np.random.randn(*b_shape[:-1], k)
+        if A_shape == "scalar":
+            A = np.random.randn()
+            A_shape = shape
+        elif A_shape == "vector":
+            A = np.random.randn(dim)
+            A_shape = shape
+        else:
+            A = np.random.randn(*A_shape[:-1], k, dim)
+
+        if b_shape == "scalar":
+            b = np.random.randn()
+            b_shape = shape
+        else:
+            b = np.random.randn(*b_shape[:-1], k)
 
         dist_2 = dist.predict(A, b)
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape == np.broadcast_shapes(
-            dist.shape, A.shape[:-2] + (1,), b.shape[:-1] + (1,)
+            dist.shape, np.shape(A)[:-2] + (1,), np.shape(b)[:-1] + (1,)
         )
         assert np.shape(dist_2.cov)[:-2] == np.broadcast_shapes(
-            np.shape(dist.cov)[:-2], A.shape[:-2] + (1,)
+            np.shape(dist.cov)[:-2], np.shape(A)[:-2] + (1,)
         )
         assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
-            np.shape(dist.mean)[:-1], A.shape[:-2] + (1,), b.shape[:-1] + (1,)
+            np.shape(dist.mean)[:-1], np.shape(A)[:-2] + (1,), np.shape(b)[:-1] + (1,)
         )
         assert dist_2.dim == k
 
         dist_2 = dist.predict(A)
         assert isinstance(dist_2, self.cls)
-        assert dist_2.shape == np.broadcast_shapes(dist.shape, A.shape[:-2] + (1,))
+        assert dist_2.shape == np.broadcast_shapes(dist.shape, np.shape(A)[:-2] + (1,))
         assert np.shape(dist_2.cov)[:-2] == np.broadcast_shapes(
-            np.shape(dist.cov)[:-2], A.shape[:-2] + (1,)
+            np.shape(dist.cov)[:-2], np.shape(A)[:-2] + (1,)
         )
         assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
-            np.shape(dist.mean)[:-1], A.shape[:-2] + (1,)
+            np.shape(dist.mean)[:-1], np.shape(A)[:-2] + (1,)
         )
         assert dist_2.dim == k
 

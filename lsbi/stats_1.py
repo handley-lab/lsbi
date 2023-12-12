@@ -103,7 +103,7 @@ class multivariate_normal(object):
         else:
             return self.mean + np.sqrt(self.cov) * x
 
-    def predict(self, A, b=0):
+    def predict(self, A=1, b=0):
         """Predict the mean and covariance of a linear transformation.
 
         if:         x ~ N(mu, Sigma)
@@ -122,12 +122,22 @@ class multivariate_normal(object):
         -------
         multivariate_normal shape (..., k)
         """
-        mean = np.einsum("...qn,...n->...q", A, np.atleast_1d(self.mean)) + b
-        if len(np.shape(self.cov)) > 1:
-            cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
+        if len(np.shape(A)) > 1:
+            mean = np.einsum("...qn,...n->...q", A, np.atleast_1d(self.mean)) + b
+            if len(np.shape(self.cov)) > 1:
+                cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
+            else:
+                cov = np.einsum("...qn,...pn->...qp", A, A * self.cov)
         else:
-            cov = np.einsum("...qn,...pn->...qp", A, A * self.cov)
-        return multivariate_normal(mean, cov, self.shape, A.shape[-2])
+            mean = A * self.mean + b
+            if len(np.shape(A)) == 1:
+                cov = A[:, None] * self.cov * A
+            else:
+                cov = A * self.cov * A
+        dim = np.max([*np.shape(mean)[-1:], *np.shape(cov)[-2:], -1])
+        if dim == -1:
+            dim = self.dim
+        return multivariate_normal(mean, cov, self.shape, dim)
 
     def marginalise(self, indices):
         """Marginalise over indices.
