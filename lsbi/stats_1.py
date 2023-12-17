@@ -338,9 +338,8 @@ class mixture_normal(multivariate_normal):
             L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
             L = np.choose(i[..., None, None], np.moveaxis(L, -3, 0))
             return mean + np.einsum("...ij,...j->...i", L, x)
-        elif len(np.shape(self.cov)) == 1:
-            return mean + np.choose(i[..., None], np.sqrt(self.cov)) * x
         else:
+            # Do we want the ability to broadcast scalars over mixtures?
             return mean + np.sqrt(self.cov) * x
 
     def predict(self, A=1, b=0):
