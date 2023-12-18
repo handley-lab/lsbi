@@ -130,8 +130,12 @@ class multivariate_normal(object):
                 cov = np.einsum("...qn,...pn->...qp", A, A * self.cov)
         else:
             mean = A * self.mean + b
-            if len(np.shape(A)) == 1:
-                cov = A[:, None] * self.cov * A
+            if len(np.shape(self.cov)) > 1:
+                cov = (
+                    self.cov
+                    * np.atleast_1d(A)[..., None]
+                    * np.atleast_1d(A)[..., None, :]
+                )
             else:
                 cov = A * self.cov * A
         dim = np.max([*np.shape(A)[-2:-1], *np.shape(b)[-1:], -1])
@@ -152,17 +156,12 @@ class multivariate_normal(object):
         multivariate_normal shape (*shape, dim - len(indices))
         """
         i = self._bar(indices)
-        if len(np.shape(self.mean)) > 0:
-            mean = self.mean[..., i]
-        else:
-            mean = self.mean
+        mean = (np.ones(self.dim) * self.mean)[..., i]
 
         if len(np.shape(self.cov)) > 1:
             cov = self.cov[..., i, :][..., i]
-        elif len(np.shape(self.cov)) == 1:
-            cov = self.cov[i]
         else:
-            cov = self.cov
+            cov = (np.ones(self.dim) * self.cov)[i]
 
         return multivariate_normal(mean, cov, self.shape, sum(i))
 
@@ -184,20 +183,14 @@ class multivariate_normal(object):
         """
         i = self._bar(indices)
         k = indices
-
-        if len(np.shape(self.mean)) > 0:
-            mean_i = self.mean[..., i]
-            mean_k = self.mean[..., k]
-        else:
-            mean_i = self.mean
-            mean_k = self.mean
+        mean = (np.ones(self.dim) * self.mean)[..., i]
 
         if len(np.shape(self.cov)) > 1:
-            mean = mean_i + np.einsum(
+            mean = mean + np.einsum(
                 "...ja,...ab,...b->...j",
                 self.cov[..., i, :][..., :, k],
                 inv(self.cov[..., k, :][..., :, k]),
-                values - mean_k,
+                values - (np.ones(self.dim) * self.mean)[..., k],
             )
             cov = self.cov[..., i, :][..., :, i] - np.einsum(
                 "...ja,...ab,...bk->...jk",
@@ -205,15 +198,12 @@ class multivariate_normal(object):
                 inv(self.cov[..., k, :][..., :, k]),
                 self.cov[..., k, :][..., :, i],
             )
-            return multivariate_normal(mean, cov, self.shape, sum(i))
+            shape = self.shape
         else:
-            mean = mean_i
-            if len(np.shape(self.cov)) == 1:
-                cov = self.cov[i]
-            else:
-                cov = self.cov
+            cov = (np.ones(self.dim) * self.cov)[i]
             shape = np.broadcast_shapes(self.shape, values.shape[:-1])
-            return multivariate_normal(mean, cov, shape, sum(i))
+
+        return multivariate_normal(mean, cov, shape, sum(i))
 
     def _bar(self, indices):
         """Return the indices not in the given indices."""
@@ -339,7 +329,6 @@ class mixture_normal(multivariate_normal):
             L = np.choose(i[..., None, None], np.moveaxis(L, -3, 0))
             return mean + np.einsum("...ij,...j->...i", L, x)
         else:
-            # Do we want the ability to broadcast scalars over mixtures?
             return mean + np.sqrt(self.cov) * x
 
     def predict(self, A=1, b=0):
@@ -361,7 +350,6 @@ class mixture_normal(multivariate_normal):
         -------
         mixture_normal shape (..., k)
         """
-        # TODO this is not what we want
         if len(np.shape(A)) > 1:
             A = np.expand_dims(A, axis=-3)
         if len(np.shape(b)) > 0:
