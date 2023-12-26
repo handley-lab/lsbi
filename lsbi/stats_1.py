@@ -1,4 +1,6 @@
 """Extensions to scipy.stats functions."""
+from copy import deepcopy
+
 import numpy as np
 import scipy.stats
 from numpy.linalg import cholesky, inv
@@ -83,12 +85,12 @@ class multivariate_normal(object):
             norm = -np.log(2 * np.pi * np.ones(self.dim) * self.cov).sum() / 2
         return norm - chi2 / 2
 
-    def rvs(self, size=1):
+    def rvs(self, size=()):
         """Draw random samples from the distribution.
 
         Parameters
         ----------
-        size : int or tuple of ints, optional, default=1
+        size : int or tuple of ints, optional, default=()
             Number of samples to draw.
 
         Returns
@@ -271,7 +273,7 @@ class mixture_normal(multivariate_normal):
 
     def __init__(self, logA=0, mean=0, cov=1, shape=(), dim=0):
         self.logA = logA
-        super().__init__(mean, cov, shape, dim)
+        super().__init__(mean=mean, cov=cov, shape=shape, dim=dim)
 
     @property
     def shape(self):
@@ -303,7 +305,7 @@ class mixture_normal(multivariate_normal):
         logA = self.logA - logsumexp(self.logA, axis=-1)[..., None]
         return logsumexp(logpdf + logA, axis=-1)
 
-    def rvs(self, size=1):
+    def rvs(self, size=()):
         """Draw random samples from the distribution.
 
         Parameters
@@ -315,7 +317,7 @@ class mixture_normal(multivariate_normal):
         rvs : array_like, shape (*size, *shape[:-1], dim)
         """
         if self.shape == ():
-            return super().rvs(size)
+            return super().rvs(size=size)
         size = np.atleast_1d(np.array(size, dtype=int))
         p = np.exp(self.logA - logsumexp(self.logA, axis=-1)[..., None])
         p = np.broadcast_to(p, self.shape)
@@ -389,12 +391,29 @@ class mixture_normal(multivariate_normal):
         mixture_normal shape (*shape, len(indices))
         """
         dist = super().condition(indices, values[..., None, :])
-        marginal = self.marginalise(self._bar(indices))
-        marginal.mean = marginal.mean - values[..., None, :]
-        logA = super(marginal.__class__, marginal).logpdf(np.zeros(marginal.dim))
+        logA = self.marginalise(self._bar(indices)).weights(values)
+        return mixture_normal(logA, dist.mean, dist.cov, dist.shape, dist.dim)
+
+    def weights(self, values):
+        """Compute the conditional weights of the mixture.
+
+        Parameters
+        ----------
+        values : array_like shape (..., dim)
+            Values to condition on.
+
+        where self.shape[:-1] is broadcastable to ...
+
+        Returns
+        -------
+        weights : array_like shape (*shape, n)
+        """
+        copy = deepcopy(self)
+        copy.mean = copy.mean - values[..., None, :]
+        logA = super(copy.__class__, copy).logpdf(np.zeros(copy.dim))
         logA -= logsumexp(logA, axis=-1)[..., None]
         logA += self.logA
-        return mixture_normal(logA, dist.mean, dist.cov, dist.shape, dist.dim)
+        return logA
 
     def bijector(self, x, inverse=False):
         """Bijector between U([0, 1])^d and the distribution.
