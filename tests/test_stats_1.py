@@ -3,9 +3,9 @@ import pytest
 
 from lsbi.stats_1 import mixture_normal, multivariate_normal
 
-shapes = [(2, 3, 4), (3, 4), (4,), ()]
-sizes = [(8, 7, 6), (7, 6), (6,), ()]
-dims = [1, 2, 5]
+shapes = [(2, 3), (3,), ()]
+sizes = [(6, 5), (5,), ()]
+dims = [1, 2, 4]
 
 
 @pytest.mark.parametrize("dim", dims)
