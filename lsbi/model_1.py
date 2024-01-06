@@ -3,7 +3,7 @@ import numpy as np
 from numpy.linalg import inv, solve
 
 from lsbi.stats_1 import mixture_normal, multivariate_normal
-from lsbi.utils import logdet
+from lsbi.utils import logdet, matrix
 
 
 class LinearModel(object):
@@ -123,11 +123,7 @@ class LinearModel(object):
         ----------
         theta : array_like, shape (k, n)
         """
-        if len(np.shape(self.M)) > 1:
-            M = self.M
-        else:
-            M = self.M * np.eye(self.d, self.n)
-
+        M = matrix(self.M, self.d, self.n)
         mu = self.m + np.einsum("...ja,...a->...j", M, theta)
         return multivariate_normal(mu, self.C, self.shape, self.d)
 
@@ -148,65 +144,35 @@ class LinearModel(object):
         ----------
         D : array_like, shape (d,)
         """
-        if len(np.shape(self.M)) > 1:
-            values = D - self.m - np.einsum("...ja,...a->...j", self.M, self.mu)
+        M = matrix(self.M, self.d, self.n)
 
-            if len(np.shape(self.C)) > 1:
-                MinvCM = np.einsum(
-                    "...aj,...ab,...bk->...jk", self.M, inv(self.C), self.M
-                )
-            else:
-                MinvCM = np.einsum(
-                    "...ja,...kb->...jk", self.M, self.M / np.array(self.C)[:, None]
-                )
-
-            if len(np.shape(self.Sigma)) > 1:
-                Sigma = inv(inv(self.Sigma) + MinvCM)
-            else:
-                Sigma = inv(np.eye(self.d) / self.Sigma + MinvCM)
-
-            if len(np.shape(self.C)) > 1:
-                mu = self.mu + np.einsum(
-                    "...ja,...ba,...bc,...c->...j", Sigma, self.M, inv(self.C), values
-                )
-            else:
-                mu = self.mu + np.einsum(
-                    "...ja,...ac,...c->...j",
-                    Sigma,
-                    self.M / np.array(self.C)[:, None],
-                    values,
-                )
+        if len(np.shape(self.C)) > 1:
+            MinvCM = np.einsum("...aj,...ab,...bk->...jk", M, inv(self.C), M)
         else:
-            values = D * np.ones(self.d)
-            values[: self.n] = values[: self.n] - self.m - self.M * self.mu
+            MinvCM = np.einsum(
+                "...aj,...bk->...jk", M, M / np.atleast_1d(self.C)[:, None]
+            )
 
-            if len(np.shape(self.C)) > 1:
-                MinvCM = (
-                    np.atleast_1d(self.M)[..., None]
-                    * inv(self.C)
-                    * np.atleast_1d(self.M)[..., None, :]
-                )
-                if len(np.shape(self.Sigma)) > 1:
-                    Sigma = inv(inv(self.Sigma) + MinvCM)
-                else:
-                    Sigma = inv(np.eye(self.d) / self.Sigma + MinvCM)
+        if len(np.shape(self.Sigma)) > 1:
+            Sigma = inv(inv(self.Sigma) + MinvCM)
+        else:
+            Sigma = inv(np.eye(self.n) / self.Sigma + MinvCM)
 
-                mu = self.mu + np.einsum(
-                    "...ja,...ba,...bc,...c->...j", Sigma, self.M, inv(self.C), values
-                )
-            else:
-                MinvCM = self.M / np.atleast_1d(self.C)[: self.n] * self.M
-                if len(np.shape(self.Sigma)) > 1:
-                    Sigma = inv(inv(self.Sigma) + np.eye(self.n) * MinvCM)
-                else:
-                    Sigma = 1 / (1 / self.Sigma + MinvCM)
+        values = (
+            D - self.m - np.einsum("...ja,...a->...j", M, self.mu * np.ones(self.n))
+        )
 
-                mu = self.mu + np.einsum(
-                    "...ja,...ac,...c->...j",
-                    Sigma,
-                    self.M / np.atleast_1d(self.C)[: self.n],
-                    values,
-                )
+        if len(np.shape(self.C)) > 1:
+            mu = self.mu + np.einsum(
+                "...ja,...ba,...bc,...c->...j", Sigma, M, inv(self.C), values
+            )
+        else:
+            mu = self.mu + np.einsum(
+                "...ja,...ca,...c->...j",
+                Sigma,
+                M / np.atleast_1d(self.C)[:, None],
+                values,
+            )
 
         return multivariate_normal(mu, Sigma, self.shape, self.n)
 
@@ -215,37 +181,16 @@ class LinearModel(object):
 
         D ~ N( m + M mu, C + M Sigma M' )
         """
-        if len(np.shape(self.M)) > 1:
-            mu = self.m + np.einsum("...ja,...a->...j", self.M, self.mu)
-
-            if len(np.shape(self.Sigma)) > 1:
-                Sigma = np.einsum(
-                    "...ja,...ab,...kb->...jk", self.M, self.Sigma, self.M
-                )
-            else:
-                Sigma = np.einsum("...ja,...kb->...jk", self.M, self.Sigma * self.M)
-            if len(np.shape(self.C)) > 1:
-                Sigma = self.C + Sigma
-            else:
-                Sigma = self.C * np.eye(self.d) + Sigma
+        M = matrix(self.M, self.d, self.n)
+        mu = self.m + np.einsum("...ja,...a->...j", M, self.mu * np.ones(self.n))
+        if len(np.shape(self.Sigma)) > 1:
+            Sigma = np.einsum("...ja,...ab,...kb->...jk", M, self.Sigma, M)
         else:
-            mu = self.m * np.ones(self.d)
-            mu[: self.n] = mu[: self.n] + self.M * self.mu
-            Sigma = self.C
-
-            if len(np.shape(self.Sigma)) > 1 or len(np.shape(self.C)) > 1:
-                if len(np.shape(self.C)) <= 1:
-                    Sigma = Sigma * np.eye(self.d)
-                Sigma[: self.n, : self.n] = (
-                    Sigma[: self.n, : self.n]
-                    + np.atleast_1d(self.M)[..., None]
-                    * self.Sigma
-                    * np.atleast_1d(self.M)[..., None, :]
-                )
-            else:
-                Sigma = Sigma * np.ones(self.d)
-                Sigma[: self.n] = Sigma[: self.n] + self.M * self.Sigma * self.M
-
+            Sigma = np.einsum("...ja,...kb->...jk", M, self.Sigma * M)
+        if len(np.shape(self.C)) > 1:
+            Sigma = self.C + Sigma
+        else:
+            Sigma = self.C * np.eye(self.d) + Sigma
         return multivariate_normal(mu, Sigma, self.shape, self.d)
 
     def joint(self):
@@ -256,19 +201,18 @@ class LinearModel(object):
         """
         evidence = self.evidence()
         prior = self.prior()
-        mu = np.block([evidence.mean * np.ones(self.d), prior.mean * np.ones(self.n)])
-        corr = np.einsum(
-            "...ja,...al->...jl",
-            np.atleast_2d(self.M) * np.eye(self.n, self.d),
-            np.atleast_2d(self.Sigma) * np.eye(self.n),
-        )
-        Sigma = np.block(
-            [
-                [np.atleast_2d(evidence.cov) * np.eye(self.d), corr],
-                [np.moveaxis(corr, -1, -2), np.atleast_2d(prior.cov) * np.eye(self.n)],
-            ]
-        )
-        return multivariate_normal(mu, Sigma, self.shape, len(mu))
+        a = np.broadcast_to(evidence.mean, self.shape + (self.d,))
+        b = np.broadcast_to(prior.mean, self.shape + (self.n,))
+        mu = np.block([a, b])
+        M = matrix(self.M, self.d, self.n)
+        Sigma = matrix(self.Sigma, self.n)
+        corr = np.einsum("...ja,...al->...jl", M, Sigma)
+        A = np.broadcast_to(matrix(evidence.cov, self.d), self.shape + (self.d, self.d))
+        D = np.broadcast_to(matrix(prior.cov, self.n), self.shape + (self.n, self.n))
+        B = np.broadcast_to(corr, self.shape + (self.d, self.n))
+        C = np.moveaxis(B, -1, -2)
+        Sigma = np.block([[A, B], [C, D]])
+        return multivariate_normal(mu, Sigma, self.shape, self.n + self.d)
 
 
 class LinearMixtureModel(object):

@@ -13,6 +13,14 @@ def quantise(f, x, tol=1e-8):
     return np.where(np.abs(y) < tol, 0, y)
 
 
+def matrix(M, *args):
+    """Convert M to a matrix."""
+    if len(np.shape(M)) > 1:
+        return M
+    else:
+        return M * np.eye(*args)
+
+
 def bisect(f, a, b, args=(), tol=1e-8):
     """Vectorised simple bisection search.
 
