@@ -123,14 +123,12 @@ class LinearModel(object):
         ----------
         theta : array_like, shape (k, n)
         """
-        #        if len(np.shape(self.M)) > 1:
-        #            M = self.M
-        #        else:
-        #            M = self.M * np.eye(self.d, self.n)
         if len(np.shape(self.M)) > 1:
-            mu = self.m + np.einsum("...ja,...a->...j", self.M, theta)
+            M = self.M
         else:
-            mu = self.m + self.M * theta
+            M = self.M * np.eye(self.d, self.n)
+
+        mu = self.m + np.einsum("...ja,...a->...j", M, theta)
         return multivariate_normal(mu, self.C, self.shape, self.d)
 
     def prior(self):
@@ -153,9 +151,9 @@ class LinearModel(object):
         if len(np.shape(self.M)) > 1:
             values = D - self.m - np.einsum("...ja,...a->...j", self.M, self.mu)
 
-            if len(self.shape(self.C)) > 1:
+            if len(np.shape(self.C)) > 1:
                 MinvCM = np.einsum(
-                    "...ja,...ab,...kb->...jk", self.M, inv(self.C), self.M
+                    "...aj,...ab,...bk->...jk", self.M, inv(self.C), self.M
                 )
             else:
                 MinvCM = np.einsum(
@@ -182,7 +180,7 @@ class LinearModel(object):
             values = D * np.ones(self.d)
             values[: self.n] = values[: self.n] - self.m - self.M * self.mu
 
-            if len(self.shape(self.C)) > 1:
+            if len(np.shape(self.C)) > 1:
                 MinvCM = (
                     np.atleast_1d(self.M)[..., None]
                     * inv(self.C)
@@ -261,13 +259,13 @@ class LinearModel(object):
         mu = np.block([evidence.mean * np.ones(self.d), prior.mean * np.ones(self.n)])
         corr = np.einsum(
             "...ja,...al->...jl",
-            np.atleast_2d(self.M) * np.eye(n, d),
-            np.atleast_2d(self.Sigma) * n.eye(n),
+            np.atleast_2d(self.M) * np.eye(self.n, self.d),
+            np.atleast_2d(self.Sigma) * np.eye(self.n),
         )
         Sigma = np.block(
             [
-                [np.atleast_2d(evidence.cov) * np.eye(d), corr],
-                [np.moveaxis(corr, -1, -2), np.atleast_2d(prior.cov) * np.eye(n)],
+                [np.atleast_2d(evidence.cov) * np.eye(self.d), corr],
+                [np.moveaxis(corr, -1, -2), np.atleast_2d(prior.cov) * np.eye(self.n)],
             ]
         )
         return multivariate_normal(mu, Sigma, self.shape, len(mu))

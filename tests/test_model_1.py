@@ -82,4 +82,43 @@ class TestLinearModel(object):
         )
         theta = np.random.randn(*theta_shape, n)
         dist = model.likelihood(theta)
-        assert dist.shape == np.broadcast_shapes(shape, theta_shape)
+        assert dist.shape == np.broadcast_shapes(model.shape, theta_shape)
+        assert dist.dim == model.d
+
+    def test_prior(self, M_shape, m_shape, C_shape, mu_shape, Sigma_shape, shape, n, d):
+        model = self.random(
+            M_shape, m_shape, C_shape, mu_shape, Sigma_shape, shape, n, d
+        )
+        dist = model.prior()
+        assert dist.shape == model.shape
+        assert dist.dim == model.n
+
+    @pytest.mark.parametrize("D_shape", shapes)
+    def test_posterior(
+        self, D_shape, M_shape, m_shape, C_shape, mu_shape, Sigma_shape, shape, n, d
+    ):
+        model = self.random(
+            M_shape, m_shape, C_shape, mu_shape, Sigma_shape, shape, n, d
+        )
+        D = np.random.randn(*D_shape, d)
+        dist = model.posterior(D)
+        assert dist.shape == np.broadcast_shapes(model.shape, D_shape)
+        assert dist.dim == model.n
+
+    def test_evidence(
+        self, M_shape, m_shape, C_shape, mu_shape, Sigma_shape, shape, n, d
+    ):
+        model = self.random(
+            M_shape, m_shape, C_shape, mu_shape, Sigma_shape, shape, n, d
+        )
+        dist = model.evidence()
+        assert dist.shape == model.shape
+        assert dist.dim == model.d
+
+    def test_joint(self, M_shape, m_shape, C_shape, mu_shape, Sigma_shape, shape, n, d):
+        model = self.random(
+            M_shape, m_shape, C_shape, mu_shape, Sigma_shape, shape, n, d
+        )
+        dist = model.joint()
+        assert dist.shape == model.shape
+        assert dist.dim == model.n + model.d
