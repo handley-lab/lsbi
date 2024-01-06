@@ -115,14 +115,6 @@ class TestLinearModel(object):
         assert dist.dim == model.d
 
     def test_joint(self, M_shape, m_shape, C_shape, mu_shape, Sigma_shape, shape, n, d):
-        M_shape = (3,)
-        m_shape = (3,)
-        C_shape = (3,)
-        mu_shape = (3,)
-        Sigma_shape = (3,)
-        shape = (3,)
-        n = 1
-        d = 1
         model = self.random(
             M_shape, m_shape, C_shape, mu_shape, Sigma_shape, shape, n, d
         )

@@ -145,34 +145,38 @@ class LinearModel(object):
         D : array_like, shape (d,)
         """
         M = matrix(self.M, self.d, self.n)
-
-        if len(np.shape(self.C)) > 1:
-            MinvCM = np.einsum("...aj,...ab,...bk->...jk", M, inv(self.C), M)
-        else:
-            MinvCM = np.einsum(
-                "...aj,...bk->...jk", M, M / np.atleast_1d(self.C)[:, None]
-            )
-
-        if len(np.shape(self.Sigma)) > 1:
-            Sigma = inv(inv(self.Sigma) + MinvCM)
-        else:
-            Sigma = inv(np.eye(self.n) / self.Sigma + MinvCM)
-
         values = (
             D - self.m - np.einsum("...ja,...a->...j", M, self.mu * np.ones(self.n))
         )
 
-        if len(np.shape(self.C)) > 1:
+        if (
+            len(np.shape(self.Sigma)) > 1
+            or len(np.shape(self.C)) > 1
+            or len(np.shape(self.M)) > 1
+        ):
+            if len(np.shape(self.C)) > 1:
+                invC = inv(self.C)
+            else:
+                invC = np.eye(self.d) / self.C
+
+            if len(np.shape(self.Sigma)) > 1:
+                invSigma = inv(self.Sigma)
+            else:
+                invSigma = np.eye(self.n) / self.Sigma
+
+            Sigma = inv(invSigma + np.einsum("...aj,...ab,...bk->...jk", M, invC, M))
             mu = self.mu + np.einsum(
-                "...ja,...ba,...bc,...c->...j", Sigma, M, inv(self.C), values
+                "...ja,...ba,...bc,...c->...j", Sigma, M, invC, values
             )
         else:
-            mu = self.mu + np.einsum(
-                "...ja,...ca,...c->...j",
-                Sigma,
-                M / np.atleast_1d(self.C)[:, None],
-                values,
-            )
+            dim = min(self.n, self.d)
+            C = np.atleast_1d(self.C)[:dim]
+            M = np.atleast_1d(self.M)[:dim]
+            Sigma = np.ones(self.n) * self.Sigma
+            Sigma[:dim] = 1 / (1 / Sigma[:dim] + M**2 / C)
+
+            mu = np.broadcast_to(self.mu, values.shape[:-1] + (self.n,)).copy()
+            mu[..., :dim] = mu[..., :dim] + Sigma[:dim] * M / C * values[..., :dim]
 
         return multivariate_normal(mu, Sigma, self.shape, self.n)
 
@@ -183,14 +187,21 @@ class LinearModel(object):
         """
         M = matrix(self.M, self.d, self.n)
         mu = self.m + np.einsum("...ja,...a->...j", M, self.mu * np.ones(self.n))
-        if len(np.shape(self.Sigma)) > 1:
-            Sigma = np.einsum("...ja,...ab,...kb->...jk", M, self.Sigma, M)
+        if (
+            len(np.shape(self.Sigma)) > 1
+            or len(np.shape(self.C)) > 1
+            or len(np.shape(self.M)) > 1
+        ):
+            Sigma = matrix(self.C, self.d) + np.einsum(
+                "...ja,...ab,...kb->...jk", M, matrix(self.Sigma, self.n), M
+            )
         else:
-            Sigma = np.einsum("...ja,...kb->...jk", M, self.Sigma * M)
-        if len(np.shape(self.C)) > 1:
-            Sigma = self.C + Sigma
-        else:
-            Sigma = self.C * np.eye(self.d) + Sigma
+            dim = min(self.n, self.d)
+            Sigma = self.C * np.ones(self.d)
+            M = np.atleast_1d(self.M)[:dim]
+            S = np.atleast_1d(self.Sigma)[:dim]
+            Sigma[:dim] += S * M**2
+
         return multivariate_normal(mu, Sigma, self.shape, self.d)
 
     def joint(self):
