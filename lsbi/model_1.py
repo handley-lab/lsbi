@@ -226,7 +226,7 @@ class LinearModel(object):
         return multivariate_normal(mu, Sigma, self.shape, self.n + self.d)
 
 
-class LinearMixtureModel(object):
+class LinearMixtureModel(LinearModel):
     """A linear mixture model.
 
     D|theta, A ~ N( m + M theta, C )
@@ -310,7 +310,7 @@ class LinearMixtureModel(object):
     @property
     def k(self):
         """Number of mixture components of the distribution."""
-        return np.shape[-1]
+        return self.shape[-1]
 
     def likelihood(self, theta):
         """P(D|theta) as a scipy distribution object.
@@ -323,7 +323,7 @@ class LinearMixtureModel(object):
         ----------
         theta : array_like, shape (n,)
         """
-        dist = super().likelihood(theta)
+        dist = super().likelihood(theta[..., None, :])
         logA = self.prior().weights(theta)
         return mixture_normal(logA, dist.mean, dist.cov, dist.shape, dist.dim)
 
@@ -348,7 +348,7 @@ class LinearMixtureModel(object):
         ----------
         D : array_like, shape (d,)
         """
-        dist = super().posterior(D)
+        dist = super().posterior(D[..., None, :])
         logA = self.evidence().weights(D)
         return mixture_normal(logA, dist.mean, dist.cov, dist.shape, dist.dim)
 
