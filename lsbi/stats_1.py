@@ -138,7 +138,7 @@ class multivariate_normal(object):
         if len(np.shape(A)) > 1:
             mean = np.einsum("...qn,...n->...q", A, self.mean) + b
             if self.diagonal_cov:
-                cov = np.einsum("...qn,...pn->...qp", A, A * self.cov)
+                cov = np.einsum("...qn,...pn->...qp", A, A * self.cov[..., None, :])
                 diagonal_cov = False
             else:
                 cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
