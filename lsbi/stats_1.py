@@ -136,9 +136,11 @@ class multivariate_normal(object):
         """
         diagonal_cov = self.diagonal_cov
         if len(np.shape(A)) > 1:
-            mean = np.einsum("...qn,...n->...q", A, self.mean) + b
+            mean = np.einsum("...qn,...n->...q", A, np.ones(self.dim) * self.mean) + b
             if self.diagonal_cov:
-                cov = np.einsum("...qn,...pn->...qp", A, A * self.cov[..., None, :])
+                cov = np.einsum(
+                    "...qn,...pn->...qp", A, A * np.atleast_1d(self.cov)[..., None, :]
+                )
                 diagonal_cov = False
             else:
                 cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
@@ -173,7 +175,7 @@ class multivariate_normal(object):
         mean = (np.ones(self.dim) * self.mean)[..., i]
 
         if self.diagonal_cov:
-            cov = (np.ones(self.dim) * self.cov)[i]
+            cov = (np.ones(self.dim) * self.cov)[..., i]
         else:
             cov = self.cov[..., i, :][..., i]
 
@@ -200,7 +202,7 @@ class multivariate_normal(object):
         mean = (np.ones(self.dim) * self.mean)[..., i]
 
         if self.diagonal_cov:
-            cov = (np.ones(self.dim) * self.cov)[i]
+            cov = (np.ones(self.dim) * self.cov)[..., i]
             shape = np.broadcast_shapes(self.shape, values.shape[:-1])
         else:
             mean = mean + np.einsum(
@@ -351,7 +353,10 @@ class mixture_normal(multivariate_normal):
         mean = np.choose(i[..., None], np.moveaxis(mean, -2, 0))
         x = np.random.randn(*size, *self.shape[:-1], self.dim)
         if self.diagonal_cov:
-            return mean + np.sqrt(self.cov) * x
+            L = np.sqrt(self.cov)
+            L = np.broadcast_to(L, (*self.shape, self.dim))
+            L = np.choose(i[..., None], np.moveaxis(L, -2, 0))
+            return mean + L * x
         else:
             L = cholesky(self.cov)
             L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
@@ -482,7 +487,10 @@ class mixture_normal(multivariate_normal):
                 np.s_[:-1], theta[..., :i]
             )
             m = np.atleast_1d(dist.mean)[..., 0]
-            c = np.atleast_2d(dist.cov)[..., 0, 0]
+            if dist.diagonal_cov:
+                c = np.atleast_1d(dist.cov)[..., 0]
+            else:
+                c = np.atleast_2d(dist.cov)[..., 0, 0]
             A = np.exp(dist.logA - logsumexp(dist.logA, axis=-1)[..., None])
             m = np.broadcast_to(m, dist.shape)
 

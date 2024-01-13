@@ -83,7 +83,7 @@ class TestMultivariateNormal(object):
         assert dist_2.shape == np.broadcast_shapes(
             dist.shape, np.shape(A)[:-2], np.shape(b)[:-1]
         )
-        assert np.shape(dist_2.cov)[: -2 + diagonal_cov] == np.broadcast_shapes(
+        assert np.shape(dist_2.cov)[: -2 + dist_2.diagonal_cov] == np.broadcast_shapes(
             np.shape(dist.cov)[: -2 + diagonal_cov], np.shape(A)[:-2]
         )
         assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
@@ -94,7 +94,7 @@ class TestMultivariateNormal(object):
         dist_2 = dist.predict(A)
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape == np.broadcast_shapes(dist.shape, np.shape(A)[:-2])
-        assert np.shape(dist_2.cov)[: -2 + diagonal_cov] == np.broadcast_shapes(
+        assert np.shape(dist_2.cov)[: -2 + dist_2.diagonal_cov] == np.broadcast_shapes(
             np.shape(dist.cov)[: -2 + diagonal_cov], np.shape(A)[:-2]
         )
         assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
@@ -106,14 +106,14 @@ class TestMultivariateNormal(object):
     def test_marginalise(self, dim, shape, mean_shape, cov_shape, diagonal_cov, p):
         if dim < p:
             pytest.skip("dim < p")
-        i = np.random.choice(dim, p, replace=False)
+        indices = np.random.choice(dim, p, replace=False)
         dist = self.random(dim, shape, mean_shape, cov_shape, diagonal_cov)
-        dist_2 = dist.marginalise(i)
+        dist_2 = dist.marginalise(indices)
 
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape == dist.shape
         assert (
-            np.shape(dist_2.cov)[: -2 + diagonal_cov]
+            np.shape(dist_2.cov)[: -2 + dist_2.diagonal_cov]
             == np.shape(dist.cov)[: -2 + diagonal_cov]
         )
         assert np.shape(dist_2.mean)[:-1] == np.shape(dist.mean)[:-1]
@@ -135,10 +135,10 @@ class TestMultivariateNormal(object):
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape == np.broadcast_shapes(dist.shape, values_shape)
         assert (
-            np.shape(dist_2.cov)[: -2 + diagonal_cov]
+            np.shape(dist_2.cov)[: -2 + dist_2.diagonal_cov]
             == np.shape(dist.cov)[: -2 + diagonal_cov]
         )
-        if cov_shape == "scalar" or cov_shape == "vector":
+        if cov_shape == "scalar" or diagonal_cov:
             assert np.shape(dist_2.mean)[:-1] == np.shape(dist.mean)[:-1]
         else:
             assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
@@ -192,7 +192,7 @@ class TestMixtureNormal(object):
             shape,
             logA_shape,
             np.shape(mean)[:-1],
-            np.shape(cov)[:-2],
+            np.shape(cov)[: -2 + diagonal_cov],
         )
         assert np.all(dist.logA == logA)
         assert np.all(dist.mean == mean)
@@ -214,6 +214,7 @@ class TestMixtureNormal(object):
     ):
         dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov)
         x = dist.rvs(size)
+        x.shape
         assert x.shape == size + dist.shape[:-1] + (dim,)
 
     @pytest.mark.parametrize("A_shape", shapes + ["vector", "scalar"])
@@ -257,7 +258,7 @@ class TestMixtureNormal(object):
             np.shape(np.atleast_2d(A))[:-2],
             np.shape(np.atleast_1d(b))[:-1],
         )
-        assert np.shape(dist_2.cov)[: -3 + diagonal_cov] == np.broadcast_shapes(
+        assert np.shape(dist_2.cov)[: -3 + dist_2.diagonal_cov] == np.broadcast_shapes(
             np.shape(dist.cov)[: -3 + diagonal_cov], np.shape(np.atleast_2d(A))[:-2]
         )
         assert np.shape(dist_2.mean)[:-2] == np.broadcast_shapes(
@@ -272,7 +273,7 @@ class TestMixtureNormal(object):
         assert dist_2.shape[:-1] == np.broadcast_shapes(
             dist.shape[:-1], np.shape(np.atleast_2d(A))[:-2]
         )
-        assert np.shape(dist_2.cov)[: -3 + diagonal_cov] == np.broadcast_shapes(
+        assert np.shape(dist_2.cov)[: -3 + dist_2.diagonal_cov] == np.broadcast_shapes(
             np.shape(dist.cov)[: -3 + diagonal_cov], np.shape(np.atleast_2d(A))[:-2]
         )
         assert np.shape(dist_2.mean)[:-2] == np.broadcast_shapes(
@@ -286,14 +287,14 @@ class TestMixtureNormal(object):
     ):
         if dim < p:
             pytest.skip("dim < p")
-        i = np.random.choice(dim, p, replace=False)
+        indices = np.random.choice(dim, p, replace=False)
         dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov)
-        dist_2 = dist.marginalise(i)
+        dist_2 = dist.marginalise(indices)
 
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape == dist.shape
         assert (
-            np.shape(dist_2.cov)[: -2 + diagonal_cov]
+            np.shape(dist_2.cov)[: -2 + dist_2.diagonal_cov]
             == np.shape(dist.cov)[: -2 + diagonal_cov]
         )
         assert np.shape(dist_2.mean)[:-1] == np.shape(dist.mean)[:-1]
@@ -323,10 +324,10 @@ class TestMixtureNormal(object):
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape == np.broadcast_shapes(dist.shape, values_shape[:-1] + (1,))
         assert (
-            np.shape(dist_2.cov)[: -2 + diagonal_cov]
+            np.shape(dist_2.cov)[: -2 + dist_2.diagonal_cov]
             == np.shape(dist.cov)[: -2 + diagonal_cov]
         )
-        if cov_shape == "scalar" or cov_shape == "vector":
+        if cov_shape == "scalar" or diagonal_cov:
             assert np.shape(dist_2.mean)[:-1] == np.shape(dist.mean)[:-1]
         else:
             assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
