@@ -377,10 +377,10 @@ class mixture_normal(multivariate_normal):
         conditioned distribution, shape (*shape, len(indices))
         """
         dist = super().condition(indices, values[..., None, :])
-        dist.logA = self.marginalise(self._bar(indices)).weights(values)
+        dist.logA = self.marginalise(self._bar(indices))._logA(values)
         return dist
 
-    def weights(self, values):
+    def _logA(self, values):
         """Compute the conditional weights of the mixture.
 
         Parameters
@@ -392,7 +392,7 @@ class mixture_normal(multivariate_normal):
 
         Returns
         -------
-        weights : array_like shape (*shape, n)
+        _logA : array_like shape (*shape, n)
         """
         copy = deepcopy(self)
         copy.mean = copy.mean - values[..., None, :]

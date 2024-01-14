@@ -125,16 +125,6 @@ class LinearModel(object):
             ]
         )
 
-    @classmethod
-    def from_joint(cls, means, covs, n):
-        """Construct model from joint distribution."""
-        mu = means[:, -n:]
-        Sigma = covs[:, -n:, -n:]
-        M = solve(Sigma, covs[:, -n:, :-n]).transpose(0, 2, 1)
-        m = means[:, :-n] - np.einsum("ija,ia->ij", M, mu)
-        C = covs[:, :-n, :-n] - np.einsum("ija,iab,ikb->ijk", M, Sigma, M)
-        return cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma)
-
     def likelihood(self, theta):
         """P(D|theta) as a scipy distribution object.
 
@@ -237,17 +227,11 @@ class LinearModel(object):
         a = np.broadcast_to(evidence.mean, self.shape + (self.d,))
         b = np.broadcast_to(prior.mean, self.shape + (self.n,))
         mu = np.block([a, b])
-        if evidence.diagonal_cov:
-            A = np.atleast_1d(evidence.cov)[..., None, :] * np.eye(self.d)
-        else:
-            A = evidence.cov
-        if prior.diagonal_cov:
-            D = np.atleast_1d(prior.cov)[..., None, :] * np.eye(self.n)
-        else:
-            D = prior.cov
-        B = np.einsum("...ja,...al->...jl", self._M, self._Sigma)
+        A = self._de_diagonalise(evidence.cov, evidence.diagonal_cov, self.d)
         A = np.broadcast_to(A, self.shape + (self.d, self.d))
+        D = self._de_diagonalise(prior.cov, prior.diagonal_cov, self.n)
         D = np.broadcast_to(D, self.shape + (self.n, self.n))
+        B = np.einsum("...ja,...al->...jl", self._M, self._Sigma)
         B = np.broadcast_to(B, self.shape + (self.d, self.n))
         C = np.moveaxis(B, -1, -2)
         Sigma = np.block([[A, B], [C, D]])
@@ -255,24 +239,21 @@ class LinearModel(object):
 
     @property
     def _M(self):
-        if self.diagonal_M:
-            return np.atleast_1d(self.M)[..., None, :] * np.eye(self.d, self.n)
-        else:
-            return self.M
+        return self._de_diagonalise(self.M, self.diagonal_M, self.d, self.n)
 
     @property
     def _C(self):
-        if self.diagonal_C:
-            return np.atleast_1d(self.C)[..., None, :] * np.eye(self.d)
-        else:
-            return self.C
+        return self._de_diagonalise(self.C, self.diagonal_C, self.d)
 
     @property
     def _Sigma(self):
-        if self.diagonal_Sigma:
-            return np.atleast_1d(self.Sigma)[..., None, :] * np.eye(self.n)
+        return self._de_diagonalise(self.Sigma, self.diagonal_Sigma, self.n)
+
+    def _de_diagonalise(self, x, diagonal, *args):
+        if diagonal:
+            return np.atleast_1d(x)[..., None, :] * np.eye(*args)
         else:
-            return self.Sigma
+            return x
 
 
 class MixtureModel(LinearModel):
@@ -327,35 +308,9 @@ class MixtureModel(LinearModel):
         Number of data dimensions, defaults to automatically inferred value
     """
 
-    def __init__(
-        self,
-        logA=1,
-        M=1,
-        m=0,
-        C=1,
-        mu=0,
-        Sigma=1,
-        shape=(),
-        n=1,
-        d=1,
-        diagonal_M=False,
-        diagonal_C=False,
-        diagonal_Sigma=False,
-    ):
+    def __init__(self, logA=1, *args):
+        super().__init__(*args)
         self.logA = logA
-        super().__init__(
-            M, m, C, mu, Sigma, shape, n, d, diagonal_M, diagonal_C, diagonal_Sigma
-        )
-
-    @classmethod
-    def from_joint(cls, means, covs, logA, n):
-        """Construct model from joint distribution."""
-        mu = means[:, -n:]
-        Sigma = covs[:, -n:, -n:]
-        M = solve(Sigma, covs[:, -n:, :-n]).transpose(0, 2, 1)
-        m = means[:, :-n] - np.einsum("ija,ia->ij", M, mu)
-        C = covs[:, :-n, :-n] - np.einsum("ija,iab,ikb->ijk", M, Sigma, M)
-        return cls(M=M, m=m, C=C, mu=mu, Sigma=Sigma, logA=logA)
 
     @property
     def shape(self):
@@ -379,10 +334,9 @@ class MixtureModel(LinearModel):
         theta : array_like, shape (n,)
         """
         dist = super(self.__class__, self).likelihood(theta[..., None, :])
-        logA = self.prior().weights(theta)
-        return mixture_normal(
-            logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
-        )
+        dist.__class__ = mixture_normal
+        dist.logA = self.prior()._logA(theta)
+        return dist
 
     def prior(self):
         """P(theta) as a scipy distribution object.
@@ -391,9 +345,9 @@ class MixtureModel(LinearModel):
         A       ~ categorical(exp(logA))
         """
         dist = super().prior()
-        return mixture_normal(
-            self.logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
-        )
+        dist.__class__ = mixture_normal
+        dist.logA = self.logA
+        return dist
 
     def posterior(self, D):
         """P(theta|D) as a scipy distribution object.
@@ -408,10 +362,9 @@ class MixtureModel(LinearModel):
         D : array_like, shape (d,)
         """
         dist = super().posterior(D[..., None, :])
-        logA = self.evidence().weights(D)
-        return mixture_normal(
-            logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
-        )
+        dist.__class__ = mixture_normal
+        dist.logA = self.evidence()._logA(D)
+        return dist
 
     def evidence(self):
         """P(D) as a scipy distribution object.
@@ -420,9 +373,9 @@ class MixtureModel(LinearModel):
         A   ~ categorical(exp(logA))
         """
         dist = super().evidence()
-        return mixture_normal(
-            self.logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
-        )
+        dist.__class__ = mixture_normal
+        dist.logA = self.logA
+        return dist
 
     def joint(self):
         """P(D, theta) as a scipy distribution object.
@@ -433,9 +386,9 @@ class MixtureModel(LinearModel):
         A           ~ categorical(exp(logA))
         """
         dist = super().joint()
-        return mixture_normal(
-            self.logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
-        )
+        dist.__class__ = mixture_normal
+        dist.logA = self.logA
+        return dist
 
 
 class ReducedLinearModel(object):
