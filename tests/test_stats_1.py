@@ -7,12 +7,17 @@ shapes = [(2, 3), (3,), ()]
 sizes = [(6, 5), (5,), ()]
 dims = [1, 2, 4]
 
+tests = []
 
-@pytest.mark.parametrize("dim", dims)
-@pytest.mark.parametrize("shape", shapes)
-@pytest.mark.parametrize("mean_shape", shapes + ["scalar"])
-@pytest.mark.parametrize("cov_shape", shapes + ["scalar"])
-@pytest.mark.parametrize("diagonal_cov", [True, False])
+for dim in dims:
+    for shape in shapes:
+        for mean_shape in shapes + ["scalar"]:
+            for cov_shape in shapes + ["scalar"]:
+                for diagonal_cov in [True, False]:
+                    tests.append((dim, shape, mean_shape, cov_shape, diagonal_cov))
+
+
+@pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
 class TestMultivariateNormal(object):
     cls = multivariate_normal
 
@@ -53,15 +58,23 @@ class TestMultivariateNormal(object):
         x = dist.rvs(size)
         assert x.shape == size + dist.shape + (dim,)
 
-    @pytest.mark.parametrize("A_shape", shapes + ["vector", "scalar"])
+    @pytest.mark.parametrize("A_shape", shapes + ["scalar"])
+    @pytest.mark.parametrize("diagonal_A", [True, False])
     @pytest.mark.parametrize("b_shape", shapes + ["scalar"])
     @pytest.mark.parametrize("k", dims)
     def test_predict(
-        self, dim, shape, mean_shape, cov_shape, diagonal_cov, k, A_shape, b_shape
+        self,
+        dim,
+        shape,
+        mean_shape,
+        cov_shape,
+        diagonal_cov,
+        k,
+        A_shape,
+        diagonal_A,
+        b_shape,
     ):
-        if (A_shape == "vector" or A_shape == "scalar") and (
-            b_shape != "scalar" or k != dim
-        ):
+        if (diagonal_A or A_shape == "scalar") and (b_shape != "scalar" or k != dim):
             pytest.skip("Non broadcastable A and b")
 
         dist = self.random(dim, shape, mean_shape, cov_shape, diagonal_cov)
@@ -73,32 +86,34 @@ class TestMultivariateNormal(object):
 
         if A_shape == "scalar":
             A = np.random.randn()
-        elif A_shape == "vector":
-            A = np.random.randn(dim)
+        elif diagonal_A:
+            A = np.random.randn(*A_shape, dim)
         else:
             A = np.random.randn(*A_shape, k, dim)
 
-        dist_2 = dist.predict(A, b)
+        dist_2 = dist.predict(A, b, diagonal_A)
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape == np.broadcast_shapes(
-            dist.shape, np.shape(A)[:-2], np.shape(b)[:-1]
+            dist.shape, np.shape(A)[: -2 + diagonal_A], np.shape(b)[:-1]
         )
         assert np.shape(dist_2.cov)[: -2 + dist_2.diagonal_cov] == np.broadcast_shapes(
-            np.shape(dist.cov)[: -2 + diagonal_cov], np.shape(A)[:-2]
+            np.shape(dist.cov)[: -2 + diagonal_cov], np.shape(A)[: -2 + diagonal_A]
         )
         assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
-            np.shape(dist.mean)[:-1], np.shape(A)[:-2], np.shape(b)[:-1]
+            np.shape(dist.mean)[:-1], np.shape(A)[: -2 + diagonal_A], np.shape(b)[:-1]
         )
         assert dist_2.dim == k
 
-        dist_2 = dist.predict(A)
+        dist_2 = dist.predict(A, diagonal_A=diagonal_A)
         assert isinstance(dist_2, self.cls)
-        assert dist_2.shape == np.broadcast_shapes(dist.shape, np.shape(A)[:-2])
+        assert dist_2.shape == np.broadcast_shapes(
+            dist.shape, np.shape(A)[: -2 + diagonal_A]
+        )
         assert np.shape(dist_2.cov)[: -2 + dist_2.diagonal_cov] == np.broadcast_shapes(
-            np.shape(dist.cov)[: -2 + diagonal_cov], np.shape(A)[:-2]
+            np.shape(dist.cov)[: -2 + diagonal_cov], np.shape(A)[: -2 + diagonal_A]
         )
         assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
-            np.shape(dist.mean)[:-1], np.shape(A)[:-2]
+            np.shape(dist.mean)[:-1], np.shape(A)[: -2 + diagonal_A]
         )
         assert dist_2.dim == k
 
@@ -217,7 +232,8 @@ class TestMixtureNormal(object):
         x.shape
         assert x.shape == size + dist.shape[:-1] + (dim,)
 
-    @pytest.mark.parametrize("A_shape", shapes + ["vector", "scalar"])
+    @pytest.mark.parametrize("A_shape", shapes + ["scalar"])
+    @pytest.mark.parametrize("diagonal_A", [True, False])
     @pytest.mark.parametrize("b_shape", shapes + ["scalar"])
     @pytest.mark.parametrize("k", dims)
     def test_predict(
@@ -228,13 +244,12 @@ class TestMixtureNormal(object):
         mean_shape,
         cov_shape,
         diagonal_cov,
-        k,
         A_shape,
+        diagonal_A,
         b_shape,
+        k,
     ):
-        if (A_shape == "vector" or A_shape == "scalar") and (
-            b_shape != "scalar" or k != dim
-        ):
+        if (diagonal_A or A_shape == "scalar") and (b_shape != "scalar" or k != dim):
             pytest.skip("Non broadcastable A and b")
 
         dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov)
@@ -246,38 +261,38 @@ class TestMixtureNormal(object):
 
         if A_shape == "scalar":
             A = np.random.randn()
-        elif A_shape == "vector":
-            A = np.random.randn(dim)
+        elif diagonal_A:
+            A = np.random.randn(*A_shape[:-1], dim)
         else:
             A = np.random.randn(*A_shape[:-1], k, dim)
 
-        dist_2 = dist.predict(A, b)
+        dist_2 = dist.predict(A, b, diagonal_A)
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape[:-1] == np.broadcast_shapes(
             dist.shape[:-1],
-            np.shape(np.atleast_2d(A))[:-2],
-            np.shape(np.atleast_1d(b))[:-1],
+            np.shape(A)[: -2 + diagonal_A],
+            np.shape(b)[:-1],
         )
         assert np.shape(dist_2.cov)[: -3 + dist_2.diagonal_cov] == np.broadcast_shapes(
-            np.shape(dist.cov)[: -3 + diagonal_cov], np.shape(np.atleast_2d(A))[:-2]
+            np.shape(dist.cov)[: -3 + diagonal_cov], np.shape(A)[: -2 + diagonal_A]
         )
         assert np.shape(dist_2.mean)[:-2] == np.broadcast_shapes(
             np.shape(dist.mean)[:-2],
-            np.shape(np.atleast_2d(A))[:-2],
-            np.shape(np.atleast_1d(b))[:-1],
+            np.shape(A)[: -2 + diagonal_A],
+            np.shape(b)[:-1],
         )
         assert dist_2.dim == k
 
-        dist_2 = dist.predict(A)
+        dist_2 = dist.predict(A, diagonal_A=diagonal_A)
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape[:-1] == np.broadcast_shapes(
-            dist.shape[:-1], np.shape(np.atleast_2d(A))[:-2]
+            dist.shape[:-1], np.shape(A)[: -2 + diagonal_A]
         )
         assert np.shape(dist_2.cov)[: -3 + dist_2.diagonal_cov] == np.broadcast_shapes(
-            np.shape(dist.cov)[: -3 + diagonal_cov], np.shape(np.atleast_2d(A))[:-2]
+            np.shape(dist.cov)[: -3 + diagonal_cov], np.shape(A)[: -2 + diagonal_A]
         )
         assert np.shape(dist_2.mean)[:-2] == np.broadcast_shapes(
-            np.shape(dist.mean)[:-2], np.shape(np.atleast_2d(A))[:-2]
+            np.shape(dist.mean)[:-2], np.shape(A)[: -2 + diagonal_A]
         )
         assert dist_2.dim == k
 

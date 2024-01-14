@@ -115,7 +115,7 @@ class multivariate_normal(object):
         else:
             return self.mean + np.einsum("...jk,...k->...j", cholesky(self.cov), x)
 
-    def predict(self, A=1, b=0):
+    def predict(self, A=1, b=0, diagonal_A=False):
         """Predict the mean and covariance of a linear transformation.
 
         if:         x ~ N(mu, Sigma)
@@ -134,17 +134,11 @@ class multivariate_normal(object):
         -------
         multivariate_normal shape (..., k)
         """
+        if len(np.shape(A)) < 2:
+            diagonal_A = True
         diagonal_cov = self.diagonal_cov
-        if len(np.shape(A)) > 1:
-            mean = np.einsum("...qn,...n->...q", A, np.ones(self.dim) * self.mean) + b
-            if self.diagonal_cov:
-                cov = np.einsum(
-                    "...qn,...pn->...qp", A, A * np.atleast_1d(self.cov)[..., None, :]
-                )
-                diagonal_cov = False
-            else:
-                cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
-        else:
+        if diagonal_A:
+            dim = self.dim
             mean = A * self.mean + b
             if self.diagonal_cov:
                 cov = A * self.cov * A
@@ -154,9 +148,16 @@ class multivariate_normal(object):
                     * np.atleast_1d(A)[..., None]
                     * np.atleast_1d(A)[..., None, :]
                 )
-        dim = np.max([*np.shape(A)[-2:-1], *np.shape(b)[-1:], -1])
-        if dim == -1:
-            dim = self.dim
+        else:
+            mean = np.einsum("...qn,...n->...q", A, np.ones(self.dim) * self.mean) + b
+            if self.diagonal_cov:
+                cov = np.einsum(
+                    "...qn,...pn->...qp", A, A * np.atleast_1d(self.cov)[..., None, :]
+                )
+                diagonal_cov = False
+            else:
+                cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
+            dim = np.shape(A)[-2]
         return multivariate_normal(mean, cov, self.shape, dim, diagonal_cov)
 
     def marginalise(self, indices):
@@ -363,7 +364,7 @@ class mixture_normal(multivariate_normal):
             L = np.choose(i[..., None, None], np.moveaxis(L, -3, 0))
             return mean + np.einsum("...ij,...j->...i", L, x)
 
-    def predict(self, A=1, b=0):
+    def predict(self, A=1, b=0, diagonal_A=False):
         """Predict the mean and covariance of a linear transformation.
 
         if:         x ~ mixN(mu, Sigma, logA)
@@ -383,10 +384,10 @@ class mixture_normal(multivariate_normal):
         mixture_normal shape (..., k)
         """
         if len(np.shape(A)) > 1:
-            A = np.expand_dims(A, axis=-3)
+            A = np.expand_dims(A, axis=-3 + diagonal_A)
         if len(np.shape(b)) > 0:
             b = np.expand_dims(b, axis=-2)
-        dist = super().predict(A, b)
+        dist = super().predict(A, b, diagonal_A)
         return mixture_normal(
             self.logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
         )
