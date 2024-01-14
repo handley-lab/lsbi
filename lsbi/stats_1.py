@@ -132,33 +132,34 @@ class multivariate_normal(object):
 
         Returns
         -------
-        multivariate_normal shape (..., k)
+        transformed distribution shape (..., k)
         """
         if len(np.shape(A)) < 2:
             diagonal_A = True
-        diagonal_cov = self.diagonal_cov
+        dist = deepcopy(self)
         if diagonal_A:
-            dim = self.dim
-            mean = A * self.mean + b
+            dist.mean = A * self.mean + b
             if self.diagonal_cov:
-                cov = A * self.cov * A
+                dist.cov = A * self.cov * A
             else:
-                cov = (
+                dist.cov = (
                     self.cov
                     * np.atleast_1d(A)[..., None]
                     * np.atleast_1d(A)[..., None, :]
                 )
         else:
-            mean = np.einsum("...qn,...n->...q", A, np.ones(self.dim) * self.mean) + b
+            dist.mean = (
+                np.einsum("...qn,...n->...q", A, np.ones(self.dim) * self.mean) + b
+            )
             if self.diagonal_cov:
-                cov = np.einsum(
+                dist.cov = np.einsum(
                     "...qn,...pn->...qp", A, A * np.atleast_1d(self.cov)[..., None, :]
                 )
-                diagonal_cov = False
+                dist.diagonal_cov = False
             else:
-                cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
-            dim = np.shape(A)[-2]
-        return multivariate_normal(mean, cov, self.shape, dim, diagonal_cov)
+                dist.cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
+            dist._dim = np.shape(A)[-2]
+        return dist
 
     def marginalise(self, indices):
         """Marginalise over indices.
@@ -170,17 +171,19 @@ class multivariate_normal(object):
 
         Returns
         -------
-        multivariate_normal shape (*shape, dim - len(indices))
+        marginalised distribution, shape (*shape, dim - len(indices))
         """
+        dist = deepcopy(self)
         i = self._bar(indices)
-        mean = (np.ones(self.dim) * self.mean)[..., i]
+        dist.mean = (np.ones(self.dim) * self.mean)[..., i]
 
         if self.diagonal_cov:
-            cov = (np.ones(self.dim) * self.cov)[..., i]
+            dist.cov = (np.ones(self.dim) * self.cov)[..., i]
         else:
-            cov = self.cov[..., i, :][..., i]
+            dist.cov = self.cov[..., i, :][..., i]
 
-        return multivariate_normal(mean, cov, self.shape, sum(i), self.diagonal_cov)
+        dist._dim = sum(i)
+        return dist
 
     def condition(self, indices, values):
         """Condition on indices with values.
@@ -196,31 +199,31 @@ class multivariate_normal(object):
 
         Returns
         -------
-        multivariate_normal shape (..., len(indices))
+        conditioned distribution shape (..., len(indices))
         """
         i = self._bar(indices)
         k = indices
-        mean = (np.ones(self.dim) * self.mean)[..., i]
+        dist = deepcopy(self)
+        dist.mean = (np.ones(self.dim) * self.mean)[..., i]
 
         if self.diagonal_cov:
-            cov = (np.ones(self.dim) * self.cov)[..., i]
-            shape = np.broadcast_shapes(self.shape, values.shape[:-1])
+            dist.cov = (np.ones(self.dim) * self.cov)[..., i]
+            dist._shape = np.broadcast_shapes(self.shape, values.shape[:-1])
         else:
-            mean = mean + np.einsum(
+            dist.mean = dist.mean + np.einsum(
                 "...ja,...ab,...b->...j",
                 self.cov[..., i, :][..., :, k],
                 inv(self.cov[..., k, :][..., :, k]),
                 values - (np.ones(self.dim) * self.mean)[..., k],
             )
-            cov = self.cov[..., i, :][..., :, i] - np.einsum(
+            dist.cov = self.cov[..., i, :][..., :, i] - np.einsum(
                 "...ja,...ab,...bk->...jk",
                 self.cov[..., i, :][..., :, k],
                 inv(self.cov[..., k, :][..., :, k]),
                 self.cov[..., k, :][..., :, i],
             )
-            shape = self.shape
-
-        return multivariate_normal(mean, cov, shape, sum(i), self.diagonal_cov)
+        dist._dim = sum(i)
+        return dist
 
     def _bar(self, indices):
         """Return the indices not in the given indices."""
@@ -364,47 +367,6 @@ class mixture_normal(multivariate_normal):
             L = np.choose(i[..., None, None], np.moveaxis(L, -3, 0))
             return mean + np.einsum("...ij,...j->...i", L, x)
 
-    def predict(self, A=1, b=0, diagonal_A=False):
-        """Predict the mean and covariance of a linear transformation.
-
-        if:         x ~ mixN(mu, Sigma, logA)
-        then:  Ax + b ~ mixN(A mu + b, A Sigma A^T, logA)
-
-        Parameters
-        ----------
-        A : array_like, shape (..., k, dim)
-            Linear transformation matrix.
-        b : array_like, shape (..., k), optional
-            Linear transformation vector.
-
-        where self.shape[:-1] is broadcastable to ...
-
-        Returns
-        -------
-        mixture_normal shape (..., k)
-        """
-        dist = super().predict(A, b, diagonal_A)
-        return mixture_normal(
-            self.logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
-        )
-
-    def marginalise(self, indices):
-        """Marginalise over indices.
-
-        Parameters
-        ----------
-        indices : array_like
-            Indices to marginalise.
-
-        Returns
-        -------
-        mixture_normal shape (*shape, dim - len(indices))
-        """
-        dist = super().marginalise(indices)
-        return mixture_normal(
-            self.logA, dist.mean, dist.cov, self.shape, dist.dim, dist.diagonal_cov
-        )
-
     def condition(self, indices, values):
         """Condition on indices with values.
 
@@ -419,13 +381,11 @@ class mixture_normal(multivariate_normal):
 
         Returns
         -------
-        mixture_normal shape (*shape, len(indices))
+        conditioned distribution, shape (*shape, len(indices))
         """
         dist = super().condition(indices, values[..., None, :])
-        logA = self.marginalise(self._bar(indices)).weights(values)
-        return mixture_normal(
-            logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
-        )
+        dist.logA = self.marginalise(self._bar(indices)).weights(values)
+        return dist
 
     def weights(self, values):
         """Compute the conditional weights of the mixture.
