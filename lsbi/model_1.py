@@ -57,12 +57,34 @@ class LinearModel(object):
         Number of mixture components, defaults to automatically inferred value
     """
 
-    def __init__(self, M=1, m=0, C=1, mu=0, Sigma=1, shape=(), n=1, d=1):
+    def __init__(
+        self,
+        M=1,
+        m=0,
+        C=1,
+        mu=0,
+        Sigma=1,
+        shape=(),
+        n=1,
+        d=1,
+        diagonal_M=False,
+        diagonal_C=False,
+        diagonal_Sigma=False,
+    ):
         self.M = M
+        self.diagonal_M = diagonal_M
+        if len(np.shape(self.M)) < 2:
+            self.diagonal_M = True
         self.m = m
         self.C = C
+        self.diagonal_C = diagonal_C
+        if len(np.shape(self.C)) < 2:
+            self.diagonal_C = True
         self.mu = mu
         self.Sigma = Sigma
+        self.diagonal_Sigma = diagonal_Sigma
+        if len(np.shape(self.Sigma)) < 2:
+            self.diagonal_Sigma = True
         self._shape = shape
         self._n = n
         self._d = d
@@ -71,11 +93,11 @@ class LinearModel(object):
     def shape(self):
         """Shape of the distribution."""
         return np.broadcast_shapes(
-            np.atleast_2d(self.M).shape[:-2],
-            np.atleast_1d(self.m).shape[:-1],
-            np.atleast_2d(self.C).shape[:-2],
-            np.atleast_1d(self.mu).shape[:-1],
-            np.atleast_2d(self.Sigma).shape[:-2],
+            np.shape(self.M)[: -2 + self.diagonal_M],
+            np.shape(self.m)[:-1],
+            np.shape(self.C)[: -2 + self.diagonal_C],
+            np.shape(self.mu)[:-1],
+            np.shape(self.Sigma)[: -2 + self.diagonal_Sigma],
             self._shape,
         )
 
@@ -84,8 +106,8 @@ class LinearModel(object):
         """Dimension of the distribution."""
         return np.max(
             [
-                *np.shape(self.M)[-1:],
-                *np.shape(self.Sigma)[-2:],
+                *np.shape(self.M)[len(np.shape(self.M)) - 1 + self.diagonal_M :],
+                *np.shape(self.Sigma)[-2 + self.diagonal_Sigma :],
                 *np.shape(self.mu)[-1:],
                 self._n,
             ]
@@ -96,8 +118,8 @@ class LinearModel(object):
         """Dimensionality of data space len(D)."""
         return np.max(
             [
-                *np.shape(self.M)[-2:-1],
-                *np.shape(self.C)[-2:],
+                *np.shape(self.M)[-2 + self.diagonal_M : -1],
+                *np.shape(self.C)[-2 + self.diagonal_C :],
                 *np.shape(self.m)[-1:],
                 self._d,
             ]
@@ -123,16 +145,17 @@ class LinearModel(object):
         ----------
         theta : array_like, shape (k, n)
         """
-        M = matrix(self.M, self.d, self.n)
-        mu = self.m + np.einsum("...ja,...a->...j", M, theta)
-        return multivariate_normal(mu, self.C, self.shape, self.d)
+        mu = self.m + np.einsum("...ja,...a->...j", self._M, theta)
+        return multivariate_normal(mu, self.C, self.shape, self.d, self.diagonal_C)
 
     def prior(self):
         """P(theta) as a scipy distribution object.
 
         theta ~ N( mu, Sigma )
         """
-        return multivariate_normal(self.mu, self.Sigma, self.shape, self.n)
+        return multivariate_normal(
+            self.mu, self.Sigma, self.shape, self.n, self.diagonal_Sigma
+        )
 
     def posterior(self, D):
         """P(theta|D) as a scipy distribution object.
@@ -144,65 +167,63 @@ class LinearModel(object):
         ----------
         D : array_like, shape (d,)
         """
-        M = matrix(self.M, self.d, self.n)
         values = (
-            D - self.m - np.einsum("...ja,...a->...j", M, self.mu * np.ones(self.n))
+            D
+            - self.m
+            - np.einsum("...ja,...a->...j", self._M, self.mu * np.ones(self.n))
         )
 
-        if (
-            len(np.shape(self.Sigma)) > 1
-            or len(np.shape(self.C)) > 1
-            or len(np.shape(self.M)) > 1
-        ):
-            if len(np.shape(self.C)) > 1:
-                invC = inv(self.C)
-            else:
-                invC = np.eye(self.d) / self.C
+        diagonal_Sigma = self.diagonal_C and self.diagonal_Sigma and self.diagonal_M
 
-            if len(np.shape(self.Sigma)) > 1:
-                invSigma = inv(self.Sigma)
-            else:
-                invSigma = np.eye(self.n) / self.Sigma
-
-            Sigma = inv(invSigma + np.einsum("...aj,...ab,...bk->...jk", M, invC, M))
-            mu = self.mu + np.einsum(
-                "...ja,...ba,...bc,...c->...j", Sigma, M, invC, values
-            )
-        else:
+        if diagonal_Sigma:
             dim = min(self.n, self.d)
-            C = np.atleast_1d(self.C)[:dim]
-            M = np.atleast_1d(self.M)[:dim]
+            C = np.atleast_1d(self.C)[..., :dim]
+            M = np.atleast_1d(self.M)[..., :dim]
             Sigma = np.ones(self.n) * self.Sigma
-            Sigma[:dim] = 1 / (1 / Sigma[:dim] + M**2 / C)
+            Sigma[..., :dim] = 1 / (1 / Sigma[..., :dim] + M**2 / C)
 
             mu = np.broadcast_to(self.mu, values.shape[:-1] + (self.n,)).copy()
-            mu[..., :dim] = mu[..., :dim] + Sigma[:dim] * M / C * values[..., :dim]
+            mu[..., :dim] = mu[..., :dim] + Sigma[..., :dim] * M / C * values[..., :dim]
+        else:
+            if self.diagonal_C:
+                invC = np.eye(self.d) / self.C[..., None, :]
+            else:
+                invC = inv(self.C)
 
-        return multivariate_normal(mu, Sigma, self.shape, self.n)
+            if self.diagonal_Sigma:
+                invSigma = np.eye(self.n) / self.Sigma[..., None, :]
+            else:
+                invSigma = inv(self.Sigma)
+
+            Sigma = inv(
+                invSigma + np.einsum("...aj,...ab,...bk->...jk", self._M, invC, self._M)
+            )
+            mu = self.mu + np.einsum(
+                "...ja,...ba,...bc,...c->...j", Sigma, self._M, invC, values
+            )
+
+        return multivariate_normal(mu, Sigma, self.shape, self.n, diagonal_Sigma)
 
     def evidence(self):
         """P(D) as a scipy distribution object.
 
         D ~ N( m + M mu, C + M Sigma M' )
         """
-        M = matrix(self.M, self.d, self.n)
-        mu = self.m + np.einsum("...ja,...a->...j", M, self.mu * np.ones(self.n))
-        if (
-            len(np.shape(self.Sigma)) > 1
-            or len(np.shape(self.C)) > 1
-            or len(np.shape(self.M)) > 1
-        ):
-            Sigma = matrix(self.C, self.d) + np.einsum(
-                "...ja,...ab,...kb->...jk", M, matrix(self.Sigma, self.n), M
-            )
-        else:
+        mu = self.m + np.einsum("...ja,...a->...j", self._M, self.mu * np.ones(self.n))
+        diagonal_Sigma = self.diagonal_C and self.diagonal_Sigma and self.diagonal_M
+
+        if diagonal_Sigma:
             dim = min(self.n, self.d)
             Sigma = self.C * np.ones(self.d)
-            M = np.atleast_1d(self.M)[:dim]
-            S = np.atleast_1d(self.Sigma)[:dim]
-            Sigma[:dim] += S * M**2
+            M = np.atleast_1d(self.M)[..., :dim]
+            S = np.atleast_1d(self.Sigma)[..., :dim]
+            Sigma[..., :dim] += S * M**2
+        else:
+            Sigma = self._C + np.einsum(
+                "...ja,...ab,...kb->...jk", self._M, self._Sigma, self._M
+            )
 
-        return multivariate_normal(mu, Sigma, self.shape, self.d)
+        return multivariate_normal(mu, Sigma, self.shape, self.d, diagonal_Sigma)
 
     def joint(self):
         """P(D, theta) as a scipy distribution object.
@@ -215,15 +236,42 @@ class LinearModel(object):
         a = np.broadcast_to(evidence.mean, self.shape + (self.d,))
         b = np.broadcast_to(prior.mean, self.shape + (self.n,))
         mu = np.block([a, b])
-        M = matrix(self.M, self.d, self.n)
-        Sigma = matrix(self.Sigma, self.n)
-        corr = np.einsum("...ja,...al->...jl", M, Sigma)
-        A = np.broadcast_to(matrix(evidence.cov, self.d), self.shape + (self.d, self.d))
-        D = np.broadcast_to(matrix(prior.cov, self.n), self.shape + (self.n, self.n))
-        B = np.broadcast_to(corr, self.shape + (self.d, self.n))
+        if evidence.diagonal_cov:
+            A = evidence.cov[..., None, :] * np.eye(self.d)
+        else:
+            A = evidence.cov
+        if prior.diagonal_cov:
+            D = prior.cov[..., None, :] * np.eye(self.n)
+        else:
+            D = prior.cov
+        B = np.einsum("...ja,...al->...jl", self._M, self._Sigma)
+        A = np.broadcast_to(A, self.shape + (self.d, self.d))
+        D = np.broadcast_to(D, self.shape + (self.n, self.n))
+        B = np.broadcast_to(B, self.shape + (self.d, self.n))
         C = np.moveaxis(B, -1, -2)
         Sigma = np.block([[A, B], [C, D]])
         return multivariate_normal(mu, Sigma, self.shape, self.n + self.d)
+
+    @property
+    def _M(self):
+        if self.diagonal_M:
+            return self.M[..., None, :] * np.eye(self.d, self.n)
+        else:
+            return self.M
+
+    @property
+    def _C(self):
+        if self.diagonal_C:
+            return self.C[..., None, :] * np.eye(self.d)
+        else:
+            return self.C
+
+    @property
+    def _Sigma(self):
+        if self.diagonal_Sigma:
+            return self.Sigma[..., None, :] * np.eye(self.n)
+        else:
+            return self.Sigma
 
 
 class LinearMixtureModel(LinearModel):
@@ -276,13 +324,27 @@ class LinearMixtureModel(LinearModel):
         Number of parameters, defaults to automatically inferred value
     d : int, optional
         Number of data dimensions, defaults to automatically inferred value
-    k : int, optional
-        Number of mixture components, defaults to automatically inferred value
     """
 
-    def __init__(self, logA=1, M=1, m=0, C=1, mu=0, Sigma=1, shape=(), n=1, d=1, k=1):
+    def __init__(
+        self,
+        logA=1,
+        M=1,
+        m=0,
+        C=1,
+        mu=0,
+        Sigma=1,
+        shape=(),
+        n=1,
+        d=1,
+        diagonal_M=False,
+        diagonal_C=False,
+        diagonal_Sigma=False,
+    ):
         self.logA = logA
-        super().__init__(M=M, m=m, C=C, mu=mu, Sigma=Sigma, shape=shape, n=n, d=d)
+        super().__init__(
+            M, m, C, mu, Sigma, shape, n, d, diagonal_M, diagonal_C, diagonal_Sigma
+        )
 
     @classmethod
     def from_joint(cls, means, covs, logA, n):

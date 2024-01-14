@@ -307,12 +307,7 @@ class mixture_normal(multivariate_normal):
     @property
     def shape(self):
         """Shape of the distribution."""
-        return np.broadcast_shapes(
-            np.shape(self.logA),
-            np.shape(self.mean)[:-1],
-            np.shape(self.cov)[: -2 + self.diagonal_cov],
-            self._shape,
-        )
+        return np.broadcast_shapes(np.shape(self.logA), super().shape)
 
     def logpdf(self, x):
         """Log of the probability density function.
