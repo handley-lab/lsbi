@@ -177,21 +177,22 @@ class LinearModel(object):
 
         if diagonal_Sigma:
             dim = min(self.n, self.d)
+            shape = np.broadcast_shapes(self.shape, values.shape[:-1])
             C = np.atleast_1d(self.C)[..., :dim]
             M = np.atleast_1d(self.M)[..., :dim]
-            Sigma = np.ones(self.n) * self.Sigma
+            Sigma = np.broadcast_to(self.Sigma, shape + (self.n,)).copy()
             Sigma[..., :dim] = 1 / (1 / Sigma[..., :dim] + M**2 / C)
 
-            mu = np.broadcast_to(self.mu, values.shape[:-1] + (self.n,)).copy()
+            mu = np.broadcast_to(self.mu, shape + (self.n,)).copy()
             mu[..., :dim] = mu[..., :dim] + Sigma[..., :dim] * M / C * values[..., :dim]
         else:
             if self.diagonal_C:
-                invC = np.eye(self.d) / self.C[..., None, :]
+                invC = np.eye(self.d) / np.atleast_1d(self.C)[..., None, :]
             else:
                 invC = inv(self.C)
 
             if self.diagonal_Sigma:
-                invSigma = np.eye(self.n) / self.Sigma[..., None, :]
+                invSigma = np.eye(self.n) / np.atleast_1d(self.Sigma)[..., None, :]
             else:
                 invSigma = inv(self.Sigma)
 
@@ -214,9 +215,9 @@ class LinearModel(object):
 
         if diagonal_Sigma:
             dim = min(self.n, self.d)
-            Sigma = self.C * np.ones(self.d)
             M = np.atleast_1d(self.M)[..., :dim]
             S = np.atleast_1d(self.Sigma)[..., :dim]
+            Sigma = np.broadcast_to(self.C, self.shape + (self.d,)).copy()
             Sigma[..., :dim] += S * M**2
         else:
             Sigma = self._C + np.einsum(
@@ -237,11 +238,11 @@ class LinearModel(object):
         b = np.broadcast_to(prior.mean, self.shape + (self.n,))
         mu = np.block([a, b])
         if evidence.diagonal_cov:
-            A = evidence.cov[..., None, :] * np.eye(self.d)
+            A = np.atleast_1d(evidence.cov)[..., None, :] * np.eye(self.d)
         else:
             A = evidence.cov
         if prior.diagonal_cov:
-            D = prior.cov[..., None, :] * np.eye(self.n)
+            D = np.atleast_1d(prior.cov)[..., None, :] * np.eye(self.n)
         else:
             D = prior.cov
         B = np.einsum("...ja,...al->...jl", self._M, self._Sigma)
@@ -255,21 +256,21 @@ class LinearModel(object):
     @property
     def _M(self):
         if self.diagonal_M:
-            return self.M[..., None, :] * np.eye(self.d, self.n)
+            return np.atleast_1d(self.M)[..., None, :] * np.eye(self.d, self.n)
         else:
             return self.M
 
     @property
     def _C(self):
         if self.diagonal_C:
-            return self.C[..., None, :] * np.eye(self.d)
+            return np.atleast_1d(self.C)[..., None, :] * np.eye(self.d)
         else:
             return self.C
 
     @property
     def _Sigma(self):
         if self.diagonal_Sigma:
-            return self.Sigma[..., None, :] * np.eye(self.n)
+            return np.atleast_1d(self.Sigma)[..., None, :] * np.eye(self.n)
         else:
             return self.Sigma
 

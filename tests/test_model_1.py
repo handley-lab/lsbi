@@ -9,30 +9,35 @@ dims = [1, 2, 4]
 tests = []
 for d in dims:
     for n in dims:
-        for shape in shapes:
-            m_shape = shape
-            M_shape = shape
-            mu_shape = shape
-            C_shape = shape
-            Sigma_shape = shape
-            for diagonal_Sigma in [True, False]:
-                for diagonal_C in [True, False]:
-                    for diagonal_M in [True, False]:
-                        tests.append(
-                            (
-                                d,
-                                n,
-                                shape,
-                                m_shape,
-                                M_shape,
-                                mu_shape,
-                                C_shape,
-                                Sigma_shape,
-                                diagonal_Sigma,
-                                diagonal_C,
-                                diagonal_M,
-                            )
+        for diagonal_Sigma in [True, False]:
+            for diagonal_C in [True, False]:
+                for diagonal_M in [True, False]:
+                    for base_shape in shapes + ["scalar"]:
+                        shape = base_shape
+                        m_shape = base_shape
+                        M_shape = base_shape
+                        mu_shape = base_shape
+                        C_shape = base_shape
+                        Sigma_shape = base_shape
+                        base_test = (
+                            d,
+                            n,
+                            shape,
+                            m_shape,
+                            M_shape,
+                            mu_shape,
+                            C_shape,
+                            Sigma_shape,
+                            diagonal_Sigma,
+                            diagonal_C,
+                            diagonal_M,
                         )
+                        for alt_shape in shapes + ["scalar"]:
+                            for i in range(2, 8):
+                                test = base_test[:i] + (alt_shape,) + base_test[i + 1 :]
+                                if test[2] == "scalar":
+                                    continue
+                                tests.append(test)
 
 
 # @pytest.mark.parametrize("d", dims)
@@ -108,9 +113,15 @@ class TestLinearModel(object):
         assert np.all(model.C == C)
         assert np.all(model.mu == mu)
         assert np.all(model.Sigma == Sigma)
-        assert model.diagonal_M == diagonal_M
-        assert model.diagonal_C == diagonal_C
-        assert model.diagonal_Sigma == diagonal_Sigma
+        assert model.diagonal_M == diagonal_M or (
+            M_shape == "scalar" and model.diagonal_M
+        )
+        assert model.diagonal_C == diagonal_C or (
+            C_shape == "scalar" and model.diagonal_C
+        )
+        assert model.diagonal_Sigma == diagonal_Sigma or (
+            Sigma_shape == "scalar" and model.diagonal_Sigma
+        )
         return model
 
     @pytest.mark.parametrize("theta_shape", shapes)
