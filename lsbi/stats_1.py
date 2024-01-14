@@ -383,10 +383,6 @@ class mixture_normal(multivariate_normal):
         -------
         mixture_normal shape (..., k)
         """
-        if len(np.shape(A)) > 1:
-            A = np.expand_dims(A, axis=-3 + diagonal_A)
-        if len(np.shape(b)) > 0:
-            b = np.expand_dims(b, axis=-2)
         dist = super().predict(A, b, diagonal_A)
         return mixture_normal(
             self.logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov

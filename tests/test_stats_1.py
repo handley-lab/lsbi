@@ -257,27 +257,27 @@ class TestMixtureNormal(object):
         if b_shape == "scalar":
             b = np.random.randn()
         else:
-            b = np.random.randn(*b_shape[:-1], k)
+            b = np.random.randn(*b_shape, k)
 
         if A_shape == "scalar":
             A = np.random.randn()
         elif diagonal_A:
-            A = np.random.randn(*A_shape[:-1], dim)
+            A = np.random.randn(*A_shape, dim)
         else:
-            A = np.random.randn(*A_shape[:-1], k, dim)
+            A = np.random.randn(*A_shape, k, dim)
 
         dist_2 = dist.predict(A, b, diagonal_A)
         assert isinstance(dist_2, self.cls)
-        assert dist_2.shape[:-1] == np.broadcast_shapes(
-            dist.shape[:-1],
+        assert dist_2.shape == np.broadcast_shapes(
+            dist.shape,
             np.shape(A)[: -2 + diagonal_A],
             np.shape(b)[:-1],
         )
-        assert np.shape(dist_2.cov)[: -3 + dist_2.diagonal_cov] == np.broadcast_shapes(
-            np.shape(dist.cov)[: -3 + diagonal_cov], np.shape(A)[: -2 + diagonal_A]
+        assert np.shape(dist_2.cov)[: -2 + dist_2.diagonal_cov] == np.broadcast_shapes(
+            np.shape(dist.cov)[: -2 + diagonal_cov], np.shape(A)[: -2 + diagonal_A]
         )
-        assert np.shape(dist_2.mean)[:-2] == np.broadcast_shapes(
-            np.shape(dist.mean)[:-2],
+        assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
+            np.shape(dist.mean)[:-1],
             np.shape(A)[: -2 + diagonal_A],
             np.shape(b)[:-1],
         )
@@ -285,14 +285,14 @@ class TestMixtureNormal(object):
 
         dist_2 = dist.predict(A, diagonal_A=diagonal_A)
         assert isinstance(dist_2, self.cls)
-        assert dist_2.shape[:-1] == np.broadcast_shapes(
-            dist.shape[:-1], np.shape(A)[: -2 + diagonal_A]
+        assert dist_2.shape == np.broadcast_shapes(
+            dist.shape, np.shape(A)[: -2 + diagonal_A]
         )
-        assert np.shape(dist_2.cov)[: -3 + dist_2.diagonal_cov] == np.broadcast_shapes(
-            np.shape(dist.cov)[: -3 + diagonal_cov], np.shape(A)[: -2 + diagonal_A]
+        assert np.shape(dist_2.cov)[: -2 + dist_2.diagonal_cov] == np.broadcast_shapes(
+            np.shape(dist.cov)[: -2 + diagonal_cov], np.shape(A)[: -2 + diagonal_A]
         )
-        assert np.shape(dist_2.mean)[:-2] == np.broadcast_shapes(
-            np.shape(dist.mean)[:-2], np.shape(A)[: -2 + diagonal_A]
+        assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
+            np.shape(dist.mean)[:-1], np.shape(A)[: -2 + diagonal_A]
         )
         assert dist_2.dim == k
 
