@@ -302,9 +302,7 @@ class mixture_normal(multivariate_normal):
 
     def __init__(self, logA=0, mean=0, cov=1, shape=(), dim=0, diagonal_cov=False):
         self.logA = logA
-        super().__init__(
-            mean=mean, cov=cov, shape=shape, dim=dim, diagonal_cov=diagonal_cov
-        )
+        super().__init__(mean, cov, shape, dim, diagonal_cov)
 
     @property
     def shape(self):
