@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from lsbi.model_1 import LinearMixtureModel, LinearModel
+from lsbi.model_1 import LinearModel, MixtureModel
 
 shapes = [(2, 3), (3,), ()]
 dims = [1, 2, 4]
@@ -108,6 +108,9 @@ class TestLinearModel(object):
         assert np.all(model.C == C)
         assert np.all(model.mu == mu)
         assert np.all(model.Sigma == Sigma)
+        assert model.diagonal_M == diagonal_M
+        assert model.diagonal_C == diagonal_C
+        assert model.diagonal_Sigma == diagonal_Sigma
         return model
 
     @pytest.mark.parametrize("theta_shape", shapes)
@@ -272,251 +275,223 @@ class TestLinearModel(object):
         assert dist.dim == model.n + model.d
 
 
-# @pytest.mark.parametrize("logA_shape", shapes)
-# class TestLinearMixtureModel(TestLinearModel):
-#   def random(
-#       self,
-#       logA_shape,
-#       M_shape,
-#       diagonal_M,
-#       m_shape,
-#       C_shape,
-#       diagonal_C,
-#       mu_shape,
-#       Sigma_shape,
-#       diagonal_Sigma,
-#       shape,
-#       n,
-#       d,
-#   ):
-#       model = super().random(
-#           M_shape,
-#           diagonal_M,
-#           m_shape,
-#           C_shape,
-#           diagonal_C,
-#           mu_shape,
-#           Sigma_shape,
-#           diagonal_Sigma,
-#           shape,
-#           n,
-#           d,
-#       )
-#       logA = np.random.randn(*logA_shape)
-#       model = LinearMixtureModel(
-#           logA, model.M, model.m, model.C, model.mu, model.Sigma, shape, n, d
-#       )
-#       assert np.all(model.logA == logA)
-#       return model
-#
-#   def test_init(
-#       self,
-#       logA_shape,
-#       M_shape,
-#       diagonal_M,
-#       m_shape,
-#       C_shape,
-#       diagonal_C,
-#       mu_shape,
-#       Sigma_shape,
-#       diagonal_Sigma,
-#       shape,
-#       n,
-#       d,
-#   ):
-#       model = self.random(
-#           logA_shape,
-#           M_shape,
-#           diagonal_M,
-#           m_shape,
-#           C_shape,
-#           diagonal_C,
-#           mu_shape,
-#           Sigma_shape,
-#           diagonal_Sigma,
-#           shape,
-#           n,
-#           d,
-#       )
-#       assert model.shape == np.broadcast_shapes(
-#           shape,
-#           np.shape(np.atleast_2d(model.M))[:-2],
-#           np.shape(np.atleast_1d(model.m))[:-1],
-#           np.shape(np.atleast_1d(model.mu))[:-1],
-#           np.shape(np.atleast_2d(model.C))[:-2],
-#           np.shape(np.atleast_2d(model.Sigma))[:-2],
-#           np.shape(model.logA),
-#       )
-#
-#   @pytest.mark.parametrize("theta_shape", shapes)
-#   def test_likelihood(
-#       self,
-#       theta_shape,
-#       logA_shape,
-#       M_shape,
-#       diagonal_M,
-#       m_shape,
-#       C_shape,
-#       diagonal_C,
-#       mu_shape,
-#       Sigma_shape,
-#       diagonal_Sigma,
-#       shape,
-#       n,
-#       d,
-#   ):
-#       model = self.random(
-#           logA_shape,
-#           M_shape,
-#           diagonal_M,
-#           m_shape,
-#           C_shape,
-#           diagonal_C,
-#           mu_shape,
-#           Sigma_shape,
-#           diagonal_Sigma,
-#           shape,
-#           n,
-#           d,
-#       )
-#       theta = np.random.randn(*theta_shape[:-1], n)
-#       dist = model.likelihood(theta)
-#       if model.shape != ():
-#           assert dist.shape == np.broadcast_shapes(model.shape, theta_shape)
-#       assert dist.dim == model.d
-#
-#   def test_prior(
-#       self,
-#       logA_shape,
-#       M_shape,
-#       diagonal_M,
-#       m_shape,
-#       C_shape,
-#       diagonal_C,
-#       mu_shape,
-#       Sigma_shape,
-#       diagonal_Sigma,
-#       shape,
-#       n,
-#       d,
-#   ):
-#       model = self.random(
-#           logA_shape,
-#           M_shape,
-#           diagonal_M,
-#           m_shape,
-#           C_shape,
-#           diagonal_C,
-#           mu_shape,
-#           Sigma_shape,
-#           diagonal_Sigma,
-#           shape,
-#           n,
-#           d,
-#       )
-#       dist = model.prior()
-#       assert dist.shape == model.shape
-#       assert dist.dim == model.n
-#
-#   @pytest.mark.parametrize("D_shape", shapes)
-#   def test_posterior(
-#       self,
-#       D_shape,
-#       logA_shape,
-#       M_shape,
-#       diagonal_M,
-#       m_shape,
-#       C_shape,
-#       diagonal_C,
-#       mu_shape,
-#       Sigma_shape,
-#       diagonal_Sigma,
-#       shape,
-#       n,
-#       d,
-#   ):
-#       model = self.random(
-#           logA_shape,
-#           M_shape,
-#           diagonal_M,
-#           m_shape,
-#           C_shape,
-#           diagonal_C,
-#           mu_shape,
-#           Sigma_shape,
-#           diagonal_Sigma,
-#           shape,
-#           n,
-#           d,
-#       )
-#       D = np.random.randn(*D_shape[:-1], d)
-#       dist = model.posterior(D)
-#       if model.shape != ():
-#           assert dist.shape == np.broadcast_shapes(model.shape, D_shape)
-#       assert dist.dim == model.n
-#
-#   def test_evidence(
-#       self,
-#       logA_shape,
-#       M_shape,
-#       diagonal_M,
-#       m_shape,
-#       C_shape,
-#       diagonal_C,
-#       mu_shape,
-#       Sigma_shape,
-#       diagonal_Sigma,
-#       shape,
-#       n,
-#       d,
-#   ):
-#       model = self.random(
-#           logA_shape,
-#           M_shape,
-#           diagonal_M,
-#           m_shape,
-#           C_shape,
-#           diagonal_C,
-#           mu_shape,
-#           Sigma_shape,
-#           diagonal_Sigma,
-#           shape,
-#           n,
-#           d,
-#       )
-#       dist = model.evidence()
-#       assert dist.shape == model.shape
-#       assert dist.dim == model.d
-#
-#   def test_joint(
-#       self,
-#       logA_shape,
-#       M_shape,
-#       diagonal_M,
-#       m_shape,
-#       C_shape,
-#       diagonal_C,
-#       mu_shape,
-#       Sigma_shape,
-#       diagonal_Sigma,
-#       shape,
-#       n,
-#       d,
-#   ):
-#       model = self.random(
-#           logA_shape,
-#           M_shape,
-#           diagonal_M,
-#           m_shape,
-#           C_shape,
-#           diagonal_C,
-#           mu_shape,
-#           Sigma_shape,
-#           diagonal_Sigma,
-#           shape,
-#           n,
-#           d,
-#       )
-#       dist = model.joint()
-#       assert dist.shape == model.shape
-#       assert dist.dim == model.n + model.d
+@pytest.mark.parametrize("logA_shape", shapes)
+class TestMixtureModel(TestLinearModel):
+    def random(
+        self,
+        logA_shape,
+        M_shape,
+        diagonal_M,
+        m_shape,
+        C_shape,
+        diagonal_C,
+        mu_shape,
+        Sigma_shape,
+        diagonal_Sigma,
+        shape,
+        n,
+        d,
+    ):
+        model = super().random(
+            M_shape,
+            diagonal_M,
+            m_shape,
+            C_shape,
+            diagonal_C,
+            mu_shape,
+            Sigma_shape,
+            diagonal_Sigma,
+            shape,
+            n,
+            d,
+        )
+        logA = np.random.randn(*logA_shape)
+        model = MixtureModel(
+            logA,
+            model.M,
+            model.m,
+            model.C,
+            model.mu,
+            model.Sigma,
+            shape,
+            n,
+            d,
+            diagonal_M,
+            diagonal_C,
+            diagonal_Sigma,
+        )
+        assert np.all(model.logA == logA)
+        return model
+
+    @pytest.mark.parametrize("theta_shape", shapes)
+    def test_likelihood(
+        self,
+        theta_shape,
+        logA_shape,
+        M_shape,
+        diagonal_M,
+        m_shape,
+        C_shape,
+        diagonal_C,
+        mu_shape,
+        Sigma_shape,
+        diagonal_Sigma,
+        shape,
+        n,
+        d,
+    ):
+        model = self.random(
+            logA_shape,
+            M_shape,
+            diagonal_M,
+            m_shape,
+            C_shape,
+            diagonal_C,
+            mu_shape,
+            Sigma_shape,
+            diagonal_Sigma,
+            shape,
+            n,
+            d,
+        )
+        theta = np.random.randn(*theta_shape[:-1], n)
+        dist = model.likelihood(theta)
+        if model.shape != ():
+            assert dist.shape == np.broadcast_shapes(model.shape, theta_shape)
+        assert dist.dim == model.d
+
+    def test_prior(
+        self,
+        logA_shape,
+        M_shape,
+        diagonal_M,
+        m_shape,
+        C_shape,
+        diagonal_C,
+        mu_shape,
+        Sigma_shape,
+        diagonal_Sigma,
+        shape,
+        n,
+        d,
+    ):
+        model = self.random(
+            logA_shape,
+            M_shape,
+            diagonal_M,
+            m_shape,
+            C_shape,
+            diagonal_C,
+            mu_shape,
+            Sigma_shape,
+            diagonal_Sigma,
+            shape,
+            n,
+            d,
+        )
+        dist = model.prior()
+        assert dist.shape == model.shape
+        assert dist.dim == model.n
+
+    @pytest.mark.parametrize("D_shape", shapes)
+    def test_posterior(
+        self,
+        D_shape,
+        logA_shape,
+        M_shape,
+        diagonal_M,
+        m_shape,
+        C_shape,
+        diagonal_C,
+        mu_shape,
+        Sigma_shape,
+        diagonal_Sigma,
+        shape,
+        n,
+        d,
+    ):
+        model = self.random(
+            logA_shape,
+            M_shape,
+            diagonal_M,
+            m_shape,
+            C_shape,
+            diagonal_C,
+            mu_shape,
+            Sigma_shape,
+            diagonal_Sigma,
+            shape,
+            n,
+            d,
+        )
+        D = np.random.randn(*D_shape[:-1], d)
+        dist = model.posterior(D)
+        if model.shape != ():
+            assert dist.shape == np.broadcast_shapes(model.shape, D_shape)
+        assert dist.dim == model.n
+
+    def test_evidence(
+        self,
+        logA_shape,
+        M_shape,
+        diagonal_M,
+        m_shape,
+        C_shape,
+        diagonal_C,
+        mu_shape,
+        Sigma_shape,
+        diagonal_Sigma,
+        shape,
+        n,
+        d,
+    ):
+        model = self.random(
+            logA_shape,
+            M_shape,
+            diagonal_M,
+            m_shape,
+            C_shape,
+            diagonal_C,
+            mu_shape,
+            Sigma_shape,
+            diagonal_Sigma,
+            shape,
+            n,
+            d,
+        )
+        dist = model.evidence()
+        assert dist.shape == model.shape
+        assert dist.dim == model.d
+
+    def test_joint(
+        self,
+        logA_shape,
+        M_shape,
+        diagonal_M,
+        m_shape,
+        C_shape,
+        diagonal_C,
+        mu_shape,
+        Sigma_shape,
+        diagonal_Sigma,
+        shape,
+        n,
+        d,
+    ):
+        model = self.random(
+            logA_shape,
+            M_shape,
+            diagonal_M,
+            m_shape,
+            C_shape,
+            diagonal_C,
+            mu_shape,
+            Sigma_shape,
+            diagonal_Sigma,
+            shape,
+            n,
+            d,
+        )
+        dist = model.joint()
+        assert dist.shape == model.shape
+        assert dist.dim == model.n + model.d

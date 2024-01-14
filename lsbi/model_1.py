@@ -274,7 +274,7 @@ class LinearModel(object):
             return self.Sigma
 
 
-class LinearMixtureModel(LinearModel):
+class MixtureModel(LinearModel):
     """A linear mixture model.
 
     D|theta, A ~ N( m + M theta, C )
@@ -359,15 +359,7 @@ class LinearMixtureModel(LinearModel):
     @property
     def shape(self):
         """Shape of the distribution."""
-        return np.broadcast_shapes(
-            np.array(self.logA).shape,
-            np.atleast_2d(self.M).shape[:-2],
-            np.atleast_1d(self.m).shape[:-1],
-            np.atleast_2d(self.C).shape[:-2],
-            np.atleast_1d(self.mu).shape[:-1],
-            np.atleast_2d(self.Sigma).shape[:-2],
-            self._shape,
-        )
+        return np.broadcast_shapes(np.shape(self.logA), super().shape)
 
     @property
     def k(self):
@@ -385,9 +377,11 @@ class LinearMixtureModel(LinearModel):
         ----------
         theta : array_like, shape (n,)
         """
-        dist = super().likelihood(theta[..., None, :])
+        dist = super(self.__class__, self).likelihood(theta[..., None, :])
         logA = self.prior().weights(theta)
-        return mixture_normal(logA, dist.mean, dist.cov, dist.shape, dist.dim)
+        return mixture_normal(
+            logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
+        )
 
     def prior(self):
         """P(theta) as a scipy distribution object.
@@ -396,7 +390,9 @@ class LinearMixtureModel(LinearModel):
         A       ~ categorical(exp(logA))
         """
         dist = super().prior()
-        return mixture_normal(self.logA, dist.mean, dist.cov, dist.shape, dist.dim)
+        return mixture_normal(
+            self.logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
+        )
 
     def posterior(self, D):
         """P(theta|D) as a scipy distribution object.
@@ -412,7 +408,9 @@ class LinearMixtureModel(LinearModel):
         """
         dist = super().posterior(D[..., None, :])
         logA = self.evidence().weights(D)
-        return mixture_normal(logA, dist.mean, dist.cov, dist.shape, dist.dim)
+        return mixture_normal(
+            logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
+        )
 
     def evidence(self):
         """P(D) as a scipy distribution object.
@@ -421,7 +419,9 @@ class LinearMixtureModel(LinearModel):
         A   ~ categorical(exp(logA))
         """
         dist = super().evidence()
-        return mixture_normal(self.logA, dist.mean, dist.cov, dist.shape, dist.dim)
+        return mixture_normal(
+            self.logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
+        )
 
     def joint(self):
         """P(D, theta) as a scipy distribution object.
@@ -432,7 +432,9 @@ class LinearMixtureModel(LinearModel):
         A           ~ categorical(exp(logA))
         """
         dist = super().joint()
-        return mixture_normal(self.logA, dist.mean, dist.cov, dist.shape, dist.dim)
+        return mixture_normal(
+            self.logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
+        )
 
 
 class ReducedLinearModel(object):
