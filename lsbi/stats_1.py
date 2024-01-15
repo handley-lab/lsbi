@@ -89,7 +89,7 @@ class multivariate_normal(object):
         dx = x.reshape(*size, *np.ones_like(self.shape), self.dim) - mean
         if self.diagonal_cov:
             chi2 = (dx**2 / self.cov).sum(axis=-1)
-            norm = -np.log(2 * np.pi * np.ones(self.dim) * self.cov).sum() / 2
+            norm = -np.log(2 * np.pi * np.ones(self.dim) * self.cov).sum(axis=-1) / 2
         else:
             chi2 = np.einsum("...j,...jk,...k->...", dx, inv(self.cov), dx)
             norm = -logdet(2 * np.pi * self.cov) / 2
@@ -309,6 +309,13 @@ class mixture_normal(multivariate_normal):
         """Shape of the distribution."""
         return np.broadcast_shapes(np.shape(self.logA), super().shape)
 
+    @property
+    def k(self):
+        """Number of components."""
+        if self.shape == ():
+            return 1
+        return self.shape[-1]
+
     def logpdf(self, x):
         """Log of the probability density function.
 
@@ -326,8 +333,7 @@ class mixture_normal(multivariate_normal):
         logpdf = super().logpdf(x)
         if self.shape == ():
             return logpdf
-        logA = self.logA - logsumexp(self.logA, axis=-1)[..., None]
-        return logsumexp(logpdf + logA, axis=-1)
+        return logsumexp(logpdf + self._logA, axis=-1)
 
     def rvs(self, size=()):
         """Draw random samples from the distribution.
@@ -343,9 +349,7 @@ class mixture_normal(multivariate_normal):
         if self.shape == ():
             return super().rvs(size=size)
         size = np.atleast_1d(np.array(size, dtype=int))
-        p = np.exp(self.logA - logsumexp(self.logA, axis=-1)[..., None])
-        p = np.broadcast_to(p, self.shape)
-        i = choice(size, p)
+        i = choice(size, np.exp(self._logA))
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
         mean = np.choose(i[..., None], np.moveaxis(mean, -2, 0))
         x = np.random.randn(*size, *self.shape[:-1], self.dim)
@@ -461,3 +465,10 @@ class mixture_normal(multivariate_normal):
             return x
         else:
             return theta
+
+    @property
+    def _logA(self):
+        """Log of the mixing weights."""
+        logA = np.broadcast_to(self.logA, self.shape).copy()
+        logA -= logsumexp(logA, axis=-1, keepdims=True)
+        return logA

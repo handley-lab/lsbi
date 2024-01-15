@@ -1,5 +1,9 @@
 import numpy as np
 import pytest
+import scipy
+from numpy.testing import assert_allclose
+from scipy.special import logsumexp
+from scipy.stats import multivariate_normal as scipy_multivariate_normal
 
 from lsbi.stats_1 import mixture_normal, multivariate_normal
 
@@ -79,12 +83,46 @@ class TestMultivariateNormal(object):
         logpdf = dist.logpdf(x)
         assert logpdf.shape == size + dist.shape
 
+        mean = np.broadcast_to(dist.mean, dist.shape + (dist.dim,)).reshape(
+            -1, dist.dim
+        )
+        if dist.diagonal_cov:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim,)).reshape(
+                -1, dist.dim
+            )
+        else:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim, dist.dim)).reshape(
+                -1, dist.dim, dist.dim
+            )
+
+        flat_dist = [
+            scipy_multivariate_normal(m, c, allow_singular=True)
+            for (m, c) in zip(mean, cov)
+        ]
+        flat_logpdf = np.array([d.logpdf(x) for d in flat_dist])
+        flat_logpdf = np.moveaxis(flat_logpdf, 0, -1).reshape(logpdf.shape)
+
+        assert_allclose(logpdf, flat_logpdf)
+
     @pytest.mark.parametrize("size", sizes)
     @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
     def test_rvs(self, dim, shape, mean_shape, cov_shape, diagonal_cov, size):
         dist = self.random(dim, shape, mean_shape, cov_shape, diagonal_cov)
-        x = dist.rvs(size)
-        assert x.shape == size + dist.shape + (dim,)
+        rvs = dist.rvs(size)
+        assert rvs.shape == size + dist.shape + (dim,)
+
+        if dist.diagonal_cov:
+            chi2 = ((rvs - dist.mean) ** 2 / dist.cov).sum(axis=-1).flatten()
+        else:
+            chi2 = np.einsum(
+                "...j,...jk,...k->...",
+                rvs - dist.mean,
+                np.linalg.inv(dist.cov),
+                rvs - dist.mean,
+            ).flatten()
+        assert (
+            scipy.stats.kstest(chi2, scipy.stats.chi2(df=dist.dim).cdf).pvalue > 1e-10
+        )
 
     @pytest.mark.parametrize(
         "dim, shape, mean_shape, cov_shape, diagonal_cov, A_shape, diagonal_A, b_shape, k",
@@ -200,6 +238,9 @@ class TestMultivariateNormal(object):
 
         assert x.shape == np.broadcast_shapes(dist.shape + (dim,), x.shape)
 
+        # TODO Sort out broadcasting
+        # assert_allclose(y, dist.bijector(x))
+
 
 @pytest.mark.parametrize("logA_shape", shapes)
 class TestMixtureNormal(TestMultivariateNormal):
@@ -224,14 +265,81 @@ class TestMixtureNormal(TestMultivariateNormal):
         logpdf = dist.logpdf(x)
         assert logpdf.shape == size + dist.shape[:-1]
 
+        logA = np.broadcast_to(dist.logA, dist.shape).reshape(-1, dist.k).copy()
+        logA -= logsumexp(logA, axis=-1, keepdims=True)
+        mean = np.broadcast_to(dist.mean, dist.shape + (dist.dim,)).reshape(
+            -1, dist.k, dist.dim
+        )
+        if dist.diagonal_cov:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim,)).reshape(
+                -1, dist.k, dist.dim
+            )
+        else:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim, dist.dim)).reshape(
+                -1, dist.k, dist.dim, dist.dim
+            )
+
+        flat_dist = [
+            [
+                scipy_multivariate_normal(m, c, allow_singular=True)
+                for (m, c) in zip(ms, cs)
+            ]
+            for (ms, cs) in zip(mean, cov)
+        ]
+        flat_logpdf = np.array(
+            [
+                logsumexp([la + d.logpdf(x) for la, d in zip(las, ds)], axis=0)
+                for las, ds in zip(logA, flat_dist)
+            ]
+        )
+        flat_logpdf = np.moveaxis(flat_logpdf, 0, -1).reshape(logpdf.shape)
+        assert_allclose(logpdf, flat_logpdf)
+
     @pytest.mark.parametrize("size", sizes)
     @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
     def test_rvs(
         self, dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov, size
     ):
         dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov)
-        x = dist.rvs(size)
-        assert x.shape == size + dist.shape[:-1] + (dim,)
+        rvs = dist.rvs(size)
+        assert rvs.shape == size + dist.shape[:-1] + (dim,)
+
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
+    def test_rvs(self, dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov):
+        size = 1000
+        dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov)
+        rvs = dist.rvs(size)
+        logA = np.broadcast_to(dist.logA, dist.shape).reshape(-1, dist.k).copy()
+        logA -= logsumexp(logA, axis=-1, keepdims=True)
+        p = np.exp(logA)
+        mean = np.broadcast_to(dist.mean, dist.shape + (dist.dim,)).reshape(
+            -1, dist.k, dist.dim
+        )
+        if dist.diagonal_cov:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim,)).reshape(
+                -1, dist.k, dist.dim
+            )
+        else:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim, dist.dim)).reshape(
+                -1, dist.k, dist.dim, dist.dim
+            )
+
+        rvs_ = np.array(
+            [
+                [
+                    scipy_multivariate_normal(ms[j], cs[j], allow_singular=True).rvs()
+                    for j in np.random.choice(len(ms), p=ps, size=size)
+                ]
+                for ms, cs, ps in zip(mean, cov, p)
+            ]
+        )
+        rvs = np.moveaxis(rvs, -2, 0).reshape(-1, size, dim)
+        for a, b in zip(rvs, rvs_):
+            for i in range(dim):
+                if dim == 1:
+                    assert scipy.stats.kstest(a[:, i], b).pvalue > 1e-10
+                else:
+                    assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > 1e-10
 
     @pytest.mark.parametrize(
         "dim, shape, mean_shape, cov_shape, diagonal_cov, A_shape, diagonal_A, b_shape, k",
@@ -364,3 +472,6 @@ class TestMixtureNormal(TestMultivariateNormal):
         y = np.random.rand(*x_shape[:-1], dim)
         x = dist.bijector(y, inverse=True)
         assert x.shape == np.broadcast_shapes(y.shape, dist.shape[:-1] + (dim,))
+
+        # TODO Sort out broadcasting
+        # assert_allclose(y, dist.bijector(x))

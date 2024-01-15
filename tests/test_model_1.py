@@ -40,17 +40,6 @@ for d in dims:
                                 tests.append(test)
 
 
-# @pytest.mark.parametrize("d", dims)
-# @pytest.mark.parametrize("n", dims)
-# @pytest.mark.parametrize("shape", shapes)
-# @pytest.mark.parametrize("m_shape", shapes + ["scalar"])
-# @pytest.mark.parametrize("mu_shape", shapes + ["scalar"])
-# @pytest.mark.parametrize("M_shape", shapes + ["scalar"])
-# @pytest.mark.parametrize("C_shape", shapes + ["scalar"])
-# @pytest.mark.parametrize("Sigma_shape", shapes + ["scalar"])
-# @pytest.mark.parametrize("diagonal_Sigma", [True, False])
-# @pytest.mark.parametrize("diagonal_C", [True, False])
-# @pytest.mark.parametrize("diagonal_M", [True, False])
 @pytest.mark.parametrize(
     "d,n,shape,m_shape,M_shape,mu_shape,C_shape,Sigma_shape,diagonal_Sigma,diagonal_C,diagonal_M",
     tests,
