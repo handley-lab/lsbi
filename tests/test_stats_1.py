@@ -51,6 +51,23 @@ for dim in dims:
                         )
 
 
+def flatten(dist):
+    """Convert a multivariate_normal to a list of scipy.stats.multivariate_normal"""
+    mean = np.broadcast_to(dist.mean, dist.shape + (dist.dim,)).reshape(-1, dist.dim)
+    if dist.diagonal_cov:
+        cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim,)).reshape(-1, dist.dim)
+    else:
+        cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim, dist.dim)).reshape(
+            -1, dist.dim, dist.dim
+        )
+
+    flat_dist = [
+        scipy_multivariate_normal(m, c, allow_singular=True)
+        for (m, c) in zip(mean, cov)
+    ]
+    return flat_dist
+
+
 class TestMultivariateNormal(object):
     cls = multivariate_normal
 
@@ -83,25 +100,9 @@ class TestMultivariateNormal(object):
         logpdf = dist.logpdf(x)
         assert logpdf.shape == size + dist.shape
 
-        mean = np.broadcast_to(dist.mean, dist.shape + (dist.dim,)).reshape(
-            -1, dist.dim
-        )
-        if dist.diagonal_cov:
-            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim,)).reshape(
-                -1, dist.dim
-            )
-        else:
-            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim, dist.dim)).reshape(
-                -1, dist.dim, dist.dim
-            )
-
-        flat_dist = [
-            scipy_multivariate_normal(m, c, allow_singular=True)
-            for (m, c) in zip(mean, cov)
-        ]
+        flat_dist = flatten(dist)
         flat_logpdf = np.array([d.logpdf(x) for d in flat_dist])
         flat_logpdf = np.moveaxis(flat_logpdf, 0, -1).reshape(logpdf.shape)
-
         assert_allclose(logpdf, flat_logpdf)
 
     @pytest.mark.parametrize("size", sizes)
@@ -297,7 +298,7 @@ class TestMixtureNormal(TestMultivariateNormal):
 
     @pytest.mark.parametrize("size", sizes)
     @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
-    def test_rvs(
+    def test_rvs_shape(
         self, dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov, size
     ):
         dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov)
@@ -334,6 +335,7 @@ class TestMixtureNormal(TestMultivariateNormal):
             ]
         )
         rvs = np.moveaxis(rvs, -2, 0).reshape(-1, size, dim)
+
         for a, b in zip(rvs, rvs_):
             for i in range(dim):
                 if dim == 1:

@@ -333,7 +333,9 @@ class mixture_normal(multivariate_normal):
         logpdf = super().logpdf(x)
         if self.shape == ():
             return logpdf
-        return logsumexp(logpdf + self._logA, axis=-1)
+        logA = np.broadcast_to(self.logA, self.shape).copy()
+        logA -= logsumexp(logA, axis=-1, keepdims=True)
+        return logsumexp(logpdf + logA, axis=-1)
 
     def rvs(self, size=()):
         """Draw random samples from the distribution.
@@ -349,7 +351,12 @@ class mixture_normal(multivariate_normal):
         if self.shape == ():
             return super().rvs(size=size)
         size = np.atleast_1d(np.array(size, dtype=int))
-        i = choice(size, np.exp(self._logA))
+        logA = np.broadcast_to(self.logA, self.shape).copy()
+        logA -= logsumexp(logA, axis=-1, keepdims=True)
+        p = np.exp(logA)
+        cump = np.cumsum(p, axis=-1)
+        u = np.random.rand(*size, *p.shape[:-1])
+        i = np.argmax(np.array(u)[..., None] < cump, axis=-1)
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
         mean = np.choose(i[..., None], np.moveaxis(mean, -2, 0))
         x = np.random.randn(*size, *self.shape[:-1], self.dim)
@@ -465,10 +472,3 @@ class mixture_normal(multivariate_normal):
             return x
         else:
             return theta
-
-    @property
-    def _logA(self):
-        """Log of the mixing weights."""
-        logA = np.broadcast_to(self.logA, self.shape).copy()
-        logA -= logsumexp(logA, axis=-1, keepdims=True)
-        return logA
