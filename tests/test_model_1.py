@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
+from numpy.testing import assert_allclose
 
-from lsbi.model_1 import LinearModel, MixtureModel
+from lsbi.model_1 import LinearModel, MixtureModel, _de_diagonalise
 
 shapes = [(2, 3), (3,), ()]
 dims = [1, 2, 4]
@@ -274,6 +275,96 @@ class TestLinearModel(object):
         assert dist.shape == model.shape
         assert dist.dim == model.n + model.d
 
+    def test_marginal_conditional(
+        self,
+        M_shape,
+        diagonal_M,
+        m_shape,
+        C_shape,
+        diagonal_C,
+        mu_shape,
+        Sigma_shape,
+        diagonal_Sigma,
+        shape,
+        n,
+        d,
+    ):
+        model = self.random(
+            M_shape,
+            diagonal_M,
+            m_shape,
+            C_shape,
+            diagonal_C,
+            mu_shape,
+            Sigma_shape,
+            diagonal_Sigma,
+            shape,
+            n,
+            d,
+        )
+
+        i = np.arange(d + n)[-n:]
+        model_1 = model.evidence()
+        model_2 = model.joint().marginalise(i)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(model_1.cov, model_2.cov)
+
+        theta = model.prior().rvs()
+        model_1 = model.likelihood(theta)
+        model_2 = model.joint().condition(i, theta)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(model_1.cov, model_2.cov)
+
+        i = np.arange(d + n)[:d]
+        model_1 = model.prior()
+        model_2 = model.joint().marginalise(i)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim), model_2.cov
+        )
+
+        D = model.evidence().rvs()
+        model_1 = model.posterior(D)
+        model_2 = model.joint().condition(i, D)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim), model_2.cov
+        )
+
+    def test_bayes_theorem(
+        self,
+        M_shape,
+        diagonal_M,
+        m_shape,
+        C_shape,
+        diagonal_C,
+        mu_shape,
+        Sigma_shape,
+        diagonal_Sigma,
+        shape,
+        n,
+        d,
+    ):
+        model = self.random(
+            M_shape,
+            diagonal_M,
+            m_shape,
+            C_shape,
+            diagonal_C,
+            mu_shape,
+            Sigma_shape,
+            diagonal_Sigma,
+            shape,
+            n,
+            d,
+        )
+        theta = model.prior().rvs()
+        D = model.evidence().rvs()
+        assert_allclose(
+            model.posterior(D).logpdf(theta) + model.evidence().logpdf(D),
+            model.likelihood(theta).logpdf(D) + model.prior().logpdf(theta),
+        )
+
 
 @pytest.mark.parametrize("logA_shape", shapes)
 class TestMixtureModel(TestLinearModel):
@@ -495,3 +586,97 @@ class TestMixtureModel(TestLinearModel):
         dist = model.joint()
         assert dist.shape == model.shape
         assert dist.dim == model.n + model.d
+
+    def test_marginal_conditional(
+        self,
+        logA_shape,
+        M_shape,
+        diagonal_M,
+        m_shape,
+        C_shape,
+        diagonal_C,
+        mu_shape,
+        Sigma_shape,
+        diagonal_Sigma,
+        shape,
+        n,
+        d,
+    ):
+        model = self.random(
+            logA_shape,
+            M_shape,
+            diagonal_M,
+            m_shape,
+            C_shape,
+            diagonal_C,
+            mu_shape,
+            Sigma_shape,
+            diagonal_Sigma,
+            shape,
+            n,
+            d,
+        )
+
+        i = np.arange(d + n)[-n:]
+        model_1 = model.evidence()
+        model_2 = model.joint().marginalise(i)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(model_1.cov, model_2.cov)
+
+        theta = model.prior().rvs()
+        model_1 = model.likelihood(theta)
+        model_2 = model.joint().condition(i, theta)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(model_1.cov, model_2.cov)
+
+        i = np.arange(d + n)[:d]
+        model_1 = model.prior()
+        model_2 = model.joint().marginalise(i)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim), model_2.cov
+        )
+
+        D = model.evidence().rvs()
+        model_1 = model.posterior(D)
+        model_2 = model.joint().condition(i, D)
+        assert_allclose(model_1.mean, model_2.mean)
+        assert_allclose(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim), model_2.cov
+        )
+
+    def test_bayes_theorem(
+        self,
+        logA_shape,
+        M_shape,
+        diagonal_M,
+        m_shape,
+        C_shape,
+        diagonal_C,
+        mu_shape,
+        Sigma_shape,
+        diagonal_Sigma,
+        shape,
+        n,
+        d,
+    ):
+        model = self.random(
+            logA_shape,
+            M_shape,
+            diagonal_M,
+            m_shape,
+            C_shape,
+            diagonal_C,
+            mu_shape,
+            Sigma_shape,
+            diagonal_Sigma,
+            shape,
+            n,
+            d,
+        )
+        theta = model.prior().rvs()
+        D = model.evidence().rvs()
+        assert_allclose(
+            model.posterior(D).logpdf(theta) + model.evidence().logpdf(D),
+            model.likelihood(theta).logpdf(D) + model.prior().logpdf(theta),
+        )

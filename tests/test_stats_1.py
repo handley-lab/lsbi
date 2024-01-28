@@ -121,9 +121,7 @@ class TestMultivariateNormal(object):
                 np.linalg.inv(dist.cov),
                 rvs - dist.mean,
             ).flatten()
-        assert (
-            scipy.stats.kstest(chi2, scipy.stats.chi2(df=dist.dim).cdf).pvalue > 1e-10
-        )
+        assert scipy.stats.kstest(chi2, scipy.stats.chi2(df=dist.dim).cdf).pvalue > 1e-5
 
     @pytest.mark.parametrize(
         "dim, shape, mean_shape, cov_shape, diagonal_cov, A_shape, diagonal_A, b_shape, k",
@@ -239,8 +237,9 @@ class TestMultivariateNormal(object):
 
         assert x.shape == np.broadcast_shapes(dist.shape + (dim,), x.shape)
 
-        # TODO Sort out broadcasting
-        # assert_allclose(y, dist.bijector(x))
+        x = np.random.rand(*x_shape, dim)
+        y = dist.bijector(x)
+        assert_allclose(np.broadcast_to(x, y.shape), dist.bijector(y, inverse=True))
 
 
 @pytest.mark.parametrize("logA_shape", shapes)
@@ -339,9 +338,9 @@ class TestMixtureNormal(TestMultivariateNormal):
         for a, b in zip(rvs, rvs_):
             for i in range(dim):
                 if dim == 1:
-                    assert scipy.stats.kstest(a[:, i], b).pvalue > 1e-10
+                    assert scipy.stats.kstest(a[:, i], b).pvalue > 1e-5
                 else:
-                    assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > 1e-10
+                    assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > 1e-5
 
     @pytest.mark.parametrize(
         "dim, shape, mean_shape, cov_shape, diagonal_cov, A_shape, diagonal_A, b_shape, k",
@@ -475,5 +474,8 @@ class TestMixtureNormal(TestMultivariateNormal):
         x = dist.bijector(y, inverse=True)
         assert x.shape == np.broadcast_shapes(y.shape, dist.shape[:-1] + (dim,))
 
-        # TODO Sort out broadcasting
-        # assert_allclose(y, dist.bijector(x))
+        x = np.random.rand(*x_shape[:-1], dim)
+        y = dist.bijector(x)
+        assert_allclose(
+            np.broadcast_to(x, y.shape), dist.bijector(y, inverse=True), atol=1e-4
+        )

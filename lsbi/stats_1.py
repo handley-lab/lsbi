@@ -95,6 +95,21 @@ class multivariate_normal(object):
             norm = -logdet(2 * np.pi * self.cov) / 2
         return norm - chi2 / 2
 
+    def pdf(self, x):
+        """Probability density function.
+
+        Parameters
+        ----------
+        x : array_like, shape (*size, dim)
+            Points at which to evaluate the probability density function.
+
+        Returns
+        -------
+        pdf : array_like, shape (*size, *shape)
+            Probability density function evaluated at x.
+        """
+        return np.exp(self.logpdf(x))
+
     def rvs(self, size=()):
         """Draw random samples from the distribution.
 
@@ -270,6 +285,43 @@ class multivariate_normal(object):
             else:
                 L = cholesky(self.cov)
                 return mean + np.einsum("...jk,...k->...j", L, y)
+
+    def __getitem__(self, arg):
+        """Access a subset of the distributions.
+
+        Parameters
+        ----------
+        arg : int or slice or tuple of ints or tuples
+            Indices to access.
+
+        Returns
+        -------
+        dist : distribution
+            A subset of the distribution
+
+        Examples
+        --------
+        >>> dist = multivariate_normal(shape=(2, 3), dim=4)
+        >>> dist.shape
+        (2, 3)
+        >>> dist.dim
+        4
+        >>> dist[0].shape
+        (3,)
+        >>> dist[0, 0].shape
+        ()
+        >>> dist[:, 0].shape
+        (2,)
+        """
+        dist = deepcopy(self)
+        dist.mean = np.broadcast_to(self.mean, (*self.shape, self.dim))[arg]
+        if self.diagonal_cov:
+            dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim))[arg]
+        else:
+            dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim, self.dim))[arg]
+        dist._shape = dist.mean.shape[:-1]
+        dist._dim = dist.mean.shape[-1]
+        return dist
 
 
 class mixture_normal(multivariate_normal):
@@ -472,3 +524,8 @@ class mixture_normal(multivariate_normal):
             return x
         else:
             return theta
+
+    def __getitem__(self, arg):  # noqa: D105
+        dist = super().__getitem__(arg)
+        dist.logA = np.broadcast_to(self.logA, self.shape)[arg]
+        return dist
