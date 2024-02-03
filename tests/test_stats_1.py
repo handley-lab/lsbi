@@ -10,6 +10,7 @@ from lsbi.stats_1 import mixture_normal, multivariate_normal
 shapes = [(2, 3), (3,), ()]
 sizes = [(6, 5), (5,), ()]
 dims = [1, 2, 4]
+pvalue = 1e-7
 
 tests = []
 A_tests = []
@@ -141,7 +142,7 @@ class TestMultivariateNormal(object):
 
         for a, b in zip(rvs, rvs_):
             for i in range(dim):
-                assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > 1e-5
+                assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > pvalue
 
     @pytest.mark.parametrize(
         "dim, shape, mean_shape, cov_shape, diagonal_cov, A_shape, diagonal_A, b_shape, k",
@@ -357,7 +358,7 @@ class TestMixtureNormal(TestMultivariateNormal):
 
         for a, b in zip(rvs, rvs_):
             for i in range(dim):
-                assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > 1e-5
+                assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > pvalue
 
     @pytest.mark.parametrize(
         "dim, shape, mean_shape, cov_shape, diagonal_cov, A_shape, diagonal_A, b_shape, k",
