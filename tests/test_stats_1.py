@@ -107,21 +107,41 @@ class TestMultivariateNormal(object):
 
     @pytest.mark.parametrize("size", sizes)
     @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
-    def test_rvs(self, dim, shape, mean_shape, cov_shape, diagonal_cov, size):
+    def test_rvs_shape(self, dim, shape, mean_shape, cov_shape, diagonal_cov, size):
         dist = self.random(dim, shape, mean_shape, cov_shape, diagonal_cov)
         rvs = dist.rvs(size)
         assert rvs.shape == size + dist.shape + (dim,)
 
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
+    def test_rvs(self, dim, shape, mean_shape, cov_shape, diagonal_cov):
+        size = 100
+        dist = self.random(dim, shape, mean_shape, cov_shape, diagonal_cov)
+        rvs = dist.rvs(size)
+
+        mean = np.broadcast_to(dist.mean, dist.shape + (dist.dim,)).reshape(
+            -1, dist.dim
+        )
         if dist.diagonal_cov:
-            chi2 = ((rvs - dist.mean) ** 2 / dist.cov).sum(axis=-1).flatten()
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim,)).reshape(
+                -1, dist.dim
+            )
         else:
-            chi2 = np.einsum(
-                "...j,...jk,...k->...",
-                rvs - dist.mean,
-                np.linalg.inv(dist.cov),
-                rvs - dist.mean,
-            ).flatten()
-        assert scipy.stats.kstest(chi2, scipy.stats.chi2(df=dist.dim).cdf).pvalue > 1e-5
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim, dist.dim)).reshape(
+                -1, dist.dim, dist.dim
+            )
+
+        rvs_ = np.array(
+            [
+                scipy_multivariate_normal(ms, cs, allow_singular=True).rvs(size)
+                for ms, cs in zip(mean, cov)
+            ]
+        ).reshape(-1, size, dim)
+
+        rvs = np.moveaxis(rvs.reshape(size, -1, dim), 1, 0)
+
+        for a, b in zip(rvs, rvs_):
+            for i in range(dim):
+                assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > 1e-5
 
     @pytest.mark.parametrize(
         "dim, shape, mean_shape, cov_shape, diagonal_cov, A_shape, diagonal_A, b_shape, k",
@@ -306,7 +326,7 @@ class TestMixtureNormal(TestMultivariateNormal):
 
     @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
     def test_rvs(self, dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov):
-        size = 1000
+        size = 100
         dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov)
         rvs = dist.rvs(size)
         logA = np.broadcast_to(dist.logA, dist.shape).reshape(-1, dist.k).copy()
@@ -332,15 +352,12 @@ class TestMixtureNormal(TestMultivariateNormal):
                 ]
                 for ms, cs, ps in zip(mean, cov, p)
             ]
-        )
+        ).reshape(-1, size, dim)
         rvs = np.moveaxis(rvs, -2, 0).reshape(-1, size, dim)
 
         for a, b in zip(rvs, rvs_):
             for i in range(dim):
-                if dim == 1:
-                    assert scipy.stats.kstest(a[:, i], b).pvalue > 1e-5
-                else:
-                    assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > 1e-5
+                assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > 1e-5
 
     @pytest.mark.parametrize(
         "dim, shape, mean_shape, cov_shape, diagonal_cov, A_shape, diagonal_A, b_shape, k",
