@@ -334,9 +334,10 @@ class MixtureModel(LinearModel):
         ----------
         theta : array_like, shape (n,)
         """
-        dist = super(self.__class__, self).likelihood(theta[..., None, :])
+        theta = np.array(theta)[..., None, :]
+        dist = super().likelihood(theta)
         dist.__class__ = mixture_normal
-        dist.logA = self.prior()._logA(theta)
+        dist.logA = self.prior().logpdf(theta, broadcast=True, joint=True)
         return dist
 
     def prior(self):
@@ -362,9 +363,10 @@ class MixtureModel(LinearModel):
         ----------
         D : array_like, shape (d,)
         """
-        dist = super().posterior(D[..., None, :])
+        D = np.array(D)[..., None, :]
+        dist = super().posterior(D)
         dist.__class__ = mixture_normal
-        dist.logA = self.evidence()._logA(D)
+        dist.logA = self.evidence().logpdf(D, broadcast=True, joint=True)
         return dist
 
     def evidence(self):

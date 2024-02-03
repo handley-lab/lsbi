@@ -373,7 +373,7 @@ class mixture_normal(multivariate_normal):
             return 1
         return self.shape[-1]
 
-    def logpdf(self, x, broadcast=False):
+    def logpdf(self, x, broadcast=False, joint=False):
         """Log of the probability density function.
 
         Parameters
@@ -395,6 +395,8 @@ class mixture_normal(multivariate_normal):
             return logpdf
         logA = np.broadcast_to(self.logA, self.shape).copy()
         logA -= logsumexp(logA, axis=-1, keepdims=True)
+        if joint:
+            return logpdf + logA
         return logsumexp(logpdf + logA, axis=-1)
 
     def rvs(self, size=()):
@@ -447,30 +449,12 @@ class mixture_normal(multivariate_normal):
         -------
         conditioned distribution, shape (*shape, len(indices))
         """
-        dist = super().condition(indices, values[..., None, :])
-        dist.logA = self.marginalise(self._bar(indices))._logA(values)
+        values = np.array(values)[..., None, :]
+        dist = super().condition(indices, values)
+        dist.__class__ = mixture_normal
+        marg = self.marginalise(self._bar(indices))
+        dist.logA = marg.logpdf(values, broadcast=True, joint=True)
         return dist
-
-    def _logA(self, values):
-        """Compute the conditional weights of the mixture.
-
-        Parameters
-        ----------
-        values : array_like shape (..., dim)
-            Values to condition on.
-
-        where self.shape[:-1] is broadcastable to ...
-
-        Returns
-        -------
-        _logA : array_like shape (*shape, n)
-        """
-        copy = deepcopy(self)
-        copy.mean = copy.mean - values[..., None, :]
-        logA = super(copy.__class__, copy).logpdf(np.zeros(copy.dim))
-        logA -= logsumexp(logA, axis=-1)[..., None]
-        logA += self.logA
-        return logA
 
     def bijector(self, x, inverse=False):
         """Bijector between U([0, 1])^d and the distribution.
