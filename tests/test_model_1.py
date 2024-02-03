@@ -307,13 +307,17 @@ class TestLinearModel(object):
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov, model_2.cov)
+        assert_allclose(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim), model_2.cov
+        )
 
         theta = model.prior().rvs()
         model_1 = model.likelihood(theta)
         model_2 = model.joint().condition(i, theta)
         assert_allclose(model_1.mean, model_2.mean)
-        assert_allclose(model_1.cov, model_2.cov)
+        assert_allclose(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim), model_2.cov
+        )
 
         i = np.arange(d + n)[:d]
         model_1 = model.prior()
@@ -361,8 +365,10 @@ class TestLinearModel(object):
         theta = model.prior().rvs()
         D = model.evidence().rvs()
         assert_allclose(
-            model.posterior(D).logpdf(theta) + model.evidence().logpdf(D),
-            model.likelihood(theta).logpdf(D) + model.prior().logpdf(theta),
+            model.posterior(D).logpdf(theta, broadcast=True)
+            + model.evidence().logpdf(D, broadcast=True),
+            model.likelihood(theta).logpdf(D, broadcast=True)
+            + model.prior().logpdf(theta, broadcast=True),
         )
 
 

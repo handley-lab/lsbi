@@ -69,7 +69,7 @@ class multivariate_normal(object):
             ]
         )
 
-    def logpdf(self, x):
+    def logpdf(self, x, broadcast=False):
         """Log of the probability density function.
 
         Parameters
@@ -77,6 +77,8 @@ class multivariate_normal(object):
         x : array_like, shape (*size, dim)
             Points at which to evaluate the log of the probability density
             function.
+        broadcast : bool, optional, default=False
+            If True, broadcast x across the distribution parameters.
 
         Returns
         -------
@@ -84,9 +86,12 @@ class multivariate_normal(object):
             Log of the probability density function evaluated at x.
         """
         x = np.array(x)
-        size = x.shape[:-1]
-        mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
-        dx = x.reshape(*size, *np.ones_like(self.shape), self.dim) - mean
+        if broadcast:
+            dx = x - self.mean
+        else:
+            size = x.shape[:-1]
+            mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
+            dx = x.reshape(*size, *np.ones_like(self.shape), self.dim) - mean
         if self.diagonal_cov:
             chi2 = (dx**2 / self.cov).sum(axis=-1)
             norm = -np.log(2 * np.pi * np.ones(self.dim) * self.cov).sum(axis=-1) / 2
@@ -368,7 +373,7 @@ class mixture_normal(multivariate_normal):
             return 1
         return self.shape[-1]
 
-    def logpdf(self, x):
+    def logpdf(self, x, broadcast=False):
         """Log of the probability density function.
 
         Parameters
@@ -377,12 +382,15 @@ class mixture_normal(multivariate_normal):
             Points at which to evaluate the log of the probability density
             function.
 
+        broadcast : bool, optional, default=False
+            If True, broadcast x across the distribution parameters.
+
         Returns
         -------
         logpdf : array_like, shape (*size, *shape[:-1])
             Log of the probability density function evaluated at x.
         """
-        logpdf = super().logpdf(x)
+        logpdf = super().logpdf(x, broadcast=broadcast)
         if self.shape == ():
             return logpdf
         logA = np.broadcast_to(self.logA, self.shape).copy()
