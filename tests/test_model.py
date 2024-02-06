@@ -320,7 +320,7 @@ class TestLinearModel(object):
         )
         atol = 1e-5
 
-        i = np.arange(d + n)[-n:]
+        i = np.arange(d + n)[:n]
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
@@ -340,7 +340,7 @@ class TestLinearModel(object):
             atol=atol,
         )
 
-        i = np.arange(d + n)[:d]
+        i = np.arange(d + n)[-d:]
         model_1 = model.prior()
         model_2 = model.joint().marginalise(i)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
@@ -387,8 +387,9 @@ class TestLinearModel(object):
             n,
             d,
         )
-        theta = model.prior().rvs()
-        D = model.evidence().rvs()
+
+        theta_D = model.joint().rvs()
+        theta, D = np.split(theta_D, [model.n], axis=-1)
         assert_allclose(
             model.posterior(D).logpdf(theta, broadcast=True)
             + model.evidence().logpdf(D, broadcast=True),
@@ -650,7 +651,7 @@ class TestMixtureModel(TestLinearModel):
 
         atol = 1e-5
 
-        i = np.arange(d + n)[-n:]
+        i = np.arange(n + d)[:n]
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
@@ -670,7 +671,7 @@ class TestMixtureModel(TestLinearModel):
             atol=atol,
         )
 
-        i = np.arange(d + n)[:d]
+        i = np.arange(n + d)[-d:]
         model_1 = model.prior()
         model_2 = model.joint().marginalise(i)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
@@ -719,8 +720,8 @@ class TestMixtureModel(TestLinearModel):
             n,
             d,
         )
-        theta = model.prior().rvs()
-        D = model.evidence().rvs()
+        theta_D = model.joint().rvs()
+        theta, D = np.split(theta_D, [model.n], axis=-1)
         assert_allclose(
             model.posterior(D).logpdf(theta, broadcast=True)
             + model.evidence().logpdf(D, broadcast=True),

@@ -225,23 +225,23 @@ class LinearModel(object):
         return multivariate_normal(mu, Sigma, self.shape, self.d, diagonal_Sigma)
 
     def joint(self):
-        """P(D, theta) as a scipy distribution object.
+        """P(theta, D) as a scipy distribution object.
 
-        [  D  ] | A ~ N( [m + M mu]   [C + M Sigma M'  M Sigma] )
-        [theta] |      ( [   mu   ] , [   Sigma M'      Sigma ] )
+        [theta] ~ N( [   mu   ]   [ Sigma      Sigma M'   ] )
+        [  D  ]    ( [m + M mu] , [M Sigma  C + M Sigma M'] )
         """
         evidence = self.evidence()
         prior = self.prior()
         a = np.broadcast_to(evidence.mean, self.shape + (self.d,))
         b = np.broadcast_to(prior.mean, self.shape + (self.n,))
         mu = np.block([a, b])
-        A = _de_diagonalise(evidence.cov, evidence.diagonal_cov, self.d)
-        A = np.broadcast_to(A, self.shape + (self.d, self.d))
-        D = _de_diagonalise(prior.cov, prior.diagonal_cov, self.n)
-        D = np.broadcast_to(D, self.shape + (self.n, self.n))
-        B = np.einsum("...ja,...al->...jl", self._M, self._Sigma)
-        B = np.broadcast_to(B, self.shape + (self.d, self.n))
-        C = np.moveaxis(B, -1, -2)
+        A = _de_diagonalise(prior.cov, prior.diagonal_cov, self.n)
+        A = np.broadcast_to(D, self.shape + (self.n, self.n))
+        D = _de_diagonalise(evidence.cov, evidence.diagonal_cov, self.d)
+        D = np.broadcast_to(A, self.shape + (self.d, self.d))
+        C = np.einsum("...ja,...al->...jl", self._M, self._Sigma)
+        C = np.broadcast_to(B, self.shape + (self.d, self.n))
+        B = np.moveaxis(C, -1, -2)
         Sigma = np.block([[A, B], [C, D]])
         return multivariate_normal(mu, Sigma, self.shape, self.n + self.d)
 
@@ -382,8 +382,8 @@ class MixtureModel(LinearModel):
     def joint(self):
         """P(D, theta) as a scipy distribution object.
 
-        [  D  ] | A ~ N( [m + M mu]   [C + M Sigma M'  M Sigma] )
-        [theta] |      ( [   mu   ] , [   Sigma M'      Sigma ] )
+        [theta] | A ~ N( [   mu   ]   [ Sigma      Sigma M'   ] )
+        [  D  ] |      ( [m + M mu] , [M Sigma  C + M Sigma M'] )
 
         A           ~ categorical(exp(logA))
         """
@@ -543,3 +543,344 @@ class ReducedLinearModelUniformPrior(object):
     def DKL(self):
         """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence."""
         return self.logV - logdet(2 * np.pi * np.e * self.Sigma_P) / 2
+
+
+class ReducedLinearModel(object):
+    """A model with no data.
+
+    If a Likelihood is Gaussian in the parameters, it is sometimes more
+    clear/efficient to phrase it in terms of a parameter covariance, parameter
+    mean and peak value:
+
+    logL(theta) = logLmax - (theta - mu_L)' Sigma_L^{-1} (theta - mu_L)
+
+    We can link this to a data-based model with the relations:
+
+    Sigma_L = (M' C^{-1} M)^{-1}
+    mu_L = Sigma_L M' C^{-1} (D-m)
+    logLmax =
+    - log|2 pi C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
+
+    Parameters
+    ----------
+    mu_L : array_like
+        Likelihood peak
+    Sigma_L : array_like
+        Likelihood covariance
+    logLmax : float, optional
+        Likelihood maximum, defaults to zero
+    mu_pi : array_like, optional
+        Prior mean, defaults to zero vector
+    Sigma_pi : array_like, optional
+        Prior covariance, defaults to identity matrix
+    """
+
+    def __init__(
+        self,
+        mu_L=0,
+        Sigma_L=1,
+        logLmax=0,
+        mu_pi=0,
+        Sigma_pi=1,
+        shape=(),
+        n=1,
+        diagonal_Sigma_L=False,
+        diagonal_Sigma_pi=False,
+    ):
+        self.mu_L = mu_L
+        self.Sigma_L = Sigma_L
+        self.logLmax = logLmax
+        self.mu_pi = mu_pi
+        self.Sigma_pi = Sigma_pi
+        self._shape = shape
+        self._n = n
+        self.diagonal_Sigma_L = diagonal_Sigma_L
+        self.diagonal_Sigma_pi = diagonal_Sigma_pi
+
+    @property
+    def shape(self):
+        """Shape of the distribution."""
+        return np.broadcast_shapes(
+            np.shape(self.mu_L)[:-1],
+            np.shape(self.Sigma_L)[: -2 + self.diagonal_Sigma_L],
+            np.shape(self.mu_pi)[:-1],
+            np.shape(self.Sigma_pi)[: -2 + self.diagonal_Sigma_pi],
+            self._shape,
+        )
+
+    @property
+    def n(self):
+        """Dimension of the distribution."""
+        return np.max(
+            [
+                *np.shape(self.Sigma_L)[-2 + self.diagonal_Sigma_L :],
+                *np.shape(self.mu_L)[-1:],
+                *np.shape(self.Sigma_pi)[-2 + self.diagonal_Sigma_pi :],
+                *np.shape(self.mu_pi)[-1:],
+                self._n,
+            ]
+        )
+
+    def prior(self):
+        """P(theta) as a scipy distribution object."""
+        return multivariate_normal(
+            self.mu_pi, self.Sigma_pi, self.shape, self.n, self.diagonal_Sigma_pi
+        )
+
+    def posterior(self):
+        """P(theta|D) as a scipy distribution object."""
+        if self.diagonal_Sigma_L and self.diagonal_Sigma_pi:
+            Sigma_P = 1 / (1 / self.Sigma_pi + 1 / self.Sigma_L)
+        else:
+            Sigma_P = inv(
+                inv(_de_diagonalise(self.Sigma_pi, self.diagonal_Sigma_pi, self.n))
+                + inv(_de_diagonalise(self.Sigma_L, self.diagonal_Sigma_L, self.n))
+            )
+
+        if self.diagonal_Sigma_L:
+            x_L = mu_L / self.Sigma_L
+        else:
+            x_L = solve(self.Sigma_L, self.mu_L)
+
+        if self.diagonal_Sigma_pi:
+            x_pi = mu_pi / self.Sigma_pi
+        else:
+            x_pi = solve(self.Sigma_pi, self.mu_pi)
+
+        mu_P = Sigma_P @ (x_pi + x_L)
+        return multivariate_normal(
+            mu_P,
+            Sigma_P,
+            self.shape,
+            self.n,
+            self.diagonal_Sigma_L and self.diagonal_Sigma_pi,
+        )
+
+    def logpi(self, theta):
+        """P(theta) as a scalar."""
+        return self.prior().logpdf(theta)
+
+    def logP(self, theta):
+        """P(theta|D) as a scalar."""
+        return self.posterior().logpdf(theta)
+
+    def logL(self, theta):
+        """P(D|theta) as a scalar."""
+        dist = multivariate_normal(
+            self.mu_L, self.Sigma_L, self.shape, self.n, self.diagonal_Sigma_L
+        )
+        return self.logLmax + dist.logpdf(theta) - dist.logpdf(dist.mu)
+
+    def logZ(self):
+        """P(D) as a scalar."""
+        posterior = self.posterior()
+        mu_P = posterior.mean
+        Sigma_P = posterior.cov
+        logZ = (
+            self.logLmax
+            + logdet(self.Sigma_P, posterior.diagonal_cov) / 2
+            - logdet(self.Sigma_pi, self.diagonal_Sigma_pi) / 2
+        )
+        if self.diagonal_Sigma_L:
+            logZ -= (
+                (self.mu_L - self.mu_pi)
+                @ (self.mu_L - self.mu_pi)
+                / (2 * self.Sigma_pi)
+            )
+        else:
+            logZ -= (
+                (self.mu_L - self.mu_pi)
+                @ inv(self.Sigma_pi)
+                @ (self.mu_L - self.mu_pi)
+                / 2
+            )
+        if self.diagonal_Sigma_pi:
+            logZ -= (
+                (self.mu_P - self.mu_pi)
+                @ (self.mu_P - self.mu_pi)
+                / (2 * self.Sigma_pi)
+            )
+        else:
+            logZ -= (
+                (self.mu_P - self.mu_pi)
+                @ inv(self.Sigma_pi)
+                @ (self.mu_P - self.mu_pi)
+                / 2
+            )
+        return logZ
+
+    def DKL(self):
+        """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence."""
+        posterior = self.posterior()
+        mu_P = posterior.mean
+
+        if self.diagonal_Sigma_pi:
+            DKL = (self.mu_P - self.mu_pi) @ (
+                self.mu_P - self.mu_pi
+            ) / self.Sigma_pi + np.trace(self.Sigma_P / self.Sigma_pi - 1)
+            inv_Sigma_pi = np.eye(self.n) / np.atleast_1d(self.Sigma_pi)[..., None, :]
+        else:
+            DKL = (
+                (self.mu_P - self.mu_pi) @ inv(self.Sigma_pi) @ (self.mu_P - self.mu_pi)
+            )
+            inv_Sigma_pi = inv(self.Sigma_pi)
+
+        DKL += np.trace(inv_Sigma_pi @ self.Sigma_P - 1)
+        DKL += logdet(self.Sigma_pi, self.diagonal_Sigma_pi)
+        DKL -= logdet(posterior.cov, posterior.diagonal_cov)
+        return DKL / 2
+
+
+class ReducedLinearModelUniformPrior(object):
+    """A model with no data.
+
+    Gaussian likelihood in the parameters
+
+    logL(theta) = logLmax - (theta - mu_L)' Sigma_L^{-1} (theta - mu_L)
+
+    Uniform prior
+
+    We can link this to a data-based model with the relations:
+
+    Sigma = (M' C^{-1} M)^{-1}
+    mu = Sigma M' C^{-1} (D-m)
+    logLmax =
+    -log|2 pi C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
+
+    Parameters
+    ----------
+    mu : array_like
+        Likelihood peak
+    Sigma : array_like
+        Likelihood covariance
+    logLmax : float, optional
+        Likelihood maximum, defaults to zero
+    logV : float, optional
+        log prior volume, defaults to zero
+    n : int, optional
+        Number of parameters, defaults to automatically inferred value
+    """
+
+    def __init__(
+        self, mu=0, Sigma=1, logLmax=0, logV=0, shape=(), n=1, diagonal_Sigma=False
+    ):
+        self.mu = mu
+        self.Sigma = Sigma
+        self.logLmax = logLmax
+        self.logV = logV
+        self._shape = shape
+        self._n = n
+        self.diagonal_Sigma = diagonal_Sigma
+
+    @property
+    def shape(self):
+        """Shape of the distribution."""
+        return np.broadcast_shapes(
+            np.shape(self.mu)[:-1],
+            np.shape(self.Sigma)[: -2 + self.diagonal_Sigma],
+            self._shape,
+        )
+
+    @property
+    def n(self):
+        """Dimension of the distribution."""
+        return np.max(
+            [
+                *np.shape(self.Sigma)[-2 + self.diagonal_Sigma :],
+                *np.shape(self.mu)[-1:],
+                self._n,
+            ]
+        )
+
+    def posterior(self):
+        """P(theta|D) as a scipy distribution object."""
+        return multivariate_normal(
+            self.mu, self.Sigma, self.shape, self.n, self.diagonal_Sigma
+        )
+
+    def logpi(self, theta):
+        """P(theta) as a scalar."""
+        return numpy.zeros(*self.shape, *np.shape(theta)) - self.logV
+
+    def logP(self, theta):
+        """P(theta|D) as a scalar."""
+        return self.posterior().logpdf(theta)
+
+    def logL(self, theta):
+        """P(D|theta) as a scalar."""
+        dist = self.posterior()
+        return self.logLmax + dist.logpdf(theta) - dist.logpdf(dist.mu)
+
+    def logZ(self):
+        """P(D) as a scalar."""
+        return (
+            self.logLmax
+            + logdet(2 * np.pi * self.Sigma, self.diagonal_Sigma) / 2
+            - self.logV
+        )
+
+    def DKL(self):
+        """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence."""
+        return (
+            self.logV - logdet(2 * np.pi * np.e * self.Sigma, self.diagonal_Sigma) / 2
+        )
+
+
+class ReducedMixtureModel(ReducedLinearModel):
+    """A model with no data.
+
+    Gaussian likelihood in the parameters
+
+    logL(theta) = logLmax - (theta - mu_L)' Sigma_L^{-1} (theta - mu_L)
+
+    We can link this to a data-based model with the relations:
+
+    Sigma_L = (M' C^{-1} M)^{-1}
+    mu_L = Sigma_L M' C^{-1} (D-m)
+    logLmax =
+    - log|2 pi C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
+
+    Parameters
+    ----------
+    mu_L : array_like
+        Likelihood peak
+    Sigma_L : array_like
+        Likelihood covariance
+    logLmax : float, optional
+        Likelihood maximum, defaults to zero
+    logA : array_like, optional
+        log mixture weights
+        if ndim>=1: log mixture weights
+        if scalar: scalar * unit vector
+        Defaults to uniform weights
+    n : int, optional
+        Number of parameters, defaults to automatically inferred value
+    """
+
+    def __init__(self, logA=1, *args):
+        super().__init__(*args)
+        self.logA = logA
+
+    @property
+    def shape(self):
+        """Shape of the distribution."""
+        return np.broadcast_shapes(np.shape(self.logA), super().shape)
+
+    @property
+    def k(self):
+        """Number of mixture components of the distribution."""
+        return self.shape[-1]
+
+    def prior(self):
+        """P(theta) as a scipy distribution object."""
+        dist = super().prior()
+        dist.__class__ = mixture
+        dist.logA = self.logA
+        return dist
+
+    def posterior(self):
+        """P(theta|D) as a scipy distribution object."""
+        dist = super().posterior()
+        dist.__class__ = mixture
+        dist.logA = self.evidence().logpdf(D, broadcast=True, joint=True)
+        return dist
