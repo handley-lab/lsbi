@@ -1,4 +1,5 @@
 """Utility functions for lsbi."""
+
 import numpy as np
 
 

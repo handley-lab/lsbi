@@ -1,4 +1,5 @@
 """Extensions to scipy.stats functions."""
+
 from copy import deepcopy
 
 import numpy as np

@@ -1,4 +1,5 @@
 """Gaussian models for linear Bayesian inference."""
+
 import numpy as np
 from numpy.linalg import inv, solve
 
