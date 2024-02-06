@@ -82,7 +82,7 @@ def choice(size, p):
     Returns
     -------
     out : ndarray
-        Output array of shape (*size, *p.shape[:-1]).
+        Output array of shape `(*size, *p.shape[:-1])`.
     """
     cump = np.cumsum(p, axis=-1)
     u = np.random.rand(*size, *p.shape)

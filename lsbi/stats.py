@@ -23,10 +23,10 @@ class multivariate_normal(object):
 
     Parameters
     ----------
-    mean : array_like, shape (..., dim)
+    mean : array_like, shape `(..., dim)`
         Mean of each component.
 
-    cov array_like, shape (..., dim, dim)
+    cov array_like, shape `(..., dim, dim)`
         Covariance matrix of each component.
 
     shape: tuple, optional, default=()
@@ -75,7 +75,7 @@ class multivariate_normal(object):
 
         Parameters
         ----------
-        x : array_like, shape (*size, dim)
+        x : array_like, shape `(*size, dim)`
             Points at which to evaluate the log of the probability density
             function.
         broadcast : bool, optional, default=False
@@ -83,7 +83,7 @@ class multivariate_normal(object):
 
         Returns
         -------
-        logpdf : array_like, shape (*size, *shape)
+        logpdf : array_like, shape `(*size, *shape)`
             Log of the probability density function evaluated at x.
         """
         x = np.array(x)
@@ -106,12 +106,12 @@ class multivariate_normal(object):
 
         Parameters
         ----------
-        x : array_like, shape (*size, dim)
+        x : array_like, shape `(*size, dim)`
             Points at which to evaluate the probability density function.
 
         Returns
         -------
-        pdf : array_like, shape (*size, *shape)
+        pdf : array_like, shape `(*size, *shape)`
             Probability density function evaluated at x.
         """
         return np.exp(self.logpdf(x))
@@ -126,7 +126,7 @@ class multivariate_normal(object):
 
         Returns
         -------
-        rvs : ndarray, shape (*size, *shape, dim)
+        rvs : ndarray, shape `(*size, *shape, dim)`
             Random samples from the distribution.
         """
         size = np.atleast_1d(size)
@@ -144,16 +144,16 @@ class multivariate_normal(object):
 
         Parameters
         ----------
-        A : array_like, shape (..., k, dim)
+        A : array_like, shape `(..., k, dim)`
             Linear transformation matrix.
-        b : array_like, shape (..., k), optional
+        b : array_like, shape `(..., k)`, optional
             Linear transformation vector.
 
         where self.shape is broadcastable to ...
 
         Returns
         -------
-        transformed distribution shape (..., k)
+        transformed distribution shape `(..., k)`
         """
         if len(np.shape(A)) < 2:
             diagonal_A = True
@@ -192,7 +192,7 @@ class multivariate_normal(object):
 
         Returns
         -------
-        marginalised distribution, shape (*shape, dim - len(indices))
+        marginalised distribution, shape `(*shape, dim - len(indices))`
         """
         dist = deepcopy(self)
         i = self._bar(indices)
@@ -213,14 +213,14 @@ class multivariate_normal(object):
         ----------
         indices : array_like
             Indices to condition over.
-        values : array_like shape (..., len(indices))
+        values : array_like shape `(..., len(indices))`
             Values to condition on.
 
         where where self.shape is broadcastable to ...
 
         Returns
         -------
-        conditioned distribution shape (..., len(indices))
+        conditioned distribution shape `(..., len(indices))`
         """
         i = self._bar(indices)
         k = indices
@@ -263,7 +263,7 @@ class multivariate_normal(object):
 
         Parameters
         ----------
-        x : array_like, shape (..., dim)
+        x : array_like, shape `(..., dim)`
             if inverse: x is theta
             else: x is x
         inverse : bool, optional, default=False
@@ -337,13 +337,13 @@ class mixture_normal(multivariate_normal):
 
     Parameters
     ----------
-    mean : array_like, shape (..., n, dim)
+    mean : array_like, shape `(..., n, dim)`
         Mean of each component.
 
-    cov: array_like, shape (..., n, dim, dim)
+    cov: array_like, shape `(..., n, dim, dim)`
         Covariance matrix of each component.
 
-    logA: array_like, shape (..., n)
+    logA: array_like, shape `(..., n)`
         Log of the mixing weights.
 
     shape: tuple, optional, default=()
@@ -379,7 +379,7 @@ class mixture_normal(multivariate_normal):
 
         Parameters
         ----------
-        x : array_like, shape (*size, dim)
+        x : array_like, shape `(*size, dim)`
             Points at which to evaluate the log of the probability density
             function.
 
@@ -388,7 +388,7 @@ class mixture_normal(multivariate_normal):
 
         Returns
         -------
-        logpdf : array_like, shape (*size, *shape[:-1])
+        logpdf : array_like, shape `(*size, *shape[:-1])`
             Log of the probability density function evaluated at x.
         """
         if broadcast:
@@ -411,7 +411,7 @@ class mixture_normal(multivariate_normal):
 
         Returns
         -------
-        rvs : array_like, shape (*size, *shape[:-1], dim)
+        rvs : array_like, shape `(*size, *shape[:-1], dim)`
         """
         if self.shape == ():
             return super().rvs(size=size)
@@ -443,14 +443,14 @@ class mixture_normal(multivariate_normal):
         ----------
         indices : array_like
             Indices to condition over.
-        values : array_like shape (..., len(indices))
+        values : array_like shape `(..., len(indices))`
             Values to condition on.
 
         where self.shape[:-1] is broadcastable to ...
 
         Returns
         -------
-        conditioned distribution, shape (*shape, len(indices))
+        conditioned distribution, shape `(*shape, len(indices))`
         """
         dist = super().condition(indices, np.expand_dims(values, -2))
         dist.__class__ = mixture_normal
@@ -469,7 +469,7 @@ class mixture_normal(multivariate_normal):
 
         Parameters
         ----------
-        x : array_like, shape (..., d)
+        x : array_like, shape `(..., d)`
             if inverse: x is theta
             else: x is x
         inverse : bool, optional, default=False
@@ -480,7 +480,7 @@ class mixture_normal(multivariate_normal):
 
         Returns
         -------
-        transformed x or theta: array_like, shape (..., d)
+        transformed x or theta: array_like, shape `(..., d)`
         """
         x = np.array(x)
         theta = np.empty(np.broadcast_shapes(x.shape, self.shape[:-1] + (self.dim,)))
