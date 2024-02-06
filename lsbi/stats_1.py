@@ -390,6 +390,8 @@ class mixture_normal(multivariate_normal):
         logpdf : array_like, shape (*size, *shape[:-1])
             Log of the probability density function evaluated at x.
         """
+        if broadcast:
+            x = np.expand_dims(x, -2)
         logpdf = super().logpdf(x, broadcast=broadcast)
         if self.shape == ():
             return logpdf
@@ -449,8 +451,7 @@ class mixture_normal(multivariate_normal):
         -------
         conditioned distribution, shape (*shape, len(indices))
         """
-        values = np.array(values)[..., None, :]
-        dist = super().condition(indices, values)
+        dist = super().condition(indices, np.expand_dims(values, -2))
         dist.__class__ = mixture_normal
         marg = self.marginalise(self._bar(indices))
         dist.logA = marg.logpdf(values, broadcast=True, joint=True)

@@ -2,9 +2,12 @@
 import numpy as np
 
 
-def logdet(A):
+def logdet(A, diag=False):
     """log(abs(det(A)))."""
-    return np.linalg.slogdet(A)[1]
+    if diag:
+        return np.sum(np.log(np.abs(A)), axis=-1)
+    else:
+        return np.linalg.slogdet(A)[1]
 
 
 def quantise(f, x, tol=1e-8):

@@ -334,8 +334,7 @@ class MixtureModel(LinearModel):
         ----------
         theta : array_like, shape (n,)
         """
-        theta = np.array(theta)[..., None, :]
-        dist = super().likelihood(theta)
+        dist = super().likelihood(np.expand_dims(theta, -2))
         dist.__class__ = mixture_normal
         dist.logA = self.prior().logpdf(theta, broadcast=True, joint=True)
         return dist
@@ -363,8 +362,7 @@ class MixtureModel(LinearModel):
         ----------
         D : array_like, shape (d,)
         """
-        D = np.array(D)[..., None, :]
-        dist = super().posterior(D)
+        dist = super().posterior(np.expand_dims(D, -2))
         dist.__class__ = mixture_normal
         dist.logA = self.evidence().logpdf(D, broadcast=True, joint=True)
         return dist

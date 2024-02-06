@@ -2,7 +2,21 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from lsbi.model_1 import LinearModel, MixtureModel, _de_diagonalise
+
+def assert_allclose_broadcast(a, b, *args, **kwargs):
+    shape = np.broadcast_shapes(np.shape(a), np.shape(b))
+    return assert_allclose(
+        np.broadcast_to(a, shape), np.broadcast_to(b, shape), *args, **kwargs
+    )
+
+
+from lsbi.model_1 import (
+    LinearModel,
+    MixtureModel,
+    ReducedLinearModel,
+    ReducedLinearModelUniformPrior,
+    _de_diagonalise,
+)
 
 shapes = [(2, 3), (3,), ()]
 dims = [1, 2, 4]
@@ -307,14 +321,9 @@ class TestLinearModel(object):
         i = np.arange(d + n)[-n:]
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
-        assert_allclose(
-            np.broadcast_to(model_1.mean, model_2.mean.shape), model_2.mean, atol=atol
-        )
-        assert_allclose(
-            np.broadcast_to(
-                _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
-                model_2.cov.shape,
-            ),
+        assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
+        assert_allclose_broadcast(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -322,14 +331,9 @@ class TestLinearModel(object):
         theta = model.prior().rvs()
         model_1 = model.likelihood(theta)
         model_2 = model.joint().condition(i, theta)
-        assert_allclose(
-            np.broadcast_to(model_1.mean, model_2.mean.shape), model_2.mean, atol=atol
-        )
-        assert_allclose(
-            np.broadcast_to(
-                _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
-                model_2.cov.shape,
-            ),
+        assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
+        assert_allclose_broadcast(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -337,14 +341,9 @@ class TestLinearModel(object):
         i = np.arange(d + n)[:d]
         model_1 = model.prior()
         model_2 = model.joint().marginalise(i)
-        assert_allclose(
-            np.broadcast_to(model_1.mean, model_2.mean.shape), model_2.mean, atol=atol
-        )
-        assert_allclose(
-            np.broadcast_to(
-                _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
-                model_2.cov.shape,
-            ),
+        assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
+        assert_allclose_broadcast(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -352,14 +351,9 @@ class TestLinearModel(object):
         D = model.evidence().rvs()
         model_1 = model.posterior(D)
         model_2 = model.joint().condition(i, D)
-        assert_allclose(
-            np.broadcast_to(model_1.mean, model_2.mean.shape), model_2.mean, atol=atol
-        )
-        assert_allclose(
-            np.broadcast_to(
-                _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
-                model_2.cov.shape,
-            ),
+        assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
+        assert_allclose_broadcast(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -657,14 +651,9 @@ class TestMixtureModel(TestLinearModel):
         i = np.arange(d + n)[-n:]
         model_1 = model.evidence()
         model_2 = model.joint().marginalise(i)
-        assert_allclose(
-            np.broadcast_to(model_1.mean, model_2.mean.shape), model_2.mean, atol=atol
-        )
-        assert_allclose(
-            np.broadcast_to(
-                _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
-                model_2.cov.shape,
-            ),
+        assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
+        assert_allclose_broadcast(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -672,14 +661,9 @@ class TestMixtureModel(TestLinearModel):
         theta = model.prior().rvs()
         model_1 = model.likelihood(theta)
         model_2 = model.joint().condition(i, theta)
-        assert_allclose(
-            np.broadcast_to(model_1.mean, model_2.mean.shape), model_2.mean, atol=atol
-        )
-        assert_allclose(
-            np.broadcast_to(
-                _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
-                model_2.cov.shape,
-            ),
+        assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
+        assert_allclose_broadcast(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -687,14 +671,9 @@ class TestMixtureModel(TestLinearModel):
         i = np.arange(d + n)[:d]
         model_1 = model.prior()
         model_2 = model.joint().marginalise(i)
-        assert_allclose(
-            np.broadcast_to(model_1.mean, model_2.mean.shape), model_2.mean, atol=atol
-        )
-        assert_allclose(
-            np.broadcast_to(
-                _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
-                model_2.cov.shape,
-            ),
+        assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
+        assert_allclose_broadcast(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -702,14 +681,9 @@ class TestMixtureModel(TestLinearModel):
         D = model.evidence().rvs()
         model_1 = model.posterior(D)
         model_2 = model.joint().condition(i, D)
-        assert_allclose(
-            np.broadcast_to(model_1.mean, model_2.mean.shape), model_2.mean, atol=atol
-        )
-        assert_allclose(
-            np.broadcast_to(
-                _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
-                model_2.cov.shape,
-            ),
+        assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
+        assert_allclose_broadcast(
+            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -750,4 +724,69 @@ class TestMixtureModel(TestLinearModel):
             + model.evidence().logpdf(D, broadcast=True),
             model.likelihood(theta).logpdf(D, broadcast=True)
             + model.prior().logpdf(theta, broadcast=True),
+        )
+
+
+@pytest.mark.parametrize("n", np.arange(1, 6))
+class TestReducedLinearModel(object):
+    def random(self, n):
+        mu_pi = np.random.randn(n)
+        Sigma_pi = invwishart(scale=np.eye(n)).rvs()
+        mu_L = np.random.randn(n)
+        Sigma_L = invwishart(scale=np.eye(n)).rvs()
+        logLmax = np.random.randn()
+
+        return ReducedLinearModel(
+            mu_pi=mu_pi, Sigma_pi=Sigma_pi, logLmax=logLmax, mu_L=mu_L, Sigma_L=Sigma_L
+        )
+
+    def test_bayes_theorem(self, n):
+        model = self.random(n)
+        theta = model.prior().rvs()
+        assert_allclose(
+            model.logP(theta) + model.logZ(), model.logL(theta) + model.logpi(theta)
+        )
+
+
+@pytest.mark.parametrize("n", np.arange(1, 6))
+class TestReducedLinearModelUniformPrior(object):
+    def random(self, n):
+        mu_L = np.random.randn(n)
+        Sigma_L = invwishart(scale=np.eye(n)).rvs()
+        logLmax = np.random.randn()
+        logV = np.random.randn()
+
+        return ReducedLinearModelUniformPrior(
+            logLmax=logLmax, logV=logV, mu_L=mu_L, Sigma_L=Sigma_L
+        )
+
+    def test_model(self, n):
+        model = self.random(n)
+        theta = model.posterior().rvs(N)
+        assert_allclose(
+            model.logpi(theta) + model.logL(theta), model.logP(theta) + model.logZ()
+        )
+
+        logV = 50
+        Sigma_pi = np.exp(2 * logV / n) / (2 * np.pi) * np.eye(n)
+
+        reduced_model = ReducedLinearModel(
+            logLmax=model.logLmax,
+            mu_L=model.mu_L,
+            Sigma_L=model.Sigma_L,
+            Sigma_pi=Sigma_pi,
+        )
+
+        model = ReducedLinearModelUniformPrior(
+            logLmax=model.logLmax, mu_L=model.mu_L, Sigma_L=model.Sigma_L, logV=logV
+        )
+
+        assert_allclose(reduced_model.logZ(), model.logZ())
+        assert_allclose(reduced_model.DKL(), model.DKL())
+
+    def test_bayes_theorem(self, n):
+        model = self.random(n)
+        theta = model.posterior().rvs()
+        assert_allclose(
+            model.logP(theta) + model.logZ(), model.logL(theta) + model.logpi(theta)
         )
