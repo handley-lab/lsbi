@@ -520,5 +520,6 @@ class mixture_normal(multivariate_normal):
 
     def __getitem__(self, arg):  # noqa: D105
         dist = super().__getitem__(arg)
+        dist.__class__ = mixture_normal
         dist.logA = np.broadcast_to(self.logA, self.shape)[arg]
         return dist

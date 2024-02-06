@@ -1,14 +1,7 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose
-
-
-def assert_allclose_broadcast(a, b, *args, **kwargs):
-    shape = np.broadcast_shapes(np.shape(a), np.shape(b))
-    return assert_allclose(
-        np.broadcast_to(a, shape), np.broadcast_to(b, shape), *args, **kwargs
-    )
-
+from scipy.stats import invwishart
 
 from lsbi.model import (
     LinearModel,
@@ -18,8 +11,17 @@ from lsbi.model import (
     _de_diagonalise,
 )
 
+
+def assert_allclose_broadcast(a, b, *args, **kwargs):
+    shape = np.broadcast_shapes(np.shape(a), np.shape(b))
+    return assert_allclose(
+        np.broadcast_to(a, shape), np.broadcast_to(b, shape), *args, **kwargs
+    )
+
+
 shapes = [(2, 3), (3,), ()]
 dims = [1, 2, 4]
+N = 1000
 
 tests = []
 for d in dims:
