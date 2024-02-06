@@ -2,7 +2,7 @@
 import numpy as np
 from numpy.linalg import inv, solve
 
-from lsbi.stats_1 import mixture_normal, multivariate_normal
+from lsbi.stats import mixture_normal, multivariate_normal
 from lsbi.utils import logdet, matrix
 
 

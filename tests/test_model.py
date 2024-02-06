@@ -10,7 +10,7 @@ def assert_allclose_broadcast(a, b, *args, **kwargs):
     )
 
 
-from lsbi.model_1 import (
+from lsbi.model import (
     LinearModel,
     MixtureModel,
     ReducedLinearModel,

@@ -5,7 +5,7 @@ from numpy.testing import assert_allclose
 from scipy.special import logsumexp
 from scipy.stats import multivariate_normal as scipy_multivariate_normal
 
-from lsbi.stats_1 import mixture_normal, multivariate_normal
+from lsbi.stats import mixture_normal, multivariate_normal
 
 shapes = [(2, 3), (3,), ()]
 sizes = [(6, 5), (5,), ()]
