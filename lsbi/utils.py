@@ -3,26 +3,15 @@
 import numpy as np
 
 
-def logdet(A, diag=False):
+def logdet(A):
     """log(abs(det(A)))."""
-    if diag:
-        return np.sum(np.log(np.abs(A)), axis=-1)
-    else:
-        return np.linalg.slogdet(A)[1]
+    return np.linalg.slogdet(A)[1]
 
 
 def quantise(f, x, tol=1e-8):
     """Quantise f(x) to zero within tolerance tol."""
     y = np.atleast_1d(f(x))
     return np.where(np.abs(y) < tol, 0, y)
-
-
-def matrix(M, *args):
-    """Convert M to a matrix."""
-    if len(np.shape(M)) > 1:
-        return M
-    else:
-        return M * np.eye(*args)
 
 
 def bisect(f, a, b, args=(), tol=1e-8):
@@ -67,23 +56,3 @@ def bisect(f, a, b, args=(), tol=1e-8):
         b = np.where(fq == 0, q, b)
         b = np.where(fb * fq > 0, q, b)
     return (a + b) / 2
-
-
-def choice(size, p):
-    """Vectorised choice function.
-
-    Parameters
-    ----------
-    size : int or tuple of ints
-        Shape of the output.
-    p : array_like
-        Probability array
-
-    Returns
-    -------
-    out : ndarray
-        Output array of shape `(*size, *p.shape[:-1])`.
-    """
-    cump = np.cumsum(p, axis=-1)
-    u = np.random.rand(*size, *p.shape)
-    return np.argmin(u > cump, axis=-1)
