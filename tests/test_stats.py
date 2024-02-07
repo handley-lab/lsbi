@@ -93,6 +93,32 @@ class TestMultivariateNormal(object):
         assert np.all(dist.cov == cov)
         return dist
 
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
+    def test_getitem(self, dim, shape, mean_shape, cov_shape, diagonal_cov):
+        dist = self.random(dim, shape, mean_shape, cov_shape, diagonal_cov)
+
+        if len(dist.shape) > 0:
+            dist_2 = dist[0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[1:]
+            assert dist_2.dim == dim
+
+        if len(dist.shape) > 1:
+            dist_2 = dist[0, 0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[2:]
+            assert dist_2.dim == dim
+
+            dist_2 = dist[0, :]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[1:]
+            assert dist_2.dim == dim
+
+            dist_2 = dist[:, 0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[:-1]
+            assert dist_2.dim == dim
+
     @pytest.mark.parametrize("size", sizes)
     @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
     def test_logpdf(self, dim, shape, mean_shape, cov_shape, diagonal_cov, size):
@@ -105,6 +131,8 @@ class TestMultivariateNormal(object):
         flat_logpdf = np.array([d.logpdf(x) for d in flat_dist])
         flat_logpdf = np.moveaxis(flat_logpdf, 0, -1).reshape(logpdf.shape)
         assert_allclose(logpdf, flat_logpdf)
+
+        assert_allclose(np.log(np.exp(logpdf), dist.pdf(x)))
 
     @pytest.mark.parametrize("size", sizes)
     @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
@@ -274,7 +302,34 @@ class TestMixtureNormal(TestMultivariateNormal):
             logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal_cov
         )
         assert np.all(dist.logA == logA)
+        assert dist.k == dist.shape[-1]
         return dist
+
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
+    def test_getitem(self, dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov):
+        dist = self.random(dim, shape, logA_shape, mean_shape, cov_shape, diagonal_cov)
+
+        if len(dist.shape) > 0:
+            dist_2 = dist[0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[1:]
+            assert dist_2.dim == dim
+
+        if len(dist.shape) > 1:
+            dist_2 = dist[0, 0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[2:]
+            assert dist_2.dim == dim
+
+            dist_2 = dist[0, :]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[1:]
+            assert dist_2.dim == dim
+
+            dist_2 = dist[:, 0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[:-1]
+            assert dist_2.dim == dim
 
     @pytest.mark.parametrize("size", sizes)
     @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
@@ -285,6 +340,8 @@ class TestMixtureNormal(TestMultivariateNormal):
         x = np.random.randn(*size, dim)
         logpdf = dist.logpdf(x)
         assert logpdf.shape == size + dist.shape[:-1]
+
+        assert_allclose(np.log(np.exp(logpdf), dist.pdf(x)))
 
         logA = np.broadcast_to(dist.logA, dist.shape).reshape(-1, dist.k).copy()
         logA -= logsumexp(logA, axis=-1, keepdims=True)

@@ -7,7 +7,7 @@ import scipy.stats
 from numpy.linalg import cholesky, inv
 from scipy.special import erf, logsumexp
 
-from lsbi.utils import bisect, choice, logdet
+from lsbi.utils import bisect, logdet
 
 
 class multivariate_normal(object):
