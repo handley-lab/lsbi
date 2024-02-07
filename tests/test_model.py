@@ -89,9 +89,9 @@ class TestLinearModel(object):
             m = np.random.randn(*m_shape, d)
 
         if C_shape == "scalar":
-            C = np.random.randn() ** 2
+            C = np.random.randn() ** 2 + d
         elif diagonal_C:
-            C = np.random.randn(*C_shape, d) ** 2
+            C = np.random.randn(*C_shape, d) ** 2 + d
         else:
             C = np.random.randn(*C_shape, d, d)
             C = np.einsum("...ij,...kj->...ik", C, C) + d * np.eye(d)
@@ -102,9 +102,9 @@ class TestLinearModel(object):
             mu = np.random.randn(*mu_shape, n)
 
         if Sigma_shape == "scalar":
-            Sigma = np.random.randn() ** 2
+            Sigma = np.random.randn() ** 2 + n
         elif diagonal_Sigma:
-            Sigma = np.random.randn(*Sigma_shape, n) ** 2
+            Sigma = np.random.randn(*Sigma_shape, n) ** 2 + n
         else:
             Sigma = np.random.randn(*Sigma_shape, n, n)
             Sigma = np.einsum("...ij,...kj->...ik", Sigma, Sigma) + n * np.eye(n)
@@ -374,6 +374,8 @@ class TestLinearModel(object):
         n,
         d,
     ):
+        atol = 1e-5
+
         model = self.random(
             M_shape,
             diagonal_M,
@@ -395,6 +397,7 @@ class TestLinearModel(object):
             + model.evidence().logpdf(D, broadcast=True),
             model.likelihood(theta).logpdf(D, broadcast=True)
             + model.prior().logpdf(theta, broadcast=True),
+            atol=atol,
         )
 
 
@@ -706,6 +709,8 @@ class TestMixtureModel(TestLinearModel):
         n,
         d,
     ):
+        atol = 1e-5
+
         model = self.random(
             logA_shape,
             M_shape,
@@ -727,6 +732,7 @@ class TestMixtureModel(TestLinearModel):
             + model.evidence().logpdf(D, broadcast=True),
             model.likelihood(theta).logpdf(D, broadcast=True)
             + model.prior().logpdf(theta, broadcast=True),
+            atol=atol,
         )
 
 

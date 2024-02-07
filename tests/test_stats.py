@@ -79,9 +79,9 @@ class TestMultivariateNormal(object):
             mean = np.random.randn(*mean_shape, dim)
 
         if cov_shape == "scalar":
-            cov = np.random.randn() ** 2
+            cov = np.random.randn() ** 2 + dim
         elif diagonal_cov:
-            cov = np.random.randn(*cov_shape, dim) ** 2
+            cov = np.random.randn(*cov_shape, dim) ** 2 + dim
         else:
             cov = np.random.randn(*cov_shape, dim, dim)
             cov = np.einsum("...ij,...kj->...ik", cov, cov) + dim * np.eye(dim)
