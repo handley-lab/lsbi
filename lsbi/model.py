@@ -4,14 +4,7 @@ import numpy as np
 from numpy.linalg import inv, solve
 
 from lsbi.stats import mixture_normal, multivariate_normal
-from lsbi.utils import logdet
-
-
-def _de_diagonalise(x, diagonal, *args):
-    if diagonal:
-        return np.atleast_1d(x)[..., None, :] * np.eye(*args)
-    else:
-        return x
+from lsbi.utils import dediagonalise, logdet
 
 
 class LinearModel(object):
@@ -235,9 +228,9 @@ class LinearModel(object):
         b = np.broadcast_to(prior.mean, self.shape + (self.n,))
         a = np.broadcast_to(evidence.mean, self.shape + (self.d,))
         mu = np.block([b, a])
-        A = _de_diagonalise(prior.cov, prior.diagonal_cov, self.n)
+        A = dediagonalise(prior.cov, prior.diagonal, self.n)
         A = np.broadcast_to(A, self.shape + (self.n, self.n))
-        D = _de_diagonalise(evidence.cov, evidence.diagonal_cov, self.d)
+        D = dediagonalise(evidence.cov, evidence.diagonal, self.d)
         D = np.broadcast_to(D, self.shape + (self.d, self.d))
         C = np.einsum("...ja,...al->...jl", self._M, self._Sigma)
         C = np.broadcast_to(C, self.shape + (self.d, self.n))
@@ -247,15 +240,15 @@ class LinearModel(object):
 
     @property
     def _M(self):
-        return _de_diagonalise(self.M, self.diagonal_M, self.d, self.n)
+        return dediagonalise(self.M, self.diagonal_M, self.d, self.n)
 
     @property
     def _C(self):
-        return _de_diagonalise(self.C, self.diagonal_C, self.d)
+        return dediagonalise(self.C, self.diagonal_C, self.d)
 
     @property
     def _Sigma(self):
-        return _de_diagonalise(self.Sigma, self.diagonal_Sigma, self.n)
+        return dediagonalise(self.Sigma, self.diagonal_Sigma, self.n)
 
 
 class MixtureModel(LinearModel):

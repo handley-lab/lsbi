@@ -8,7 +8,7 @@ from lsbi.model import (
     MixtureModel,
     ReducedLinearModel,
     ReducedLinearModelUniformPrior,
-    _de_diagonalise,
+    dediagonalise,
 )
 
 
@@ -325,7 +325,7 @@ class TestLinearModel(object):
         model_2 = model.joint().marginalise(i)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
         assert_allclose_broadcast(
-            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
+            dediagonalise(model_1.cov, model_1.diagonal, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -335,7 +335,7 @@ class TestLinearModel(object):
         model_2 = model.joint().condition(i, theta)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
         assert_allclose_broadcast(
-            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
+            dediagonalise(model_1.cov, model_1.diagonal, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -345,7 +345,7 @@ class TestLinearModel(object):
         model_2 = model.joint().marginalise(i)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
         assert_allclose_broadcast(
-            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
+            dediagonalise(model_1.cov, model_1.diagonal, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -355,7 +355,7 @@ class TestLinearModel(object):
         model_2 = model.joint().condition(i, D)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
         assert_allclose_broadcast(
-            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
+            dediagonalise(model_1.cov, model_1.diagonal, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -659,7 +659,7 @@ class TestMixtureModel(TestLinearModel):
         model_2 = model.joint().marginalise(i)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
         assert_allclose_broadcast(
-            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
+            dediagonalise(model_1.cov, model_1.diagonal, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -669,7 +669,7 @@ class TestMixtureModel(TestLinearModel):
         model_2 = model.joint().condition(i, theta)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
         assert_allclose_broadcast(
-            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
+            dediagonalise(model_1.cov, model_1.diagonal, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -679,7 +679,7 @@ class TestMixtureModel(TestLinearModel):
         model_2 = model.joint().marginalise(i)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
         assert_allclose_broadcast(
-            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
+            dediagonalise(model_1.cov, model_1.diagonal, model_1.dim),
             model_2.cov,
             atol=atol,
         )
@@ -689,7 +689,7 @@ class TestMixtureModel(TestLinearModel):
         model_2 = model.joint().condition(i, D)
         assert_allclose_broadcast(model_1.mean, model_2.mean, atol=atol)
         assert_allclose_broadcast(
-            _de_diagonalise(model_1.cov, model_1.diagonal_cov, model_1.dim),
+            dediagonalise(model_1.cov, model_1.diagonal, model_1.dim),
             model_2.cov,
             atol=atol,
         )

@@ -26,7 +26,7 @@ class multivariate_normal(object):
     mean : array_like, shape `(..., dim)`
         Mean of each component.
 
-    cov array_like, shape `(..., dim, dim)`
+    cov array_like, shape `(..., dim, dim)`if diagonal is False else shape `(..., dim)`
         Covariance matrix of each component.
 
     shape: tuple, optional, default=()
@@ -35,27 +35,27 @@ class multivariate_normal(object):
 
     dim: int, optional, default=0
         Dimension of the distribution. Useful for forcing a broadcast beyond that
-        inferred by mean and cov shapes
+        inferred by mean and cov dimensions
 
-    diagonal_cov: bool, optional, default=False
+    diagonal: bool, optional, default=False
         If True, cov is interpreted as the diagonal of the covariance matrix.
     """
 
-    def __init__(self, mean=0, cov=1, shape=(), dim=0, diagonal_cov=False):
+    def __init__(self, mean=0, cov=1, shape=(), dim=0, diagonal=False):
         self.mean = mean
         self.cov = cov
         self._shape = shape
         self._dim = dim
-        self.diagonal_cov = diagonal_cov
+        self.diagonal = diagonal
         if len(np.shape(self.cov)) < 2:
-            self.diagonal_cov = True
+            self.diagonal = True
 
     @property
     def shape(self):
         """Shape of the distribution."""
         return np.broadcast_shapes(
             np.shape(self.mean)[:-1],
-            np.shape(self.cov)[: -2 + self.diagonal_cov],
+            np.shape(self.cov)[: -2 + self.diagonal],
             self._shape,
         )
 
@@ -65,7 +65,7 @@ class multivariate_normal(object):
         return np.max(
             [
                 *np.shape(self.mean)[-1:],
-                *np.shape(self.cov)[-2 + self.diagonal_cov :],
+                *np.shape(self.cov)[-2 + self.diagonal :],
                 self._dim,
             ]
         )
@@ -79,11 +79,11 @@ class multivariate_normal(object):
             Points at which to evaluate the log of the probability density
             function.
         broadcast : bool, optional, default=False
-            If True, broadcast x across the distribution parameters.
+            If True, broadcast x across the shape of the distribution
 
         Returns
         -------
-        logpdf : array_like, shape `(*size, *shape)`
+        logpdf : array_like, shape `(*size, *shape)` if broadcast is False else the consistent broadcast of size and shape.
             Log of the probability density function evaluated at x.
         """
         x = np.array(x)
@@ -93,7 +93,7 @@ class multivariate_normal(object):
             size = x.shape[:-1]
             mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
             dx = x.reshape(*size, *np.ones_like(self.shape), self.dim) - mean
-        if self.diagonal_cov:
+        if self.diagonal:
             chi2 = (dx**2 / self.cov).sum(axis=-1)
             norm = -np.log(2 * np.pi * np.ones(self.dim) * self.cov).sum(axis=-1) / 2
         else:
@@ -101,20 +101,22 @@ class multivariate_normal(object):
             norm = -logdet(2 * np.pi * self.cov) / 2
         return norm - chi2 / 2
 
-    def pdf(self, x):
+    def pdf(self, x, broadcast=False):
         """Probability density function.
 
         Parameters
         ----------
         x : array_like, shape `(*size, dim)`
             Points at which to evaluate the probability density function.
+        broadcast : bool, optional, default=False
+            If True, broadcast x across the distribution parameters.
 
         Returns
         -------
-        pdf : array_like, shape `(*size, *shape)`
+        pdf : array_like, shape `(*size, *shape)` if broadcast is False else the consistent broadcast of size and shape.
             Probability density function evaluated at x.
         """
-        return np.exp(self.logpdf(x))
+        return np.exp(self.logpdf(x, broadcast=broadcast))
 
     def rvs(self, size=()):
         """Draw random samples from the distribution.
@@ -131,12 +133,12 @@ class multivariate_normal(object):
         """
         size = np.atleast_1d(size)
         x = np.random.randn(*size, *self.shape, self.dim)
-        if self.diagonal_cov:
+        if self.diagonal:
             return self.mean + np.sqrt(self.cov) * x
         else:
             return self.mean + np.einsum("...jk,...k->...j", cholesky(self.cov), x)
 
-    def predict(self, A=1, b=0, diagonal_A=False):
+    def predict(self, A=1, b=0, diagonal=False):
         """Predict the mean and covariance of a linear transformation.
 
         if:         x ~ N(mu, Sigma)
@@ -148,6 +150,8 @@ class multivariate_normal(object):
             Linear transformation matrix.
         b : array_like, shape `(..., k)`, optional
             Linear transformation vector.
+        diagonal : bool, optional, default=False
+            If True, A is interpreted as the diagonal of the transformation matrix.
 
         where self.shape is broadcastable to ...
 
@@ -156,11 +160,11 @@ class multivariate_normal(object):
         transformed distribution shape `(..., k)`
         """
         if len(np.shape(A)) < 2:
-            diagonal_A = True
+            diagonal = True
         dist = deepcopy(self)
-        if diagonal_A:
+        if diagonal:
             dist.mean = A * self.mean + b
-            if self.diagonal_cov:
+            if self.diagonal:
                 dist.cov = A * self.cov * A
             else:
                 dist.cov = (
@@ -172,11 +176,11 @@ class multivariate_normal(object):
             dist.mean = (
                 np.einsum("...qn,...n->...q", A, np.ones(self.dim) * self.mean) + b
             )
-            if self.diagonal_cov:
+            if self.diagonal:
                 dist.cov = np.einsum(
                     "...qn,...pn->...qp", A, A * np.atleast_1d(self.cov)[..., None, :]
                 )
-                dist.diagonal_cov = False
+                dist.diagonal = False
             else:
                 dist.cov = np.einsum("...qn,...nm,...pm->...qp", A, self.cov, A)
             dist._dim = np.shape(A)[-2]
@@ -198,7 +202,7 @@ class multivariate_normal(object):
         i = self._bar(indices)
         dist.mean = (np.ones(self.dim) * self.mean)[..., i]
 
-        if self.diagonal_cov:
+        if self.diagonal:
             dist.cov = (np.ones(self.dim) * self.cov)[..., i]
         else:
             dist.cov = self.cov[..., i, :][..., i]
@@ -227,7 +231,7 @@ class multivariate_normal(object):
         dist = deepcopy(self)
         dist.mean = (np.ones(self.dim) * self.mean)[..., i]
 
-        if self.diagonal_cov:
+        if self.diagonal:
             dist.cov = (np.ones(self.dim) * self.cov)[..., i]
             dist._shape = np.broadcast_shapes(self.shape, values.shape[:-1])
         else:
@@ -279,14 +283,14 @@ class multivariate_normal(object):
         x = np.array(x)
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
         if inverse:
-            if self.diagonal_cov:
+            if self.diagonal:
                 y = (x - mean) / np.sqrt(self.cov)
             else:
                 y = np.einsum("...jk,...k->...j", inv(cholesky(self.cov)), x - mean)
             return scipy.stats.norm.cdf(y)
         else:
             y = scipy.stats.norm.ppf(x)
-            if self.diagonal_cov:
+            if self.diagonal:
                 return mean + np.sqrt(self.cov) * y
             else:
                 L = cholesky(self.cov)
@@ -321,7 +325,7 @@ class multivariate_normal(object):
         """
         dist = deepcopy(self)
         dist.mean = np.broadcast_to(self.mean, (*self.shape, self.dim))[arg]
-        if self.diagonal_cov:
+        if self.diagonal:
             dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim))[arg]
         else:
             dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim, self.dim))[arg]
@@ -354,13 +358,13 @@ class mixture_normal(multivariate_normal):
         Dimension of the distribution. Useful for forcing a broadcast beyond that
         inferred by mean and cov shapes
 
-    diagonal_cov: bool, optional, default=False
+    diagonal: bool, optional, default=False
         If True, cov is interpreted as the diagonal of the covariance matrix.
     """
 
-    def __init__(self, logA=0, mean=0, cov=1, shape=(), dim=0, diagonal_cov=False):
+    def __init__(self, logA=0, mean=0, cov=1, shape=(), dim=0, diagonal=False):
         self.logA = logA
-        super().__init__(mean, cov, shape, dim, diagonal_cov)
+        super().__init__(mean, cov, shape, dim, diagonal)
 
     @property
     def shape(self):
@@ -388,8 +392,12 @@ class mixture_normal(multivariate_normal):
 
         Returns
         -------
-        logpdf : array_like, shape `(*size, *shape[:-1])`
+        logpdf :
             Log of the probability density function evaluated at x.
+            if not broadcast and not joint:
+                array_like, shape `(*size, *shape[:-1])`
+            elif broadcast and not joint.
+                array_like, shape the broadcast of `(*size,) and `shape[:-1]`
         """
         if broadcast:
             x = np.expand_dims(x, -2)
@@ -425,7 +433,7 @@ class mixture_normal(multivariate_normal):
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
         mean = np.choose(i[..., None], np.moveaxis(mean, -2, 0))
         x = np.random.randn(*size, *self.shape[:-1], self.dim)
-        if self.diagonal_cov:
+        if self.diagonal:
             L = np.sqrt(self.cov)
             L = np.broadcast_to(L, (*self.shape, self.dim))
             L = np.choose(i[..., None], np.moveaxis(L, -2, 0))
@@ -494,7 +502,7 @@ class mixture_normal(multivariate_normal):
                 np.s_[:-1], theta[..., :i]
             )
             m = np.atleast_1d(dist.mean)[..., 0]
-            if dist.diagonal_cov:
+            if dist.diagonal:
                 c = np.atleast_1d(dist.cov)[..., 0]
             else:
                 c = np.atleast_2d(dist.cov)[..., 0, 0]

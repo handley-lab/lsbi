@@ -56,3 +56,11 @@ def bisect(f, a, b, args=(), tol=1e-8):
         b = np.where(fq == 0, q, b)
         b = np.where(fb * fq > 0, q, b)
     return (a + b) / 2
+
+
+def dediagonalise(x, diagonal, *args):
+    """Optionally construct a dense matrix with x on the diagonal."""
+    if diagonal:
+        return np.atleast_1d(x)[..., None, :] * np.eye(*args)
+    else:
+        return x
