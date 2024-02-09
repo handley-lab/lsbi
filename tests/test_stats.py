@@ -341,7 +341,7 @@ class TestMixtureNormal(TestMultivariateNormal):
         logpdf = dist.logpdf(x)
         assert logpdf.shape == size + dist.shape[:-1]
 
-        assert_allclose(np.log(np.exp(logpdf), dist.pdf(x)))
+        assert_allclose(np.log(np.exp(logpdf)), dist.pdf(x))
 
         logA = np.broadcast_to(dist.logA, dist.shape).reshape(-1, dist.k).copy()
         logA -= logsumexp(logA, axis=-1, keepdims=True)
