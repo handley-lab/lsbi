@@ -314,7 +314,9 @@ class MixtureModel(LinearModel):
 
     @property
     def k(self):
-        """Number of mixture components of the distribution."""
+        """Number of mixture components."""
+        if self.shape == ():
+            return 1
         return self.shape[-1]
 
     def likelihood(self, theta):

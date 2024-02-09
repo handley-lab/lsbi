@@ -447,6 +447,10 @@ class TestMixtureModel(TestLinearModel):
             diagonal_Sigma,
         )
         assert np.all(model.logA == logA)
+        if model.shape:
+            assert model.k == logA_shape[-1]
+        else:
+            assert model.k == 1
         return model
 
     @pytest.mark.parametrize("theta_shape", shapes)
