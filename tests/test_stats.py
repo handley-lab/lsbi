@@ -132,7 +132,7 @@ class TestMultivariateNormal(object):
         flat_logpdf = np.moveaxis(flat_logpdf, 0, -1).reshape(logpdf.shape)
         assert_allclose(logpdf, flat_logpdf)
 
-        assert_allclose(np.log(np.exp(logpdf), dist.pdf(x)))
+        assert_allclose(np.log(np.exp(logpdf)), dist.pdf(x))
 
     @pytest.mark.parametrize("size", sizes)
     @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal_cov", tests)
