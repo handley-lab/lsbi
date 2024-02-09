@@ -213,7 +213,7 @@ class TestMultivariateNormal(object):
         )
         assert dist_2.dim == k
 
-        dist_2 = dist.predict(A, diagonal_A=diagonal_A)
+        dist_2 = dist.predict(A, diagonal=diagonal_A)
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape == np.broadcast_shapes(
             dist.shape, np.shape(A)[: -2 + diagonal_A]
@@ -296,7 +296,10 @@ class TestMixtureNormal(TestMultivariateNormal):
             logA, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal
         )
         assert np.all(dist.logA == logA)
-        assert dist.k == dist.shape[-1]
+        if dist.shape:
+            assert dist.k == dist.shape[-1]
+        else:
+            assert dist.k == 1
         return dist
 
     @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal", tests)
@@ -459,7 +462,7 @@ class TestMixtureNormal(TestMultivariateNormal):
         )
         assert dist_2.dim == k
 
-        dist_2 = dist.predict(A, diagonal_A=diagonal_A)
+        dist_2 = dist.predict(A, diagonal=diagonal_A)
         assert isinstance(dist_2, self.cls)
         assert dist_2.shape == np.broadcast_shapes(
             dist.shape, np.shape(A)[: -2 + diagonal_A]

@@ -83,8 +83,10 @@ class multivariate_normal(object):
 
         Returns
         -------
-        logpdf : array_like, shape `(*size, *shape)` if broadcast is False else the consistent broadcast of size and shape.
+        logpdf : array_like
             Log of the probability density function evaluated at x.
+            if not broadcast: shape `(*size, *self.shape)`
+            else: shape broadcast of `(*size,) and `self.shape`
         """
         x = np.array(x)
         if broadcast:
@@ -113,8 +115,10 @@ class multivariate_normal(object):
 
         Returns
         -------
-        pdf : array_like, shape `(*size, *shape)` if broadcast is False else the consistent broadcast of size and shape.
+        pdf : array_like
             Probability density function evaluated at x.
+            if not broadcast: shape `(*size, *self.shape)`
+            else: shape broadcast of `(*size,) and `self.shape`
         """
         return np.exp(self.logpdf(x, broadcast=broadcast))
 
@@ -390,14 +394,17 @@ class mixture_normal(multivariate_normal):
         broadcast : bool, optional, default=False
             If True, broadcast x across the distribution parameters.
 
+        joint : bool, optional, default=False
+            If True, return the joint logpdf of the mixture P(x, N)
+
         Returns
         -------
-        logpdf :
+        logpdf : array_like
             Log of the probability density function evaluated at x.
-            if not broadcast and not joint:
-                array_like, shape `(*size, *shape[:-1])`
-            elif broadcast and not joint.
-                array_like, shape the broadcast of `(*size,) and `shape[:-1]`
+            if not broadcast and not joint: shape `(*size, *shape[:-1])`
+            elif not broadcast and joint: shape `(*size, *shape)`
+            elif not joint: shape the broadcast of `(*size,) and `shape[:-1]`
+            else: shape the broadcast of `(*size,) and `shape`
         """
         if broadcast:
             x = np.expand_dims(x, -2)
@@ -409,6 +416,31 @@ class mixture_normal(multivariate_normal):
         if joint:
             return logpdf + logA
         return logsumexp(logpdf + logA, axis=-1)
+
+    def pdf(self, x, broadcast=False, joint=False):
+        """Probability density function.
+
+        Parameters
+        ----------
+        x : array_like, shape `(*size, dim)`
+            Points at which to evaluate the probability density function.
+
+        broadcast : bool, optional, default=False
+            If True, broadcast x across the distribution parameters.
+
+        joint : bool, optional, default=False
+            If True, return the joint pdf of the mixture P(x, N)
+
+        Returns
+        -------
+        pdf :
+            Probability density function evaluated at x.
+            if not broadcast and not joint: shape `(*size, *shape[:-1])`
+            elif not broadcast and joint: shape `(*size, *shape)`
+            elif not joint: shape the broadcast of `(*size,) and `shape[:-1]`
+            else: shape the broadcast of `(*size,) and `shape`
+        """
+        return np.exp(self.logpdf(x, broadcast=broadcast, joint=joint))
 
     def rvs(self, size=()):
         """Draw random samples from the distribution.
