@@ -460,21 +460,22 @@ class mixture_normal(multivariate_normal):
         logA -= logsumexp(logA, axis=-1, keepdims=True)
         p = np.exp(logA)
         cump = np.cumsum(p, axis=-1)
-        u = np.random.rand(*size, *p.shape[:-1])
+        u = np.random.rand(np.prod(size), *p.shape[:-1])
         i = np.argmax(np.array(u)[..., None] < cump, axis=-1)
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
-        mean = np.choose(i[..., None], np.moveaxis(mean, -2, 0))
-        x = np.random.randn(*size, *self.shape[:-1], self.dim)
+        mean = np.take_along_axis(np.moveaxis(mean, -2, 0), i[..., None], axis=0)
+        x = np.random.randn(np.prod(size), *self.shape[:-1], self.dim)
         if self.diagonal:
             L = np.sqrt(self.cov)
             L = np.broadcast_to(L, (*self.shape, self.dim))
-            L = np.choose(i[..., None], np.moveaxis(L, -2, 0))
-            return mean + L * x
+            L = np.take_along_axis(np.moveaxis(L, -2, 0), i[..., None], axis=0)
+            rvs = mean + L * x
         else:
             L = cholesky(self.cov)
             L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
-            L = np.choose(i[..., None, None], np.moveaxis(L, -3, 0))
-            return mean + np.einsum("...ij,...j->...i", L, x)
+            L = np.take_along_axis(np.moveaxis(L, -3, 0), i[..., None, None], axis=0)
+            rvs = mean + np.einsum("...ij,...j->...i", L, x)
+        return rvs.reshape(*size, *self.shape[:-1], self.dim)
 
     def condition(self, indices, values):
         """Condition on indices with values.
