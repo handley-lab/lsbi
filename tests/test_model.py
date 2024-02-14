@@ -110,7 +110,17 @@ class TestLinearModel(object):
             Sigma = np.einsum("...ij,...kj->...ik", Sigma, Sigma) + n * np.eye(n)
 
         model = LinearModel(
-            M, m, C, mu, Sigma, shape, n, d, diagonal_M, diagonal_C, diagonal_Sigma
+            M=M,
+            m=m,
+            C=C,
+            mu=mu,
+            Sigma=Sigma,
+            shape=shape,
+            n=n,
+            d=d,
+            diagonal_M=diagonal_M,
+            diagonal_C=diagonal_C,
+            diagonal_Sigma=diagonal_Sigma,
         )
         assert model.d == d
         assert model.n == n
@@ -401,11 +411,11 @@ class TestLinearModel(object):
         )
 
 
-@pytest.mark.parametrize("logA_shape", shapes)
+@pytest.mark.parametrize("logw_shape", shapes)
 class TestMixtureModel(TestLinearModel):
     def random(
         self,
-        logA_shape,
+        logw_shape,
         M_shape,
         diagonal_M,
         m_shape,
@@ -431,22 +441,22 @@ class TestMixtureModel(TestLinearModel):
             n,
             d,
         )
-        logA = np.random.randn(*logA_shape)
+        logw = np.random.randn(*logw_shape)
         model = MixtureModel(
-            logA,
-            model.M,
-            model.m,
-            model.C,
-            model.mu,
-            model.Sigma,
-            shape,
-            n,
-            d,
-            diagonal_M,
-            diagonal_C,
-            diagonal_Sigma,
+            logw=logw,
+            M=model.M,
+            m=model.m,
+            C=model.C,
+            mu=model.mu,
+            Sigma=model.Sigma,
+            shape=shape,
+            n=n,
+            d=d,
+            diagonal_M=diagonal_M,
+            diagonal_C=diagonal_C,
+            diagonal_Sigma=diagonal_Sigma,
         )
-        assert np.all(model.logA == logA)
+        assert np.all(model.logw == logw)
         if model.shape:
             assert model.k == model.shape[-1]
         else:
@@ -457,7 +467,7 @@ class TestMixtureModel(TestLinearModel):
     def test_likelihood(
         self,
         theta_shape,
-        logA_shape,
+        logw_shape,
         M_shape,
         diagonal_M,
         m_shape,
@@ -471,7 +481,7 @@ class TestMixtureModel(TestLinearModel):
         d,
     ):
         model = self.random(
-            logA_shape,
+            logw_shape,
             M_shape,
             diagonal_M,
             m_shape,
@@ -492,7 +502,7 @@ class TestMixtureModel(TestLinearModel):
 
     def test_prior(
         self,
-        logA_shape,
+        logw_shape,
         M_shape,
         diagonal_M,
         m_shape,
@@ -506,7 +516,7 @@ class TestMixtureModel(TestLinearModel):
         d,
     ):
         model = self.random(
-            logA_shape,
+            logw_shape,
             M_shape,
             diagonal_M,
             m_shape,
@@ -527,7 +537,7 @@ class TestMixtureModel(TestLinearModel):
     def test_posterior(
         self,
         D_shape,
-        logA_shape,
+        logw_shape,
         M_shape,
         diagonal_M,
         m_shape,
@@ -541,7 +551,7 @@ class TestMixtureModel(TestLinearModel):
         d,
     ):
         model = self.random(
-            logA_shape,
+            logw_shape,
             M_shape,
             diagonal_M,
             m_shape,
@@ -562,7 +572,7 @@ class TestMixtureModel(TestLinearModel):
 
     def test_evidence(
         self,
-        logA_shape,
+        logw_shape,
         M_shape,
         diagonal_M,
         m_shape,
@@ -576,7 +586,7 @@ class TestMixtureModel(TestLinearModel):
         d,
     ):
         model = self.random(
-            logA_shape,
+            logw_shape,
             M_shape,
             diagonal_M,
             m_shape,
@@ -595,7 +605,7 @@ class TestMixtureModel(TestLinearModel):
 
     def test_joint(
         self,
-        logA_shape,
+        logw_shape,
         M_shape,
         diagonal_M,
         m_shape,
@@ -609,7 +619,7 @@ class TestMixtureModel(TestLinearModel):
         d,
     ):
         model = self.random(
-            logA_shape,
+            logw_shape,
             M_shape,
             diagonal_M,
             m_shape,
@@ -628,7 +638,7 @@ class TestMixtureModel(TestLinearModel):
 
     def test_marginal_conditional(
         self,
-        logA_shape,
+        logw_shape,
         M_shape,
         diagonal_M,
         m_shape,
@@ -642,7 +652,7 @@ class TestMixtureModel(TestLinearModel):
         d,
     ):
         model = self.random(
-            logA_shape,
+            logw_shape,
             M_shape,
             diagonal_M,
             m_shape,
@@ -700,7 +710,7 @@ class TestMixtureModel(TestLinearModel):
 
     def test_bayes_theorem(
         self,
-        logA_shape,
+        logw_shape,
         M_shape,
         diagonal_M,
         m_shape,
@@ -716,7 +726,7 @@ class TestMixtureModel(TestLinearModel):
         atol = 1e-5
 
         model = self.random(
-            logA_shape,
+            logw_shape,
             M_shape,
             diagonal_M,
             m_shape,

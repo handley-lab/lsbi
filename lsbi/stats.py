@@ -351,7 +351,7 @@ class mixture_normal(multivariate_normal):
     cov: array_like, shape `(..., n, dim, dim)`
         Covariance matrix of each component.
 
-    logA: array_like, shape `(..., n)`
+    logw: array_like, shape `(..., n)`
         Log of the mixing weights.
 
     shape: tuple, optional, default=()
@@ -366,14 +366,14 @@ class mixture_normal(multivariate_normal):
         If True, cov is interpreted as the diagonal of the covariance matrix.
     """
 
-    def __init__(self, logA=0.0, mean=0.0, cov=1.0, shape=(), dim=1, diagonal=False):
-        self.logA = logA
+    def __init__(self, logw=0.0, mean=0.0, cov=1.0, shape=(), dim=1, diagonal=False):
+        self.logw = logw
         super().__init__(mean, cov, shape, dim, diagonal)
 
     @property
     def shape(self):
         """Shape of the distribution."""
-        return np.broadcast_shapes(np.shape(self.logA), super().shape)
+        return np.broadcast_shapes(np.shape(self.logw), super().shape)
 
     @property
     def k(self):
@@ -411,11 +411,11 @@ class mixture_normal(multivariate_normal):
         logpdf = super().logpdf(x, broadcast=broadcast)
         if self.shape == ():
             return logpdf
-        logA = np.broadcast_to(self.logA, self.shape).copy()
-        logA -= logsumexp(logA, axis=-1, keepdims=True)
+        logw = np.broadcast_to(self.logw, self.shape).copy()
+        logw -= logsumexp(logw, axis=-1, keepdims=True)
         if joint:
-            return logpdf + logA
-        return logsumexp(logpdf + logA, axis=-1)
+            return logpdf + logw
+        return logsumexp(logpdf + logw, axis=-1)
 
     def pdf(self, x, broadcast=False, joint=False):
         """Probability density function.
@@ -456,9 +456,9 @@ class mixture_normal(multivariate_normal):
         if self.shape == ():
             return super().rvs(size=size)
         size = np.atleast_1d(np.array(size, dtype=int))
-        logA = np.broadcast_to(self.logA, self.shape).copy()
-        logA -= logsumexp(logA, axis=-1, keepdims=True)
-        p = np.exp(logA)
+        logw = np.broadcast_to(self.logw, self.shape).copy()
+        logw -= logsumexp(logw, axis=-1, keepdims=True)
+        p = np.exp(logw)
         cump = np.cumsum(p, axis=-1)
         u = np.random.rand(np.prod(size), *p.shape[:-1])
         i = np.argmax(np.array(u)[..., None] < cump, axis=-1)
@@ -496,7 +496,7 @@ class mixture_normal(multivariate_normal):
         dist = super().condition(indices, np.expand_dims(values, -2))
         dist.__class__ = mixture_normal
         marg = self.marginalise(self._bar(indices))
-        dist.logA = marg.logpdf(values, broadcast=True, joint=True)
+        dist.logw = marg.logpdf(values, broadcast=True, joint=True)
         return dist
 
     def bijector(self, x, inverse=False):
@@ -539,7 +539,7 @@ class mixture_normal(multivariate_normal):
                 c = np.atleast_1d(dist.cov)[..., 0]
             else:
                 c = np.atleast_2d(dist.cov)[..., 0, 0]
-            A = np.exp(dist.logA - logsumexp(dist.logA, axis=-1)[..., None])
+            A = np.exp(dist.logw - logsumexp(dist.logw, axis=-1)[..., None])
             m = np.broadcast_to(m, dist.shape)
 
             def f(t):
@@ -563,5 +563,5 @@ class mixture_normal(multivariate_normal):
     def __getitem__(self, arg):  # noqa: D105
         dist = super().__getitem__(arg)
         dist.__class__ = mixture_normal
-        dist.logA = np.broadcast_to(self.logA, self.shape)[arg]
+        dist.logw = np.broadcast_to(self.logw, self.shape)[arg]
         return dist

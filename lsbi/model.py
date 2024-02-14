@@ -40,12 +40,12 @@ class LinearModel(object):
         if ndim==1: data covariance with vector diagonal for all components
         if ndim==0: scalar * identity matrix for all components
         Defaults to rectangular identity matrix
-    μ : array_like, optional
+    μ : (or mu) array_like, optional
         if ndim>=1: prior means
         if ndim==0: scalar * unit vector for all components
         Defaults to 0 for all components
         Prior mean, defaults to zero vector
-    Σ : array_like, optional
+    Σ : (or Sigma) array_like, optional
         if ndim>=2: prior covariances
         if ndim==1: prior covariance with vector diagonal for all components
         if ndim==0: scalar * identity matrix for all components
@@ -58,37 +58,54 @@ class LinearModel(object):
         Number of mixture components, defaults to automatically inferred value
     """
 
-    def __init__(
-        self,
-        M=1.0,
-        m=0.0,
-        C=1.0,
-        μ=0.0,
-        Σ=1.0,
-        shape=(),
-        n=1,
-        d=1,
-        diagonal_M=False,
-        diagonal_C=False,
-        diagonal_Σ=False,
-    ):
-        self.M = M
-        self.diagonal_M = diagonal_M
+    def __init__(self, *args, **kwargs):
+        self.M = kwargs.pop("M", 1.0)
+        self.diagonal_M = kwargs.pop("diagonal_M", False)
         if len(np.shape(self.M)) < 2:
             self.diagonal_M = True
-        self.m = m
-        self.C = C
-        self.diagonal_C = diagonal_C
+        self.m = kwargs.pop("m", 0.0)
+        self.C = kwargs.pop("C", 1.0)
+        self.diagonal_C = kwargs.pop("diagonal_C", False)
         if len(np.shape(self.C)) < 2:
             self.diagonal_C = True
-        self.μ = μ
-        self.Σ = Σ
-        self.diagonal_Σ = diagonal_Σ
+        self.μ = kwargs.pop("μ", 0.0)
+        self.μ = kwargs.pop("mu", self.μ)
+        self.Σ = kwargs.pop("Σ", 1.0)
+        self.Σ = kwargs.pop("Sigma", self.Σ)
+        self.diagonal_Σ = kwargs.pop("diagonal_Σ", False)
+        self.diagonal_Σ = kwargs.pop("diagonal_Sigma", self.diagonal_Σ)
         if len(np.shape(self.Σ)) < 2:
             self.diagonal_Σ = True
-        self._shape = shape
-        self._n = n
-        self._d = d
+        self._shape = kwargs.pop("shape", ())
+        self._n = kwargs.pop("n", 1)
+        self._d = kwargs.pop("d", 1)
+
+        if kwargs:
+            raise ValueError(f"Unrecognised arguments: {kwargs}")
+
+    @property
+    def Sigma(self):  # noqa: D102
+        return self.Σ
+
+    @Sigma.setter
+    def Sigma(self, value):
+        self.Σ = value
+
+    @property
+    def mu(self):  # noqa: D102
+        return self.μ
+
+    @mu.setter
+    def mu(self, value):
+        self.μ = value
+
+    @property
+    def diagonal_Sigma(self):  # noqa: D102
+        return self.diagonal_Σ
+
+    @diagonal_Sigma.setter
+    def diagonal_Sigma(self, value):
+        self.diagonal_Σ = value
 
     @property
     def shape(self):
@@ -126,6 +143,17 @@ class LinearModel(object):
             ]
         )
 
+    def model(self, θ):
+        """Model matrix M(θ) for a given parameter vector.
+
+        M(θ) = m + M θ
+
+        Parameters
+        ----------
+        θ : array_like, shape (..., n,)
+        """
+        return self.m + np.einsum("...ja,...a->...j", self._M, θ * np.ones(self.n))
+
     def likelihood(self, θ):
         """P(D|θ as a scipy distribution object.
 
@@ -136,7 +164,7 @@ class LinearModel(object):
         ----------
         θ : array_like, shape (k, n)
         """
-        μ = self.m + np.einsum("...ja,...a->...j", self._M, θ)
+        μ = self.model(θ)
         return multivariate_normal(μ, self.C, self.shape, self.d, self.diagonal_C)
 
     def prior(self):
@@ -156,11 +184,7 @@ class LinearModel(object):
         ----------
         D : array_like, shape (d,)
         """
-        values = (
-            D
-            - self.m
-            - np.einsum("...ja,...a->...j", self._M, self.μ * np.ones(self.n))
-        )
+        values = D - self.model(self.μ)
 
         diagonal_Σ = self.diagonal_C and self.diagonal_Σ and self.diagonal_M
 
@@ -199,9 +223,7 @@ class LinearModel(object):
 
         D ~ N( m + M μ, C + M Σ M' )
         """
-        μ = self.m + np.einsum("...ja,...a->...j", self._M, self.μ * np.ones(self.n))
         diagonal_Σ = self.diagonal_C and self.diagonal_Σ and self.diagonal_M
-
         if diagonal_Σ:
             dim = min(self.n, self.d)
             M = np.atleast_1d(self.M)[..., :dim]
@@ -212,7 +234,7 @@ class LinearModel(object):
             Σ = self._C + np.einsum(
                 "...ja,...ab,...kb->...jk", self._M, self._Σ, self._M
             )
-
+        μ = self.model(self.μ)
         return multivariate_normal(μ, Σ, self.shape, self.d, diagonal_Σ)
 
     def joint(self):
@@ -254,7 +276,7 @@ class MixtureModel(LinearModel):
 
     D|θ, A ~ N( m + M θ, C )
     θ|A    ~ N( μ, Σ )
-    A          ~ categorical( exp(logA) )
+    A          ~ categorical( exp(logw) )
 
     Defined by:
         Parameters:          θ     (..., n,)
@@ -263,7 +285,7 @@ class MixtureModel(LinearModel):
         Prior covariances:   Σ     (..., k, n, n)
         Data means:          m     (..., k, d)
         Data covariances:    C     (..., k, d, d)
-        log mixture weights: logA  (..., k,)
+        log mixture weights: logw  (..., k,)
 
     Parameters
     ----------
@@ -291,7 +313,7 @@ class MixtureModel(LinearModel):
         if ndim==1: prior covariance with vector diagonal for all components
         if scalar: scalar * identity matrix for all components
         Defaults to k copies of identity matrices
-    logA : array_like, optional
+    logw : array_like, optional
         if ndim>=1: log mixture weights
         if scalar: scalar * unit vector
         Defaults to uniform weights
@@ -301,14 +323,14 @@ class MixtureModel(LinearModel):
         Number of data dimensions, defaults to automatically inferred value
     """
 
-    def __init__(self, logA=1.0, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
+        self.logw = kwargs.pop("logw", 0.0)
         super().__init__(*args, **kwargs)
-        self.logA = logA
 
     @property
     def shape(self):
         """Shape of the distribution."""
-        return np.broadcast_shapes(np.shape(self.logA), super().shape)
+        return np.broadcast_shapes(np.shape(self.logw), super().shape)
 
     @property
     def k(self):
@@ -320,9 +342,9 @@ class MixtureModel(LinearModel):
     def likelihood(self, θ):
         """P(D|θ) as a scipy distribution object.
 
-        D|θ,A ~ N( m + M θ, C )
-        θ|A   ~ N( μ, Σ )
-        A         ~ categorical(exp(logA))
+        D|θ,w ~ N( m + M θ, C )
+        θ|w   ~ N( μ, Σ )
+        w     ~ categorical(exp(logw))
 
         Parameters
         ----------
@@ -330,18 +352,18 @@ class MixtureModel(LinearModel):
         """
         dist = super().likelihood(np.expand_dims(θ, -2))
         dist.__class__ = mixture_normal
-        dist.logA = self.prior().logpdf(θ, broadcast=True, joint=True)
+        dist.logw = self.prior().logpdf(θ, broadcast=True, joint=True)
         return dist
 
     def prior(self):
         """P(θ) as a scipy distribution object.
 
         θ|A ~ N( μ, Σ )
-        A       ~ categorical(exp(logA))
+        A       ~ categorical(exp(logw))
         """
         dist = super().prior()
         dist.__class__ = mixture_normal
-        dist.logA = self.logA
+        dist.logw = self.logw
         return dist
 
     def posterior(self, D):
@@ -349,7 +371,7 @@ class MixtureModel(LinearModel):
 
         θ|D, A ~ N( μ + S M'C^{-1}(D - m - M μ), S )
         D|A        ~ N( m + M μ, C + M Σ M' )
-        A          ~ categorical(exp(logA))
+        A          ~ categorical(exp(logw))
         S = (Σ^{-1} + M'C^{-1}M)^{-1}
 
         Parameters
@@ -358,18 +380,18 @@ class MixtureModel(LinearModel):
         """
         dist = super().posterior(np.expand_dims(D, -2))
         dist.__class__ = mixture_normal
-        dist.logA = self.evidence().logpdf(D, broadcast=True, joint=True)
+        dist.logw = self.evidence().logpdf(D, broadcast=True, joint=True)
         return dist
 
     def evidence(self):
         """P(D) as a scipy distribution object.
 
         D|A ~ N( m + M μ, C + M Σ M' )
-        A   ~ categorical(exp(logA))
+        A   ~ categorical(exp(logw))
         """
         dist = super().evidence()
         dist.__class__ = mixture_normal
-        dist.logA = self.logA
+        dist.logw = self.logw
         return dist
 
     def joint(self):
@@ -378,11 +400,11 @@ class MixtureModel(LinearModel):
         [θ] | A ~ N( [   μ   ]   [ Σ      Σ M'   ] )
         [  D  ] |      ( [m + M μ] , [M Σ  C + M Σ M'] )
 
-        A           ~ categorical(exp(logA))
+        A           ~ categorical(exp(logw))
         """
         dist = super().joint()
         dist.__class__ = mixture_normal
-        dist.logA = self.logA
+        dist.logw = self.logw
         return dist
 
 
