@@ -145,8 +145,8 @@ class multivariate_normal(object):
     def predict(self, A=1.0, b=0.0, diagonal=False):
         """Predict the mean and covariance of a linear transformation.
 
-        if:         x ~ N(mu, Sigma)
-        then:  Ax + b ~ N(A mu + b, A Sigma A^T)
+        if:         x ~ N(μ, Σ)
+        then:  Ax + b ~ N(A μ + b, A Σ A^T)
 
         Parameters
         ----------

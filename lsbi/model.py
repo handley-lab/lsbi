@@ -10,17 +10,17 @@ from lsbi.utils import dediagonalise, logdet
 class LinearModel(object):
     """A multilinear model.
 
-    D|theta ~ N( m + M theta, C )
-    theta   ~ N( mu, Sigma )
+    D|θ ~ N( m + M θ, C )
+    θ   ~ N( μ, Σ )
 
     Defined by:
-        Parameters:       theta (..., n,)
-        Data:             D     (..., d,)
-        Model:            M     (..., d, n)
-        Prior mean:       mu    (..., n,)
-        Prior covariance: Sigma (..., n, n)
-        Data mean:        m     (..., d,)
-        Data covariance:  C     (..., d, d)
+        Parameters:       θ (..., n,)
+        Data:             D (..., d,)
+        Model:            M (..., d, n)
+        Prior mean:       μ (..., n,)
+        Prior covariance: Σ (..., n, n)
+        Data mean:        m (..., d,)
+        Data covariance:  C (..., d, d)
 
     where the ellipses indicate arbitrary (broadcastable) additional copies.
 
@@ -40,12 +40,12 @@ class LinearModel(object):
         if ndim==1: data covariance with vector diagonal for all components
         if ndim==0: scalar * identity matrix for all components
         Defaults to rectangular identity matrix
-    mu : array_like, optional
+    μ : array_like, optional
         if ndim>=1: prior means
         if ndim==0: scalar * unit vector for all components
         Defaults to 0 for all components
         Prior mean, defaults to zero vector
-    Sigma : array_like, optional
+    Σ : array_like, optional
         if ndim>=2: prior covariances
         if ndim==1: prior covariance with vector diagonal for all components
         if ndim==0: scalar * identity matrix for all components
@@ -63,14 +63,14 @@ class LinearModel(object):
         M=1.0,
         m=0.0,
         C=1.0,
-        mu=0.0,
-        Sigma=1.0,
+        μ=0.0,
+        Σ=1.0,
         shape=(),
         n=1,
         d=1,
         diagonal_M=False,
         diagonal_C=False,
-        diagonal_Sigma=False,
+        diagonal_Σ=False,
     ):
         self.M = M
         self.diagonal_M = diagonal_M
@@ -81,11 +81,11 @@ class LinearModel(object):
         self.diagonal_C = diagonal_C
         if len(np.shape(self.C)) < 2:
             self.diagonal_C = True
-        self.mu = mu
-        self.Sigma = Sigma
-        self.diagonal_Sigma = diagonal_Sigma
-        if len(np.shape(self.Sigma)) < 2:
-            self.diagonal_Sigma = True
+        self.μ = μ
+        self.Σ = Σ
+        self.diagonal_Σ = diagonal_Σ
+        if len(np.shape(self.Σ)) < 2:
+            self.diagonal_Σ = True
         self._shape = shape
         self._n = n
         self._d = d
@@ -97,8 +97,8 @@ class LinearModel(object):
             np.shape(self.M)[: -2 + self.diagonal_M],
             np.shape(self.m)[:-1],
             np.shape(self.C)[: -2 + self.diagonal_C],
-            np.shape(self.mu)[:-1],
-            np.shape(self.Sigma)[: -2 + self.diagonal_Sigma],
+            np.shape(self.μ)[:-1],
+            np.shape(self.Σ)[: -2 + self.diagonal_Σ],
             self._shape,
         )
 
@@ -108,8 +108,8 @@ class LinearModel(object):
         return np.max(
             [
                 *np.shape(self.M)[len(np.shape(self.M)) - 1 + self.diagonal_M :],
-                *np.shape(self.Sigma)[-2 + self.diagonal_Sigma :],
-                *np.shape(self.mu)[-1:],
+                *np.shape(self.Σ)[-2 + self.diagonal_Σ :],
+                *np.shape(self.μ)[-1:],
                 self._n,
             ]
         )
@@ -126,33 +126,31 @@ class LinearModel(object):
             ]
         )
 
-    def likelihood(self, theta):
-        """P(D|theta) as a scipy distribution object.
+    def likelihood(self, θ):
+        """P(D|θ as a scipy distribution object.
 
-        D|theta ~ N( m + M theta, C )
-        theta   ~ N( mu, Sigma )
+        D|θ ~ N( m + M θ, C )
+        θ   ~ N( μ, Σ )
 
         Parameters
         ----------
-        theta : array_like, shape (k, n)
+        θ : array_like, shape (k, n)
         """
-        mu = self.m + np.einsum("...ja,...a->...j", self._M, theta)
-        return multivariate_normal(mu, self.C, self.shape, self.d, self.diagonal_C)
+        μ = self.m + np.einsum("...ja,...a->...j", self._M, θ)
+        return multivariate_normal(μ, self.C, self.shape, self.d, self.diagonal_C)
 
     def prior(self):
-        """P(theta) as a scipy distribution object.
+        """P(θ) as a scipy distribution object.
 
-        theta ~ N( mu, Sigma )
+        θ ~ N( μ, Σ )
         """
-        return multivariate_normal(
-            self.mu, self.Sigma, self.shape, self.n, self.diagonal_Sigma
-        )
+        return multivariate_normal(self.μ, self.Σ, self.shape, self.n, self.diagonal_Σ)
 
     def posterior(self, D):
-        """P(theta|D) as a scipy distribution object.
+        """P(θ|D) as a scipy distribution object.
 
-        theta|D ~ N( mu + S M'C^{-1}(D - m - M mu), S )
-        S = (Sigma^{-1} + M'C^{-1}M)^{-1}
+        θ|D ~ N( μ + S M'C^{-1}(D - m - M μ), S )
+        S = (Σ^{-1} + M'C^{-1}M)^{-1}
 
         Parameters
         ----------
@@ -161,82 +159,82 @@ class LinearModel(object):
         values = (
             D
             - self.m
-            - np.einsum("...ja,...a->...j", self._M, self.mu * np.ones(self.n))
+            - np.einsum("...ja,...a->...j", self._M, self.μ * np.ones(self.n))
         )
 
-        diagonal_Sigma = self.diagonal_C and self.diagonal_Sigma and self.diagonal_M
+        diagonal_Σ = self.diagonal_C and self.diagonal_Σ and self.diagonal_M
 
-        if diagonal_Sigma:
+        if diagonal_Σ:
             dim = min(self.n, self.d)
             shape = np.broadcast_shapes(self.shape, values.shape[:-1])
             C = np.atleast_1d(self.C)[..., :dim]
             M = np.atleast_1d(self.M)[..., :dim]
-            Sigma = np.broadcast_to(self.Sigma, shape + (self.n,)).copy()
-            Sigma[..., :dim] = 1 / (1 / Sigma[..., :dim] + M**2 / C)
+            Σ = np.broadcast_to(self.Σ, shape + (self.n,)).copy()
+            Σ[..., :dim] = 1 / (1 / Σ[..., :dim] + M**2 / C)
 
-            mu = np.broadcast_to(self.mu, shape + (self.n,)).copy()
-            mu[..., :dim] = mu[..., :dim] + Sigma[..., :dim] * M / C * values[..., :dim]
+            μ = np.broadcast_to(self.μ, shape + (self.n,)).copy()
+            μ[..., :dim] = μ[..., :dim] + Σ[..., :dim] * M / C * values[..., :dim]
         else:
             if self.diagonal_C:
                 invC = np.eye(self.d) / np.atleast_1d(self.C)[..., None, :]
             else:
                 invC = inv(self.C)
 
-            if self.diagonal_Sigma:
-                invSigma = np.eye(self.n) / np.atleast_1d(self.Sigma)[..., None, :]
+            if self.diagonal_Σ:
+                invΣ = np.eye(self.n) / np.atleast_1d(self.Σ)[..., None, :]
             else:
-                invSigma = inv(self.Sigma)
+                invΣ = inv(self.Σ)
 
-            Sigma = inv(
-                invSigma + np.einsum("...aj,...ab,...bk->...jk", self._M, invC, self._M)
+            Σ = inv(
+                invΣ + np.einsum("...aj,...ab,...bk->...jk", self._M, invC, self._M)
             )
-            mu = self.mu + np.einsum(
-                "...ja,...ba,...bc,...c->...j", Sigma, self._M, invC, values
+            μ = self.μ + np.einsum(
+                "...ja,...ba,...bc,...c->...j", Σ, self._M, invC, values
             )
 
-        return multivariate_normal(mu, Sigma, self.shape, self.n, diagonal_Sigma)
+        return multivariate_normal(μ, Σ, self.shape, self.n, diagonal_Σ)
 
     def evidence(self):
         """P(D) as a scipy distribution object.
 
-        D ~ N( m + M mu, C + M Sigma M' )
+        D ~ N( m + M μ, C + M Σ M' )
         """
-        mu = self.m + np.einsum("...ja,...a->...j", self._M, self.mu * np.ones(self.n))
-        diagonal_Sigma = self.diagonal_C and self.diagonal_Sigma and self.diagonal_M
+        μ = self.m + np.einsum("...ja,...a->...j", self._M, self.μ * np.ones(self.n))
+        diagonal_Σ = self.diagonal_C and self.diagonal_Σ and self.diagonal_M
 
-        if diagonal_Sigma:
+        if diagonal_Σ:
             dim = min(self.n, self.d)
             M = np.atleast_1d(self.M)[..., :dim]
-            S = np.atleast_1d(self.Sigma)[..., :dim]
-            Sigma = np.broadcast_to(self.C, self.shape + (self.d,)).copy()
-            Sigma[..., :dim] += S * M**2
+            S = np.atleast_1d(self.Σ)[..., :dim]
+            Σ = np.broadcast_to(self.C, self.shape + (self.d,)).copy()
+            Σ[..., :dim] += S * M**2
         else:
-            Sigma = self._C + np.einsum(
-                "...ja,...ab,...kb->...jk", self._M, self._Sigma, self._M
+            Σ = self._C + np.einsum(
+                "...ja,...ab,...kb->...jk", self._M, self._Σ, self._M
             )
 
-        return multivariate_normal(mu, Sigma, self.shape, self.d, diagonal_Sigma)
+        return multivariate_normal(μ, Σ, self.shape, self.d, diagonal_Σ)
 
     def joint(self):
-        """P(theta, D) as a scipy distribution object.
+        """P(θ, D) as a scipy distribution object.
 
-        [theta] ~ N( [   mu   ]   [ Sigma      Sigma M'   ] )
-        [  D  ]    ( [m + M mu] , [M Sigma  C + M Sigma M'] )
+        [θ] ~ N( [   μ   ]   [ Σ      Σ M'   ] )
+        [D]    ( [m + M μ] , [M Σ  C + M Σ M'] )
         """
         evidence = self.evidence()
         prior = self.prior()
         b = np.broadcast_to(prior.mean, self.shape + (self.n,))
         a = np.broadcast_to(evidence.mean, self.shape + (self.d,))
-        mu = np.block([b, a])
+        μ = np.block([b, a])
         A = dediagonalise(prior.cov, prior.diagonal, self.n)
         A = np.broadcast_to(A, self.shape + (self.n, self.n))
         D = dediagonalise(evidence.cov, evidence.diagonal, self.d)
         D = np.broadcast_to(D, self.shape + (self.d, self.d))
-        C = np.einsum("...ja,...al->...jl", self._M, self._Sigma)
+        C = np.einsum("...ja,...al->...jl", self._M, self._Σ)
         C = np.broadcast_to(C, self.shape + (self.d, self.n))
         B = np.moveaxis(C, -1, -2)
-        Sigma = np.block([[A, B], [C, D]])
-        return multivariate_normal(mu, Sigma, self.shape, self.n + self.d)
+        Σ = np.block([[A, B], [C, D]])
+        return multivariate_normal(μ, Σ, self.shape, self.n + self.d)
 
     @property
     def _M(self):
@@ -247,22 +245,22 @@ class LinearModel(object):
         return dediagonalise(self.C, self.diagonal_C, self.d)
 
     @property
-    def _Sigma(self):
-        return dediagonalise(self.Sigma, self.diagonal_Sigma, self.n)
+    def _Σ(self):
+        return dediagonalise(self.Σ, self.diagonal_Σ, self.n)
 
 
 class MixtureModel(LinearModel):
     """A linear mixture model.
 
-    D|theta, A ~ N( m + M theta, C )
-    theta|A    ~ N( mu, Sigma )
+    D|θ, A ~ N( m + M θ, C )
+    θ|A    ~ N( μ, Σ )
     A          ~ categorical( exp(logA) )
 
     Defined by:
-        Parameters:          theta (..., n,)
+        Parameters:          θ     (..., n,)
         Data:                D     (..., d,)
-        Prior means:         mu    (..., k, n)
-        Prior covariances:   Sigma (..., k, n, n)
+        Prior means:         μ     (..., k, n)
+        Prior covariances:   Σ     (..., k, n, n)
         Data means:          m     (..., k, d)
         Data covariances:    C     (..., k, d, d)
         log mixture weights: logA  (..., k,)
@@ -283,12 +281,12 @@ class MixtureModel(LinearModel):
         if ndim==1: data covariance with vector diagonal for all components
         if scalar: scalar * identity matrix for all components
         Defaults to k copies of identity matrices
-    mu : array_like, optional
+    μ : array_like, optional
         if ndim>=1: prior means
         if scalar: scalar * unit vector for all components
         Defaults to 0 for all components
         Prior mean, defaults to zero vector
-    Sigma : array_like, optional
+    Σ : array_like, optional
         if ndim>=2: prior covariances
         if ndim==1: prior covariance with vector diagonal for all components
         if scalar: scalar * identity matrix for all components
@@ -319,26 +317,26 @@ class MixtureModel(LinearModel):
             return 1
         return self.shape[-1]
 
-    def likelihood(self, theta):
-        """P(D|theta) as a scipy distribution object.
+    def likelihood(self, θ):
+        """P(D|θ) as a scipy distribution object.
 
-        D|theta,A ~ N( m + M theta, C )
-        theta|A   ~ N( mu, Sigma )
+        D|θ,A ~ N( m + M θ, C )
+        θ|A   ~ N( μ, Σ )
         A         ~ categorical(exp(logA))
 
         Parameters
         ----------
-        theta : array_like, shape (n,)
+        θ : array_like, shape (n,)
         """
-        dist = super().likelihood(np.expand_dims(theta, -2))
+        dist = super().likelihood(np.expand_dims(θ, -2))
         dist.__class__ = mixture_normal
-        dist.logA = self.prior().logpdf(theta, broadcast=True, joint=True)
+        dist.logA = self.prior().logpdf(θ, broadcast=True, joint=True)
         return dist
 
     def prior(self):
-        """P(theta) as a scipy distribution object.
+        """P(θ) as a scipy distribution object.
 
-        theta|A ~ N( mu, Sigma )
+        θ|A ~ N( μ, Σ )
         A       ~ categorical(exp(logA))
         """
         dist = super().prior()
@@ -347,12 +345,12 @@ class MixtureModel(LinearModel):
         return dist
 
     def posterior(self, D):
-        """P(theta|D) as a scipy distribution object.
+        """P(θ|D) as a scipy distribution object.
 
-        theta|D, A ~ N( mu + S M'C^{-1}(D - m - M mu), S )
-        D|A        ~ N( m + M mu, C + M Sigma M' )
+        θ|D, A ~ N( μ + S M'C^{-1}(D - m - M μ), S )
+        D|A        ~ N( m + M μ, C + M Σ M' )
         A          ~ categorical(exp(logA))
-        S = (Sigma^{-1} + M'C^{-1}M)^{-1}
+        S = (Σ^{-1} + M'C^{-1}M)^{-1}
 
         Parameters
         ----------
@@ -366,7 +364,7 @@ class MixtureModel(LinearModel):
     def evidence(self):
         """P(D) as a scipy distribution object.
 
-        D|A ~ N( m + M mu, C + M Sigma M' )
+        D|A ~ N( m + M μ, C + M Σ M' )
         A   ~ categorical(exp(logA))
         """
         dist = super().evidence()
@@ -375,10 +373,10 @@ class MixtureModel(LinearModel):
         return dist
 
     def joint(self):
-        """P(D, theta) as a scipy distribution object.
+        """P(D, θ) as a scipy distribution object.
 
-        [theta] | A ~ N( [   mu   ]   [ Sigma      Sigma M'   ] )
-        [  D  ] |      ( [m + M mu] , [M Sigma  C + M Sigma M'] )
+        [θ] | A ~ N( [   μ   ]   [ Σ      Σ M'   ] )
+        [  D  ] |      ( [m + M μ] , [M Σ  C + M Σ M'] )
 
         A           ~ categorical(exp(logA))
         """
@@ -395,83 +393,79 @@ class ReducedLinearModel(object):
     clear/efficient to phrase it in terms of a parameter covariance, parameter
     mean and peak value:
 
-    logL(theta) = logLmax - (theta - mu_L)' Sigma_L^{-1} (theta - mu_L)
+    logL(θ) = logLmax - (θ - μ_L)' Σ_L^{-1} (θ - μ_L)
 
     We can link this to a data-based model with the relations:
 
-    Sigma_L = (M' C^{-1} M)^{-1}
-    mu_L = Sigma_L M' C^{-1} (D-m)
+    Σ_L = (M' C^{-1} M)^{-1}
+    μ_L = Σ_L M' C^{-1} (D-m)
     logLmax =
     - log|2 pi C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
 
     Parameters
     ----------
-    mu_L : array_like
+    μ_L : array_like
         Likelihood peak
-    Sigma_L : array_like
+    Σ_L : array_like
         Likelihood covariance
     logLmax : float, optional
         Likelihood maximum, defaults to zero
-    mu_pi : array_like, optional
+    μ_pi : array_like, optional
         Prior mean, defaults to zero vector
-    Sigma_pi : array_like, optional
+    Σ_pi : array_like, optional
         Prior covariance, defaults to identity matrix
     """
 
     def __init__(self, *args, **kwargs):
-        self.mu_L = np.atleast_1d(kwargs.pop("mu_L"))
-        self.Sigma_L = np.atleast_2d(kwargs.pop("Sigma_L", None))
+        self.μ_L = np.atleast_1d(kwargs.pop("μ_L"))
+        self.Σ_L = np.atleast_2d(kwargs.pop("Σ_L", None))
         self.logLmax = kwargs.pop("logLmax", 0)
-        self.mu_pi = np.atleast_1d(kwargs.pop("mu_pi", np.zeros_like(self.mu_L)))
-        self.Sigma_pi = np.atleast_2d(kwargs.pop("Sigma_pi", np.eye(len(self.mu_pi))))
-        self.Sigma_P = inv(inv(self.Sigma_pi) + inv(self.Sigma_L))
-        self.mu_P = self.Sigma_P @ (
-            solve(self.Sigma_pi, self.mu_pi) + solve(self.Sigma_L, self.mu_L)
-        )
+        self.μ_pi = np.atleast_1d(kwargs.pop("μ_pi", np.zeros_like(self.μ_L)))
+        self.Σ_pi = np.atleast_2d(kwargs.pop("Σ_pi", np.eye(len(self.μ_pi))))
+        self.Σ_P = inv(inv(self.Σ_pi) + inv(self.Σ_L))
+        self.μ_P = self.Σ_P @ (solve(self.Σ_pi, self.μ_pi) + solve(self.Σ_L, self.μ_L))
 
     def prior(self):
-        """P(theta) as a scipy distribution object."""
-        return multivariate_normal(self.mu_pi, self.Sigma_pi)
+        """P(θ) as a scipy distribution object."""
+        return multivariate_normal(self.μ_pi, self.Σ_pi)
 
     def posterior(self):
-        """P(theta|D) as a scipy distribution object."""
-        return multivariate_normal(self.mu_P, self.Sigma_P)
+        """P(θ|D) as a scipy distribution object."""
+        return multivariate_normal(self.μ_P, self.Σ_P)
 
-    def logpi(self, theta):
-        """P(theta) as a scalar."""
-        return self.prior().logpdf(theta)
+    def logpi(self, θ):
+        """P(θ) as a scalar."""
+        return self.prior().logpdf(θ)
 
-    def logP(self, theta):
-        """P(theta|D) as a scalar."""
-        return self.posterior().logpdf(theta)
+    def logP(self, θ):
+        """P(θ|D) as a scalar."""
+        return self.posterior().logpdf(θ)
 
-    def logL(self, theta):
-        """P(D|theta) as a scalar."""
+    def logL(self, θ):
+        """P(D|θ) as a scalar."""
         return (
             self.logLmax
-            + multivariate_normal(self.mu_L, self.Sigma_L).logpdf(theta)
-            + logdet(2 * np.pi * self.Sigma_L) / 2
+            + multivariate_normal(self.μ_L, self.Σ_L).logpdf(θ)
+            + logdet(2 * np.pi * self.Σ_L) / 2
         )
 
     def logZ(self):
         """P(D) as a scalar."""
         return (
             self.logLmax
-            + logdet(self.Sigma_P) / 2
-            - logdet(self.Sigma_pi) / 2
-            - (self.mu_P - self.mu_pi)
-            @ solve(self.Sigma_pi, self.mu_P - self.mu_pi)
-            / 2
-            - (self.mu_P - self.mu_L) @ solve(self.Sigma_L, self.mu_P - self.mu_L) / 2
+            + logdet(self.Σ_P) / 2
+            - logdet(self.Σ_pi) / 2
+            - (self.μ_P - self.μ_pi) @ solve(self.Σ_pi, self.μ_P - self.μ_pi) / 2
+            - (self.μ_P - self.μ_L) @ solve(self.Σ_L, self.μ_P - self.μ_L) / 2
         )
 
     def DKL(self):
-        """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence."""
+        """D_KL(P(θ|D)||P(θ)) the Kullback-Leibler divergence."""
         return (
-            logdet(self.Sigma_pi)
-            - logdet(self.Sigma_P)
-            + np.trace(inv(self.Sigma_pi) @ self.Sigma_P - 1)
-            + (self.mu_P - self.mu_pi) @ solve(self.Sigma_pi, self.mu_P - self.mu_pi)
+            logdet(self.Σ_pi)
+            - logdet(self.Σ_P)
+            + np.trace(inv(self.Σ_pi) @ self.Σ_P - 1)
+            + (self.μ_P - self.μ_pi) @ solve(self.Σ_pi, self.μ_P - self.μ_pi)
         ) / 2
 
 
@@ -480,22 +474,22 @@ class ReducedLinearModelUniformPrior(object):
 
     Gaussian likelihood in the parameters
 
-    logL(theta) = logLmax - (theta - mu_L)' Sigma_L^{-1} (theta - mu_L)
+    logL(θ) = logLmax - (θ - μ_L)' Σ_L^{-1} (θ - μ_L)
 
     Uniform prior
 
     We can link this to a data-based model with the relations:
 
-    Sigma_L = (M' C^{-1} M)^{-1}
-    mu_L = Sigma_L M' C^{-1} (D-m)
+    Σ_L = (M' C^{-1} M)^{-1}
+    μ_L = Σ_L M' C^{-1} (D-m)
     logLmax =
     -log|2 pi C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
 
     Parameters
     ----------
-    mu_L : array_like
+    μ_L : array_like
         Likelihood peak
-    Sigma_L : array_like
+    Σ_L : array_like
         Likelihood covariance
     logLmax : float, optional
         Likelihood maximum, defaults to zero
@@ -504,37 +498,37 @@ class ReducedLinearModelUniformPrior(object):
     """
 
     def __init__(self, *args, **kwargs):
-        self.mu_L = np.atleast_1d(kwargs.pop("mu_L"))
-        self.Sigma_L = np.atleast_2d(kwargs.pop("Sigma_L"))
+        self.μ_L = np.atleast_1d(kwargs.pop("μ_L"))
+        self.Σ_L = np.atleast_2d(kwargs.pop("Σ_L"))
         self.logLmax = kwargs.pop("logLmax", 0)
         self.logV = kwargs.pop("logV", 0)
-        self.Sigma_P = self.Sigma_L
-        self.mu_P = self.mu_L
+        self.Σ_P = self.Σ_L
+        self.μ_P = self.μ_L
 
     def posterior(self):
-        """P(theta|D) as a scipy distribution object."""
-        return multivariate_normal(self.mu_P, self.Sigma_P)
+        """P(θ|D) as a scipy distribution object."""
+        return multivariate_normal(self.μ_P, self.Σ_P)
 
-    def logpi(self, theta):
-        """P(theta) as a scalar."""
+    def logpi(self, θ):
+        """P(θ) as a scalar."""
         return -self.logV
 
-    def logP(self, theta):
-        """P(theta|D) as a scalar."""
-        return self.posterior().logpdf(theta)
+    def logP(self, θ):
+        """P(θ|D) as a scalar."""
+        return self.posterior().logpdf(θ)
 
-    def logL(self, theta):
-        """P(D|theta) as a scalar."""
+    def logL(self, θ):
+        """P(D|θ) as a scalar."""
         return (
             self.logLmax
-            + logdet(2 * np.pi * self.Sigma_L) / 2
-            + multivariate_normal(self.mu_L, self.Sigma_L).logpdf(theta)
+            + logdet(2 * np.pi * self.Σ_L) / 2
+            + multivariate_normal(self.μ_L, self.Σ_L).logpdf(θ)
         )
 
     def logZ(self):
         """P(D) as a scalar."""
-        return self.logLmax + logdet(2 * np.pi * self.Sigma_P) / 2 - self.logV
+        return self.logLmax + logdet(2 * np.pi * self.Σ_P) / 2 - self.logV
 
     def DKL(self):
-        """D_KL(P(theta|D)||P(theta)) the Kullback-Leibler divergence."""
-        return self.logV - logdet(2 * np.pi * np.e * self.Sigma_P) / 2
+        """D_KL(P(θ|D)||P(θ)) the Kullback-Leibler divergence."""
+        return self.logV - logdet(2 * np.pi * np.e * self.Σ_P) / 2
