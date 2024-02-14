@@ -41,7 +41,7 @@ class multivariate_normal(object):
         If True, cov is interpreted as the diagonal of the covariance matrix.
     """
 
-    def __init__(self, mean=0, cov=1, shape=(), dim=0, diagonal=False):
+    def __init__(self, mean=0.0, cov=1.0, shape=(), dim=1, diagonal=False):
         self.mean = mean
         self.cov = cov
         self._shape = shape
@@ -142,7 +142,7 @@ class multivariate_normal(object):
         else:
             return self.mean + np.einsum("...jk,...k->...j", cholesky(self.cov), x)
 
-    def predict(self, A=1, b=0, diagonal=False):
+    def predict(self, A=1.0, b=0.0, diagonal=False):
         """Predict the mean and covariance of a linear transformation.
 
         if:         x ~ N(mu, Sigma)
@@ -366,7 +366,7 @@ class mixture_normal(multivariate_normal):
         If True, cov is interpreted as the diagonal of the covariance matrix.
     """
 
-    def __init__(self, logA=0, mean=0, cov=1, shape=(), dim=0, diagonal=False):
+    def __init__(self, logA=0.0, mean=0.0, cov=1.0, shape=(), dim=1, diagonal=False):
         self.logA = logA
         super().__init__(mean, cov, shape, dim, diagonal)
 

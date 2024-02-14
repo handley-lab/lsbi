@@ -60,11 +60,11 @@ class LinearModel(object):
 
     def __init__(
         self,
-        M=1,
-        m=0,
-        C=1,
-        mu=0,
-        Sigma=1,
+        M=1.0,
+        m=0.0,
+        C=1.0,
+        mu=0.0,
+        Sigma=1.0,
         shape=(),
         n=1,
         d=1,
@@ -303,8 +303,8 @@ class MixtureModel(LinearModel):
         Number of data dimensions, defaults to automatically inferred value
     """
 
-    def __init__(self, logA=1, *args):
-        super().__init__(*args)
+    def __init__(self, logA=1.0, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.logA = logA
 
     @property
