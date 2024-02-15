@@ -57,7 +57,7 @@ for d in dims:
                                 tests.append(test)
 
 
-def test_linear_model_init(object):
+def test_linear_model_init():
     with pytest.raises(ValueError):
         LinearModel(foo="bar")
 
