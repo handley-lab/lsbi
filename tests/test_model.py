@@ -59,7 +59,8 @@ for d in dims:
 
 def test_linear_model_init(object):
     with pytest.raises(ValueError):
-        LinearModel(foo='bar')
+        LinearModel(foo="bar")
+
 
 @pytest.mark.parametrize(
     "d,n,shape,m_shape,M_shape,mu_shape,C_shape,Sigma_shape,diagonal_Sigma,diagonal_C,diagonal_M",
