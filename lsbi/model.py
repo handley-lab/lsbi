@@ -4,7 +4,7 @@ import numpy as np
 from numpy.linalg import inv, solve
 
 from lsbi.stats import mixture_normal, multivariate_normal
-from lsbi.utils import dediagonalise, logdet
+from lsbi.utils import alias, dediagonalise, logdet
 
 
 class LinearModel(object):
@@ -82,30 +82,6 @@ class LinearModel(object):
 
         if kwargs:
             raise ValueError(f"Unrecognised arguments: {kwargs}")
-
-    @property
-    def Sigma(self):  # noqa: D102
-        return self.Σ
-
-    @Sigma.setter
-    def Sigma(self, value):
-        self.Σ = value
-
-    @property
-    def mu(self):  # noqa: D102
-        return self.μ
-
-    @mu.setter
-    def mu(self, value):
-        self.μ = value
-
-    @property
-    def diagonal_Sigma(self):  # noqa: D102
-        return self.diagonal_Σ
-
-    @diagonal_Sigma.setter
-    def diagonal_Sigma(self, value):
-        self.diagonal_Σ = value
 
     @property
     def shape(self):
@@ -271,12 +247,17 @@ class LinearModel(object):
         return dediagonalise(self.Σ, self.diagonal_Σ, self.n)
 
 
+alias(LinearModel, "μ", "mu")
+alias(LinearModel, "Σ", "Sigma")
+alias(LinearModel, "diagonal_Σ", "diagonal_Sigma")
+
+
 class MixtureModel(LinearModel):
     """A linear mixture model.
 
-    D|θ, A ~ N( m + M θ, C )
-    θ|A    ~ N( μ, Σ )
-    A          ~ categorical( exp(logw) )
+    D|θ, w ~ N( m + M θ, C )
+    θ|w    ~ N( μ, Σ )
+    w          ~ categorical( exp(logw) )
 
     Defined by:
         Parameters:          θ     (..., n,)
@@ -343,8 +324,7 @@ class MixtureModel(LinearModel):
         """P(D|θ) as a distribution object.
 
         D|θ,w ~ N( m + M θ, C )
-        θ|w   ~ N( μ, Σ )
-        w     ~ categorical(exp(logw))
+        w|θ   ~ categorical(...)
 
         Parameters
         ----------
@@ -358,8 +338,8 @@ class MixtureModel(LinearModel):
     def prior(self):
         """P(θ) as a distribution object.
 
-        θ|A ~ N( μ, Σ )
-        A       ~ categorical(exp(logw))
+        θ|w ~ N( μ, Σ )
+        w   ~ categorical(exp(logw))
         """
         dist = super().prior()
         dist.__class__ = mixture_normal
@@ -369,9 +349,8 @@ class MixtureModel(LinearModel):
     def posterior(self, D):
         """P(θ|D) as a distribution object.
 
-        θ|D, A ~ N( μ + S M'C^{-1}(D - m - M μ), S )
-        D|A        ~ N( m + M μ, C + M Σ M' )
-        A          ~ categorical(exp(logw))
+        θ|D, w ~ N( μ + S M'C^{-1}(D - m - M μ), S )
+        w|D    ~ categorical(...)
         S = (Σ^{-1} + M'C^{-1}M)^{-1}
 
         Parameters
@@ -386,8 +365,8 @@ class MixtureModel(LinearModel):
     def evidence(self):
         """P(D) as a distribution object.
 
-        D|A ~ N( m + M μ, C + M Σ M' )
-        A   ~ categorical(exp(logw))
+        D|w ~ N( m + M μ, C + M Σ M' )
+        w   ~ categorical(exp(logw))
         """
         dist = super().evidence()
         dist.__class__ = mixture_normal
@@ -397,10 +376,10 @@ class MixtureModel(LinearModel):
     def joint(self):
         """P(D, θ) as a distribution object.
 
-        [θ] | A ~ N( [   μ   ]   [ Σ      Σ M'   ] )
+        [θ] | w ~ N( [   μ   ]   [ Σ      Σ M'   ] )
         [D] |      ( [m + M μ] , [M Σ  C + M Σ M'] )
 
-        A           ~ categorical(exp(logw))
+        w           ~ categorical(exp(logw))
         """
         dist = super().joint()
         dist.__class__ = mixture_normal
