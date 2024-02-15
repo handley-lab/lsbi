@@ -1,8 +1,8 @@
+import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from lsbi.utils import bisect, alias
-import numpy as np
+from lsbi.utils import alias, bisect
 
 
 def test_bisect():
