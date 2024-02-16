@@ -1,5 +1,7 @@
 """Gaussian models for linear Bayesian inference."""
 
+import copy
+
 import numpy as np
 from numpy.linalg import inv, solve
 
@@ -59,18 +61,18 @@ class LinearModel(object):
     """
 
     def __init__(self, *args, **kwargs):
-        self.M = kwargs.pop("M", 1.0)
+        self.M = kwargs.pop("M", 1)
         self.diagonal_M = kwargs.pop("diagonal_M", False)
         if len(np.shape(self.M)) < 2:
             self.diagonal_M = True
-        self.m = kwargs.pop("m", 0.0)
-        self.C = kwargs.pop("C", 1.0)
+        self.m = kwargs.pop("m", 0)
+        self.C = kwargs.pop("C", 1)
         self.diagonal_C = kwargs.pop("diagonal_C", False)
         if len(np.shape(self.C)) < 2:
             self.diagonal_C = True
-        self.μ = kwargs.pop("μ", 0.0)
+        self.μ = kwargs.pop("μ", 0)
         self.μ = kwargs.pop("mu", self.μ)
-        self.Σ = kwargs.pop("Σ", 1.0)
+        self.Σ = kwargs.pop("Σ", 1)
         self.Σ = kwargs.pop("Sigma", self.Σ)
         self.diagonal_Σ = kwargs.pop("diagonal_Σ", False)
         self.diagonal_Σ = kwargs.pop("diagonal_Sigma", self.diagonal_Σ)
@@ -169,10 +171,10 @@ class LinearModel(object):
             shape = np.broadcast_shapes(self.shape, values.shape[:-1])
             C = np.atleast_1d(self.C)[..., :dim]
             M = np.atleast_1d(self.M)[..., :dim]
-            Σ = np.broadcast_to(self.Σ, shape + (self.n,)).copy()
+            Σ = self.Σ * np.ones((*shape, self.n))
             Σ[..., :dim] = 1 / (1 / Σ[..., :dim] + M**2 / C)
 
-            μ = np.broadcast_to(self.μ, shape + (self.n,)).copy()
+            μ = self.μ * np.ones((*shape, self.n))
             μ[..., :dim] = μ[..., :dim] + Σ[..., :dim] * M / C * values[..., :dim]
         else:
             if self.diagonal_C:
@@ -204,8 +206,13 @@ class LinearModel(object):
             dim = min(self.n, self.d)
             M = np.atleast_1d(self.M)[..., :dim]
             S = np.atleast_1d(self.Σ)[..., :dim]
-            Σ = np.broadcast_to(self.C, self.shape + (self.d,)).copy()
-            Σ[..., :dim] += S * M**2
+            Σ = self.C * np.ones(
+                (
+                    *self.shape,
+                    self.d,
+                )
+            )
+            Σ[..., :dim] = Σ[..., :dim] + S * M**2
         else:
             Σ = self._C + np.einsum(
                 "...ja,...ab,...kb->...jk", self._M, self._Σ, self._M
@@ -234,6 +241,24 @@ class LinearModel(object):
         Σ = np.block([[A, B], [C, D]])
         return multivariate_normal(μ, Σ, self.shape, self.n + self.d)
 
+    def update(self, D, inplace=False):
+        """Bayesian update of the model with data.
+
+        Parameters
+        ----------
+        D : array_like, shape (..., d)
+        """
+        dist = copy.deepcopy(self) if not inplace else self
+        posterior = self.posterior(D)
+        dist.μ = posterior.mean
+        dist.Σ = posterior.cov
+        if not inplace:
+            return dist
+
+    def PPD(self, D0):
+        """P(D|D0) as a distribution object."""
+        return self.update(D0).evidence()
+
     @property
     def _M(self):
         return dediagonalise(self.M, self.diagonal_M, self.d, self.n)
@@ -257,7 +282,7 @@ class MixtureModel(LinearModel):
 
     D|θ, w ~ N( m + M θ, C )
     θ|w    ~ N( μ, Σ )
-    w          ~ categorical( exp(logw) )
+    w      ~ categorical( exp(logw) )
 
     Defined by:
         Parameters:          θ     (..., n,)
@@ -305,7 +330,7 @@ class MixtureModel(LinearModel):
     """
 
     def __init__(self, *args, **kwargs):
-        self.logw = kwargs.pop("logw", 0.0)
+        self.logw = kwargs.pop("logw", 0)
         super().__init__(*args, **kwargs)
 
     @property
@@ -332,7 +357,8 @@ class MixtureModel(LinearModel):
         """
         dist = super().likelihood(np.expand_dims(θ, -2))
         dist.__class__ = mixture_normal
-        dist.logw = self.prior().logpdf(θ, broadcast=True, joint=True)
+        prior = self.prior()
+        dist.logw = prior.logpdf(θ, broadcast=True, joint=True) - prior.logpdf(θ)
         return dist
 
     def prior(self):
@@ -350,7 +376,7 @@ class MixtureModel(LinearModel):
         """P(θ|D) as a distribution object.
 
         θ|D, w ~ N( μ + S M'C^{-1}(D - m - M μ), S )
-        w|D    ~ categorical(...)
+        w|D    ~ P(D|w)P(w)/P(D)
         S = (Σ^{-1} + M'C^{-1}M)^{-1}
 
         Parameters
@@ -359,7 +385,8 @@ class MixtureModel(LinearModel):
         """
         dist = super().posterior(np.expand_dims(D, -2))
         dist.__class__ = mixture_normal
-        dist.logw = self.evidence().logpdf(D, broadcast=True, joint=True)
+        evidence = self.evidence()
+        dist.logw = evidence.logpdf(D, broadcast=True, joint=True) - evidence.logpdf(D)
         return dist
 
     def evidence(self):
@@ -385,6 +412,21 @@ class MixtureModel(LinearModel):
         dist.__class__ = mixture_normal
         dist.logw = self.logw
         return dist
+
+    def update(self, D, inplace=False):
+        """Bayesian update of the model with data.
+
+        Parameters
+        ----------
+        D : array_like, shape (..., d)
+        """
+        dist = copy.deepcopy(self) if not inplace else self
+        posterior = self.posterior(D)
+        dist.μ = posterior.mean
+        dist.Σ = posterior.cov
+        dist.logw = posterior.logw
+        if not inplace:
+            return dist
 
 
 class ReducedLinearModel(object):

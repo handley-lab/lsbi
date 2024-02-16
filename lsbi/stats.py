@@ -41,7 +41,7 @@ class multivariate_normal(object):
         If True, cov is interpreted as the diagonal of the covariance matrix.
     """
 
-    def __init__(self, mean=0.0, cov=1.0, shape=(), dim=1, diagonal=False):
+    def __init__(self, mean=0, cov=1, shape=(), dim=1, diagonal=False):
         self.mean = mean
         self.cov = cov
         self._shape = shape
@@ -142,7 +142,7 @@ class multivariate_normal(object):
         else:
             return self.mean + np.einsum("...jk,...k->...j", cholesky(self.cov), x)
 
-    def predict(self, A=1.0, b=0.0, diagonal=False):
+    def predict(self, A=1, b=0, diagonal=False):
         """Predict the mean and covariance of a linear transformation.
 
         if:         x ~ N(μ, Σ)
@@ -366,7 +366,7 @@ class mixture_normal(multivariate_normal):
         If True, cov is interpreted as the diagonal of the covariance matrix.
     """
 
-    def __init__(self, logw=0.0, mean=0.0, cov=1.0, shape=(), dim=1, diagonal=False):
+    def __init__(self, logw=0, mean=0, cov=1, shape=(), dim=1, diagonal=False):
         self.logw = logw
         super().__init__(mean, cov, shape, dim, diagonal)
 
@@ -412,7 +412,7 @@ class mixture_normal(multivariate_normal):
         if self.shape == ():
             return logpdf
         logw = np.broadcast_to(self.logw, self.shape).copy()
-        logw -= logsumexp(logw, axis=-1, keepdims=True)
+        logw = logw - logsumexp(logw, axis=-1, keepdims=True)
         if joint:
             return logpdf + logw
         return logsumexp(logpdf + logw, axis=-1)
@@ -457,7 +457,7 @@ class mixture_normal(multivariate_normal):
             return super().rvs(size=size)
         size = np.atleast_1d(np.array(size, dtype=int))
         logw = np.broadcast_to(self.logw, self.shape).copy()
-        logw -= logsumexp(logw, axis=-1, keepdims=True)
+        logw = logw - logsumexp(logw, axis=-1, keepdims=True)
         p = np.exp(logw)
         cump = np.cumsum(p, axis=-1)
         u = np.random.rand(np.prod(size), *p.shape[:-1])
@@ -496,7 +496,9 @@ class mixture_normal(multivariate_normal):
         dist = super().condition(indices, np.expand_dims(values, -2))
         dist.__class__ = mixture_normal
         marg = self.marginalise(self._bar(indices))
-        dist.logw = marg.logpdf(values, broadcast=True, joint=True)
+        dist.logw = marg.logpdf(values, broadcast=True, joint=True) - marg.logpdf(
+            values, broadcast=True
+        )
         return dist
 
     def bijector(self, x, inverse=False):
