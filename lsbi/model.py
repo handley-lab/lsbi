@@ -253,6 +253,7 @@ class LinearModel(object):
         posterior = self.posterior(D)
         dist.μ = posterior.mean
         dist.Σ = posterior.cov
+        dist.diagonal_Σ = posterior.diagonal
         if not inplace:
             return dist
 
@@ -427,6 +428,7 @@ class MixtureModel(LinearModel):
         posterior = self.posterior(D)
         dist.μ = posterior.mean
         dist.Σ = posterior.cov
+        dist.diagonal_Σ = posterior.diagonal
         dist.logw = posterior.logw
         if not inplace:
             return dist
