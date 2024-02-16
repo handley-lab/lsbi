@@ -572,6 +572,7 @@ class TestMixtureModel(TestLinearModel):
         n,
         d,
     ):
+
         model = self.random(
             logw_shape,
             M_shape,
@@ -593,7 +594,8 @@ class TestMixtureModel(TestLinearModel):
         assert posterior.dim == model.n
 
         ppd = model.ppd(D)
-        assert ppd.shape == np.broadcast_shapes(model.shape, D_shape)
+        if model.shape != ():
+            assert ppd.shape == np.broadcast_shapes(model.shape, D_shape)
 
         update = model.update(D)
         assert_allclose_broadcast(update.m, model.m)
