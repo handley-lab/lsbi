@@ -4,6 +4,7 @@ import copy
 
 import numpy as np
 from numpy.linalg import inv, solve
+from scipy.special import logsumexp
 
 from lsbi.stats import mixture_normal, multivariate_normal
 from lsbi.utils import alias, dediagonalise, logdet
@@ -358,7 +359,8 @@ class MixtureModel(LinearModel):
         dist = super().likelihood(np.expand_dims(θ, -2))
         dist.__class__ = mixture_normal
         prior = self.prior()
-        dist.logw = prior.logpdf(θ, broadcast=True, joint=True) - prior.logpdf(θ)
+        dist.logw = prior.logpdf(θ, broadcast=True, joint=True)
+        dist.logw = dist.logw - logsumexp(dist.logw, axis=-1, keepdims=True)
         return dist
 
     def prior(self):
@@ -386,7 +388,8 @@ class MixtureModel(LinearModel):
         dist = super().posterior(np.expand_dims(D, -2))
         dist.__class__ = mixture_normal
         evidence = self.evidence()
-        dist.logw = evidence.logpdf(D, broadcast=True, joint=True) - evidence.logpdf(D)
+        dist.logw = evidence.logpdf(D, broadcast=True, joint=True)
+        dist.logw = dist.logw - logsumexp(dist.logw, axis=-1, keepdims=True)
         return dist
 
     def evidence(self):

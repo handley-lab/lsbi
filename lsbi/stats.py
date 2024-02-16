@@ -496,9 +496,8 @@ class mixture_normal(multivariate_normal):
         dist = super().condition(indices, np.expand_dims(values, -2))
         dist.__class__ = mixture_normal
         marg = self.marginalise(self._bar(indices))
-        dist.logw = marg.logpdf(values, broadcast=True, joint=True) - marg.logpdf(
-            values, broadcast=True
-        )
+        dist.logw = marg.logpdf(values, broadcast=True, joint=True)
+        dist.logw = dist.logw - logsumexp(dist.logw, axis=-1, keepdims=True)
         return dist
 
     def bijector(self, x, inverse=False):
