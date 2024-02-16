@@ -256,7 +256,7 @@ class LinearModel(object):
         if not inplace:
             return dist
 
-    def PPD(self, D0):
+    def ppd(self, D0):
         """P(D|D0) as a distribution object."""
         return self.update(D0).evidence()
 

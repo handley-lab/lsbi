@@ -175,9 +175,9 @@ class TestLinearModel(object):
             d,
         )
         theta = np.random.randn(*theta_shape, n)
-        dist = model.likelihood(theta)
-        assert dist.shape == np.broadcast_shapes(model.shape, theta_shape)
-        assert dist.dim == model.d
+        likelihood = model.likelihood(theta)
+        assert likelihood.shape == np.broadcast_shapes(model.shape, theta_shape)
+        assert likelihood.dim == model.d
 
     def test_prior(
         self,
@@ -206,9 +206,9 @@ class TestLinearModel(object):
             n,
             d,
         )
-        dist = model.prior()
-        assert dist.shape == model.shape
-        assert dist.dim == model.n
+        prior = model.prior()
+        assert prior.shape == model.shape
+        assert prior.dim == model.n
 
     @pytest.mark.parametrize("D_shape", shapes)
     def test_posterior(
@@ -240,9 +240,26 @@ class TestLinearModel(object):
             d,
         )
         D = np.random.randn(*D_shape, d)
-        dist = model.posterior(D)
-        assert dist.shape == np.broadcast_shapes(model.shape, D_shape)
-        assert dist.dim == model.n
+        posterior = model.posterior(D)
+        assert posterior.shape == np.broadcast_shapes(model.shape, D_shape)
+        assert posterior.dim == model.n
+
+        ppd = model.ppd(D)
+        assert ppd.shape == np.broadcast_shapes(model.shape, D_shape)
+
+        update = model.update(D)
+        assert_allclose_broadcast(update.m, model.m)
+        assert_allclose_broadcast(update.M, model.M)
+        assert_allclose_broadcast(update.C, model.C)
+        assert_allclose_broadcast(update.mu, posterior.mean)
+        assert_allclose_broadcast(update.Sigma, posterior.cov)
+
+        model.update(D, inplace=True)
+        assert_allclose(model.m, update.m)
+        assert_allclose(model.M, update.M)
+        assert_allclose(model.C, update.C)
+        assert_allclose(model.mu, update.mu)
+        assert_allclose(model.Sigma, update.Sigma)
 
     def test_evidence(
         self,
@@ -271,9 +288,9 @@ class TestLinearModel(object):
             n,
             d,
         )
-        dist = model.evidence()
-        assert dist.shape == model.shape
-        assert dist.dim == model.d
+        evidence = model.evidence()
+        assert evidence.shape == model.shape
+        assert evidence.dim == model.d
 
     def test_joint(
         self,
@@ -302,9 +319,9 @@ class TestLinearModel(object):
             n,
             d,
         )
-        dist = model.joint()
-        assert dist.shape == model.shape
-        assert dist.dim == model.n + model.d
+        joint = model.joint()
+        assert joint.shape == model.shape
+        assert joint.dim == model.n + model.d
 
     def test_marginal_conditional(
         self,
@@ -500,10 +517,10 @@ class TestMixtureModel(TestLinearModel):
             d,
         )
         theta = np.random.randn(*theta_shape[:-1], n)
-        dist = model.likelihood(theta)
+        likelihood = model.likelihood(theta)
         if model.shape != ():
-            assert dist.shape == np.broadcast_shapes(model.shape, theta_shape)
-        assert dist.dim == model.d
+            assert likelihood.shape == np.broadcast_shapes(model.shape, theta_shape)
+        assert likelihood.dim == model.d
 
     def test_prior(
         self,
@@ -534,9 +551,9 @@ class TestMixtureModel(TestLinearModel):
             n,
             d,
         )
-        dist = model.prior()
-        assert dist.shape == model.shape
-        assert dist.dim == model.n
+        prior = model.prior()
+        assert prior.shape == model.shape
+        assert prior.dim == model.n
 
     @pytest.mark.parametrize("D_shape", shapes)
     def test_posterior(
@@ -570,10 +587,27 @@ class TestMixtureModel(TestLinearModel):
             d,
         )
         D = np.random.randn(*D_shape[:-1], d)
-        dist = model.posterior(D)
+        posterior = model.posterior(D)
         if model.shape != ():
-            assert dist.shape == np.broadcast_shapes(model.shape, D_shape)
-        assert dist.dim == model.n
+            assert posterior.shape == np.broadcast_shapes(model.shape, D_shape)
+        assert posterior.dim == model.n
+
+        ppd = model.ppd(D)
+        assert ppd.shape == np.broadcast_shapes(model.shape, D_shape)
+
+        update = model.update(D)
+        assert_allclose_broadcast(update.m, model.m)
+        assert_allclose_broadcast(update.M, model.M)
+        assert_allclose_broadcast(update.C, model.C)
+        assert_allclose_broadcast(update.mu, posterior.mean)
+        assert_allclose_broadcast(update.Sigma, posterior.cov)
+
+        model.update(D, inplace=True)
+        assert_allclose(model.m, update.m)
+        assert_allclose(model.M, update.M)
+        assert_allclose(model.C, update.C)
+        assert_allclose(model.mu, update.mu)
+        assert_allclose(model.Sigma, update.Sigma)
 
     def test_evidence(
         self,
@@ -604,9 +638,9 @@ class TestMixtureModel(TestLinearModel):
             n,
             d,
         )
-        dist = model.evidence()
-        assert dist.shape == model.shape
-        assert dist.dim == model.d
+        evidence = model.evidence()
+        assert evidence.shape == model.shape
+        assert evidence.dim == model.d
 
     def test_joint(
         self,
@@ -637,9 +671,9 @@ class TestMixtureModel(TestLinearModel):
             n,
             d,
         )
-        dist = model.joint()
-        assert dist.shape == model.shape
-        assert dist.dim == model.n + model.d
+        joint = model.joint()
+        assert joint.shape == model.shape
+        assert joint.dim == model.n + model.d
 
     def test_marginal_conditional(
         self,
