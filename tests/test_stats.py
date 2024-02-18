@@ -5,7 +5,7 @@ from numpy.testing import assert_allclose
 from scipy.special import logsumexp
 from scipy.stats import multivariate_normal as scipy_multivariate_normal
 
-from lsbi.stats import mixture_normal, multivariate_normal
+from lsbi.stats import dkl, mixture_normal, multivariate_normal
 
 shapes = [(2, 3), (3,), ()]
 sizes = [(6, 5), (5,), ()]
@@ -547,3 +547,38 @@ class TestMixtureNormal(TestMultivariateNormal):
         assert_allclose(
             np.broadcast_to(x, y.shape), dist.bijector(y, inverse=True), atol=1e-4
         )
+
+
+@pytest.mark.parametrize("dim_p, shape_p, mean_shape_p, cov_shape_p, diagonal_p", tests)
+@pytest.mark.parametrize("dim_q, shape_q, mean_shape_q, cov_shape_q, diagonal_q", tests)
+def test_dkl(
+    dim_p,
+    shape_p,
+    mean_shape_p,
+    cov_shape_p,
+    diagonal_p,
+    dim_q,
+    shape_q,
+    mean_shape_q,
+    cov_shape_q,
+    diagonal_q,
+):
+    p = TestMultivariateNormal().random(
+        dim, shape_p, mean_shape_p, cov_shape_p, diagonal_p
+    )
+    q = TestMultivariateNormal().random(
+        dim, shape_q, mean_shape_q, cov_shape_q, diagonal_q
+    )
+
+    dkl_pq = dkl(p, q)
+
+    assert_allclose(dkl(p, p), 0, atol=1e-10)
+    assert_allclose(dkl(q, q), 0, atol=1e-10)
+
+    assert (dkl_pq >= 0).all()
+    assert dkl_pq.shape == np.broadcast_shapes(p.shape, q.shape)
+
+    dkl_mc = dkl(p, q, 1000)
+    assert dkl_mc.shape == np.broadcast_shapes(p.shape, q.shape)
+
+    assert_allclose(dkl_pq, dkl_mc, atol=1)

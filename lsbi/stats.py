@@ -122,7 +122,7 @@ class multivariate_normal(object):
         """
         return np.exp(self.logpdf(x, broadcast=broadcast))
 
-    def rvs(self, size=()):
+    def rvs(self, size=(), broadcast=False):
         """Draw random samples from the distribution.
 
         Parameters
@@ -136,7 +136,10 @@ class multivariate_normal(object):
             Random samples from the distribution.
         """
         size = np.atleast_1d(size)
-        x = np.random.randn(*size, *self.shape, self.dim)
+        if broadcast:
+            x = np.random.randn(*size, self.dim)
+        else:
+            x = np.random.randn(*size, *self.shape, self.dim)
         if self.diagonal:
             return self.mean + np.sqrt(self.cov) * x
         else:
@@ -566,3 +569,43 @@ class mixture_normal(multivariate_normal):
         dist.__class__ = mixture_normal
         dist.logw = np.broadcast_to(self.logw, self.shape)[arg]
         return dist
+
+
+def dkl(p, q, n=0):
+    """Kullback-Leibler divergence between two distributions.
+
+    Parameters
+    ----------
+    p : lsbi.stats.multivariate_normal
+    q : lsbi.stats.multivariate_normal
+    n : int, optional, default=0
+        Number of samples to mcmc estimate the divergence.
+
+    Returns
+    -------
+    dkl : array_like
+        Kullback-Leibler divergence between p and q.
+    """
+    shape = np.broadcast_shapes(p.shape, q.shape)
+    if n:
+        x = p.rvs(size=(n, *shape), broadcast=True)
+        return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).mean(axis=0)
+    dkl = -p.dim * np.ones(shape)
+    dkl = dkl + logdet(q.cov * np.ones(q.dim), q.diagonal)
+    dkl = dkl - logdet(p.cov * np.ones(p.dim), p.diagonal)
+    pq = (p.mean - q.mean) * np.ones(p.dim)
+    if q.diagonal:
+        dkl = dkl + (pq**2 / q.cov).sum(axis=-1)
+        if p.diagonal:
+            dkl = dkl + (p.cov / q.cov * np.ones(q.dim)).sum(axis=-1)
+        else:
+            dkl = dkl + (np.diagonal(p.cov, 0, -2, -1) / q.cov).sum(axis=-1)
+    else:
+        invq = inv(q.cov)
+        dkl = dkl + np.einsum("...i,...ij,...j->...", pq, invq, pq)
+        if p.diagonal:
+            dkl = dkl + (p.cov * np.diagonal(invq, 0, -2, -1)).sum(axis=-1)
+        else:
+            dkl = dkl + np.einsum("...ij,...ji->...", invq, p.cov)
+
+    return dkl / 2

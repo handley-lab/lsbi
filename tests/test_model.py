@@ -261,6 +261,10 @@ class TestLinearModel(object):
         assert_allclose(model.mu, update.mu)
         assert_allclose(model.Sigma, update.Sigma)
 
+        dkl = model.dkl(D)
+        assert dkl.shape == model.shape
+        assert (dkl >= 0).all()
+
     def test_evidence(
         self,
         M_shape,
@@ -572,7 +576,6 @@ class TestMixtureModel(TestLinearModel):
         n,
         d,
     ):
-
         model = self.random(
             logw_shape,
             M_shape,
@@ -610,6 +613,13 @@ class TestMixtureModel(TestLinearModel):
         assert_allclose(model.C, update.C)
         assert_allclose(model.mu, update.mu)
         assert_allclose(model.Sigma, update.Sigma)
+
+        with pytest.raises(ValueError):
+            model.dkl(D)
+
+        dkl = model.dkl(D, 10)
+        assert dkl.shape == model.shape
+        assert (dkl >= 0).all()
 
     def test_evidence(
         self,

@@ -6,7 +6,7 @@ import numpy as np
 from numpy.linalg import inv, solve
 from scipy.special import logsumexp
 
-from lsbi.stats import mixture_normal, multivariate_normal
+from lsbi.stats import dkl, mixture_normal, multivariate_normal
 from lsbi.utils import alias, dediagonalise, logdet
 
 
@@ -261,6 +261,19 @@ class LinearModel(object):
         """P(D|D0) as a distribution object."""
         return self.update(D0).evidence()
 
+    def dkl(self, D, n=0):
+        """KL divergence between the posterior and prior.
+
+        Parameters
+        ----------
+        D : array_like, shape (..., d)
+            Data to form the posterior
+        n : int, optional
+            Number of samples for a monte carlo estimate, defaults to 0
+        """
+
+        return dkl(self.posterior(D), self.prior(), n)
+
     @property
     def _M(self):
         return dediagonalise(self.M, self.diagonal_M, self.d, self.n)
@@ -432,6 +445,20 @@ class MixtureModel(LinearModel):
         dist.logw = posterior.logw
         if not inplace:
             return dist
+
+    def dkl(self, D, n=0):
+        """KL divergence between the posterior and prior.
+
+        Parameters
+        ----------
+        D : array_like, shape (..., d)
+            Data to form the posterior
+        n : int, optional
+            Number of samples for a monte carlo estimate, defaults to 0
+        """
+        if n == 0:
+            raise ValueError("MixtureModel requires a monte carlo estimate. Use n>0.")
+        return super().dkl(D, n)
 
 
 class ReducedLinearModel(object):
