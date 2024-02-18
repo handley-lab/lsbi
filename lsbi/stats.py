@@ -129,6 +129,8 @@ class multivariate_normal(object):
         ----------
         size : int or tuple of ints, optional, default=()
             Number of samples to draw.
+        broadcast : bool, optional, default=False
+            If True, broadcast x across the distribution parameters.
 
         Returns
         -------
@@ -445,19 +447,22 @@ class mixture_normal(multivariate_normal):
         """
         return np.exp(self.logpdf(x, broadcast=broadcast, joint=joint))
 
-    def rvs(self, size=()):
+    def rvs(self, size=(), broadcast=False):
         """Draw random samples from the distribution.
 
         Parameters
         ----------
         size : int or tuple of ints, optional, default=1
+            Number of samples to draw.
+        broadcast : bool, optional, default=False
+            If True, broadcast x across the distribution parameters.
 
         Returns
         -------
         rvs : array_like, shape `(*size, *shape[:-1], dim)`
         """
         if self.shape == ():
-            return super().rvs(size=size)
+            return super().rvs(size=size, broadcast=broadcast)
         size = np.atleast_1d(np.array(size, dtype=int))
         logw = np.broadcast_to(self.logw, self.shape).copy()
         logw = logw - logsumexp(logw, axis=-1, keepdims=True)
@@ -467,7 +472,11 @@ class mixture_normal(multivariate_normal):
         i = np.argmax(np.array(u)[..., None] < cump, axis=-1)
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
         mean = np.take_along_axis(np.moveaxis(mean, -2, 0), i[..., None], axis=0)
-        x = np.random.randn(np.prod(size), *self.shape[:-1], self.dim)
+        if broadcast:
+            x = np.random.randn(np.prod(size), self.dim)
+            x = x.reshape(-1, *self.shape[:-1], self.dim)
+        else:
+            x = np.random.randn(np.prod(size), *self.shape[:-1], self.dim)
         if self.diagonal:
             L = np.sqrt(self.cov)
             L = np.broadcast_to(L, (*self.shape, self.dim))
@@ -478,7 +487,10 @@ class mixture_normal(multivariate_normal):
             L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
             L = np.take_along_axis(np.moveaxis(L, -3, 0), i[..., None, None], axis=0)
             rvs = mean + np.einsum("...ij,...j->...i", L, x)
-        return rvs.reshape(*size, *self.shape[:-1], self.dim)
+        if broadcast:
+            return rvs.reshape(*size, self.dim)
+        else:
+            return rvs.reshape(*size, *self.shape[:-1], self.dim)
 
     def condition(self, indices, values):
         """Condition on indices with values.
