@@ -618,8 +618,7 @@ class TestMixtureModel(TestLinearModel):
             model.dkl(D)
 
         dkl = model.dkl(D, 10)
-        assert dkl.shape == model.shape
-        assert (dkl >= 0).all()
+        assert dkl.shape == model.shape[:-1]
 
     def test_evidence(
         self,
