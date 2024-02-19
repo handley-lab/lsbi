@@ -122,15 +122,13 @@ class multivariate_normal(object):
         """
         return np.exp(self.logpdf(x, broadcast=broadcast))
 
-    def rvs(self, size=(), broadcast=False):
+    def rvs(self, size=()):
         """Draw random samples from the distribution.
 
         Parameters
         ----------
         size : int or tuple of ints, optional, default=()
             Number of samples to draw.
-        broadcast : bool, optional, default=False
-            If True, broadcast x across the distribution parameters.
 
         Returns
         -------
@@ -138,10 +136,7 @@ class multivariate_normal(object):
             Random samples from the distribution.
         """
         size = np.atleast_1d(size)
-        if broadcast:
-            x = np.random.randn(*size, self.dim)
-        else:
-            x = np.random.randn(*size, *self.shape, self.dim)
+        x = np.random.randn(*size, *self.shape, self.dim)
         if self.diagonal:
             return self.mean + np.sqrt(self.cov) * x
         else:
@@ -447,38 +442,30 @@ class mixture_normal(multivariate_normal):
         """
         return np.exp(self.logpdf(x, broadcast=broadcast, joint=joint))
 
-    def rvs(self, size=(), broadcast=False):
+    def rvs(self, size=()):
         """Draw random samples from the distribution.
 
         Parameters
         ----------
         size : int or tuple of ints, optional, default=1
             Number of samples to draw.
-        broadcast : bool, optional, default=False
-            If True, broadcast x across the distribution parameters.
 
         Returns
         -------
         rvs : array_like, shape `(*size, *shape[:-1], dim)`
         """
         if self.shape == ():
-            return super().rvs(size=size, broadcast=broadcast)
+            return super().rvs(size=size)
         size = np.atleast_1d(np.array(size, dtype=int))
         logw = np.broadcast_to(self.logw, self.shape).copy()
         logw = logw - logsumexp(logw, axis=-1, keepdims=True)
         p = np.exp(logw)
         cump = np.cumsum(p, axis=-1)
-        if broadcast:
-            u = np.random.rand(*size).reshape(-1, *p.shape[:-1])
-        else:
-            u = np.random.rand(np.prod(size), *p.shape[:-1])
+        u = np.random.rand(np.prod(size), *p.shape[:-1])
         i = np.argmax(np.array(u)[..., None] < cump, axis=-1)
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
         mean = np.take_along_axis(np.moveaxis(mean, -2, 0), i[..., None], axis=0)
-        if broadcast:
-            x = np.random.randn(*size, self.dim)
-        else:
-            x = np.random.randn(np.prod(size), *self.shape[:-1], self.dim)
+        x = np.random.randn(np.prod(size), *self.shape[:-1], self.dim)
         if self.diagonal:
             L = np.sqrt(self.cov)
             L = np.broadcast_to(L, (*self.shape, self.dim))
@@ -489,10 +476,7 @@ class mixture_normal(multivariate_normal):
             L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
             L = np.take_along_axis(np.moveaxis(L, -3, 0), i[..., None, None], axis=0)
             rvs = mean + np.einsum("...ij,...j->...i", L, x)
-        if broadcast:
-            return rvs.reshape(*size, self.dim)
-        else:
-            return rvs.reshape(*size, *self.shape[:-1], self.dim)
+        return rvs.reshape(*size, *self.shape[:-1], self.dim)
 
     def condition(self, indices, values):
         """Condition on indices with values.
@@ -602,7 +586,7 @@ def dkl(p, q, n=0):
     """
     shape = np.broadcast_shapes(p.shape, q.shape)
     if n:
-        x = p.rvs(size=(n, *shape), broadcast=True)
+        x = p.rvs(n)
         return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).mean(axis=0)
     dkl = -p.dim * np.ones(shape)
     dkl = dkl + logdet(q.cov * np.ones(q.dim), q.diagonal)

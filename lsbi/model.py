@@ -271,7 +271,6 @@ class LinearModel(object):
         n : int, optional
             Number of samples for a monte carlo estimate, defaults to 0
         """
-
         return dkl(self.posterior(D), self.prior(), n)
 
     @property
@@ -458,11 +457,7 @@ class MixtureModel(LinearModel):
         """
         if n == 0:
             raise ValueError("MixtureModel requires a monte carlo estimate. Use n>0.")
-
-        p = self.posterior(D)
-        q = self.prior()
-        x = p.rvs(size=(n, *self.shape[:-1]), broadcast=True)
-        return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).mean(axis=0)
+        return super().dkl(D, n)
 
 
 class ReducedLinearModel(object):
