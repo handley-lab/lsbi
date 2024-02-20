@@ -457,7 +457,11 @@ class MixtureModel(LinearModel):
         """
         if n == 0:
             raise ValueError("MixtureModel requires a monte carlo estimate. Use n>0.")
-        return super().dkl(D, n)
+
+        p = self.posterior(D)
+        q = self.prior()
+        x = p.rvs(size=(n, *self.shape[:-1]), broadcast=True)
+        return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).mean(axis=0)
 
 
 class ReducedLinearModel(object):
