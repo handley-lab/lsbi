@@ -463,7 +463,7 @@ class mixture_normal(multivariate_normal):
         """
         if self.shape == ():
             return super().rvs(size=size, broadcast=broadcast)
-        size = np.atleast_1d(np.array(size, dtype=int))
+        size = np.atleast_1d(size)
         logw = np.broadcast_to(self.logw, self.shape).copy()
         logw = logw - logsumexp(logw, axis=-1, keepdims=True)
         p = np.exp(logw)
@@ -471,14 +471,14 @@ class mixture_normal(multivariate_normal):
         if broadcast:
             u = np.random.rand(*size).reshape(-1, *p.shape[:-1])
         else:
-            u = np.random.rand(np.prod(size), *p.shape[:-1])
+            u = np.random.rand(np.prod(size, dtype=int), *p.shape[:-1])
         i = np.argmax(np.array(u)[..., None] < cump, axis=-1)
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
         mean = np.take_along_axis(np.moveaxis(mean, -2, 0), i[..., None], axis=0)
         if broadcast:
             x = np.random.randn(*size, self.dim)
         else:
-            x = np.random.randn(np.prod(size), *self.shape[:-1], self.dim)
+            x = np.random.randn(np.prod(size, dtype=int), *self.shape[:-1], self.dim)
         if self.diagonal:
             L = np.sqrt(self.cov)
             L = np.broadcast_to(L, (*self.shape, self.dim))
