@@ -7,6 +7,7 @@ import scipy.stats
 from numpy.linalg import cholesky, inv
 from scipy.special import erf, logsumexp
 
+import lsbi.plot
 from lsbi.utils import bisect, logdet
 
 
@@ -337,6 +338,28 @@ class multivariate_normal(object):
         dist._dim = dist.mean.shape[-1]
         return dist
 
+    def plot_1d(self, axes=None, *args, **kwargs):  # noqa: D102
+        if self.shape:
+            return [
+                self.plot_1d(self[i], axes=axes, *args, **kwargs)
+                for i in range(self.shape[0])
+            ]
+        else:
+            return lsbi.stats.plot_2d(self, axes=axes, *args, **kwargs)
+
+    def plot_2d(self, axes=None, *args, **kwargs):  # noqa:D102
+        if self.shape:
+            return [
+                self.plot_2d(self[i], axes=axes, *args, **kwargs)
+                for i in range(self.shape[0])
+            ]
+        else:
+            return lsbi.stats.plot_2d(self, axes=axes, *args, **kwargs)
+
+
+multivariate_normal.plot_1d.__doc__ = lsbi.plot.plot_1d.__doc__
+multivariate_normal.plot_2d.__doc__ = lsbi.plot.plot_2d.__doc__
+
 
 class mixture_normal(multivariate_normal):
     """Mixture of multivariate normal distributions.
@@ -564,3 +587,25 @@ class mixture_normal(multivariate_normal):
         dist.__class__ = mixture_normal
         dist.logA = np.broadcast_to(self.logA, self.shape)[arg]
         return dist
+
+    def plot_1d(self, axes=None, *args, **kwargs):  # noqa: D102
+        if self.shape[:-1]:
+            return [
+                self.plot_1d(self[i], axes=axes, *args, **kwargs)
+                for i in range(self.shape[0])
+            ]
+        else:
+            return lsbi.stats.plot_2d(self, axes=axes, *args, **kwargs)
+
+    def plot_2d(self, axes=None, *args, **kwargs):  # noqa:D102
+        if self.shape[:-1]:
+            return [
+                self.plot_2d(self[i], axes=axes, *args, **kwargs)
+                for i in range(self.shape[0])
+            ]
+        else:
+            return lsbi.stats.plot_2d(self, axes=axes, *args, **kwargs)
+
+
+mixture_normal.plot_1d.__doc__ = lsbi.plot.plot_1d.__doc__
+mixture_normal.plot_2d.__doc__ = lsbi.plot.plot_2d.__doc__
