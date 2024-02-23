@@ -42,7 +42,7 @@ class multivariate_normal(object):
         If True, cov is interpreted as the diagonal of the covariance matrix.
     """
 
-    def __init__(self, mean=0, cov=1, shape=(), dim=0, diagonal=False):
+    def __init__(self, mean=0, cov=1, shape=(), dim=1, diagonal=False):
         self.mean = mean
         self.cov = cov
         self._shape = shape
@@ -123,13 +123,15 @@ class multivariate_normal(object):
         """
         return np.exp(self.logpdf(x, broadcast=broadcast))
 
-    def rvs(self, size=()):
+    def rvs(self, size=(), broadcast=False):
         """Draw random samples from the distribution.
 
         Parameters
         ----------
         size : int or tuple of ints, optional, default=()
             Number of samples to draw.
+        broadcast : bool, optional, default=False
+            If True, broadcast x across the distribution parameters.
 
         Returns
         -------
@@ -137,7 +139,10 @@ class multivariate_normal(object):
             Random samples from the distribution.
         """
         size = np.atleast_1d(size)
-        x = np.random.randn(*size, *self.shape, self.dim)
+        if broadcast:
+            x = np.random.randn(*size, self.dim)
+        else:
+            x = np.random.randn(*size, *self.shape, self.dim)
         if self.diagonal:
             return self.mean + np.sqrt(self.cov) * x
         else:
@@ -146,8 +151,8 @@ class multivariate_normal(object):
     def predict(self, A=1, b=0, diagonal=False):
         """Predict the mean and covariance of a linear transformation.
 
-        if:         x ~ N(mu, Sigma)
-        then:  Ax + b ~ N(A mu + b, A Sigma A^T)
+        if:         x ~ N(μ, Σ)
+        then:  Ax + b ~ N(A μ + b, A Σ A^T)
 
         Parameters
         ----------
@@ -374,7 +379,7 @@ class mixture_normal(multivariate_normal):
     cov: array_like, shape `(..., n, dim, dim)`
         Covariance matrix of each component.
 
-    logA: array_like, shape `(..., n)`
+    logw: array_like, shape `(..., n)`
         Log of the mixing weights.
 
     shape: tuple, optional, default=()
@@ -389,14 +394,14 @@ class mixture_normal(multivariate_normal):
         If True, cov is interpreted as the diagonal of the covariance matrix.
     """
 
-    def __init__(self, logA=0, mean=0, cov=1, shape=(), dim=0, diagonal=False):
-        self.logA = logA
+    def __init__(self, logw=0, mean=0, cov=1, shape=(), dim=1, diagonal=False):
+        self.logw = logw
         super().__init__(mean, cov, shape, dim, diagonal)
 
     @property
     def shape(self):
         """Shape of the distribution."""
-        return np.broadcast_shapes(np.shape(self.logA), super().shape)
+        return np.broadcast_shapes(np.shape(self.logw), super().shape)
 
     @property
     def k(self):
@@ -434,11 +439,11 @@ class mixture_normal(multivariate_normal):
         logpdf = super().logpdf(x, broadcast=broadcast)
         if self.shape == ():
             return logpdf
-        logA = np.broadcast_to(self.logA, self.shape).copy()
-        logA -= logsumexp(logA, axis=-1, keepdims=True)
+        logw = np.broadcast_to(self.logw, self.shape).copy()
+        logw = logw - logsumexp(logw, axis=-1, keepdims=True)
         if joint:
-            return logpdf + logA
-        return logsumexp(logpdf + logA, axis=-1)
+            return logpdf + logw
+        return logsumexp(logpdf + logw, axis=-1)
 
     def pdf(self, x, broadcast=False, joint=False):
         """Probability density function.
@@ -465,39 +470,52 @@ class mixture_normal(multivariate_normal):
         """
         return np.exp(self.logpdf(x, broadcast=broadcast, joint=joint))
 
-    def rvs(self, size=()):
+    def rvs(self, size=(), broadcast=False):
         """Draw random samples from the distribution.
 
         Parameters
         ----------
         size : int or tuple of ints, optional, default=1
+            Number of samples to draw.
+        broadcast : bool, optional, default=False
+            If True, broadcast x across the distribution parameters.
 
         Returns
         -------
         rvs : array_like, shape `(*size, *shape[:-1], dim)`
         """
         if self.shape == ():
-            return super().rvs(size=size)
-        size = np.atleast_1d(np.array(size, dtype=int))
-        logA = np.broadcast_to(self.logA, self.shape).copy()
-        logA -= logsumexp(logA, axis=-1, keepdims=True)
-        p = np.exp(logA)
+            return super().rvs(size=size, broadcast=broadcast)
+        size = np.atleast_1d(size)
+        logw = np.broadcast_to(self.logw, self.shape).copy()
+        logw = logw - logsumexp(logw, axis=-1, keepdims=True)
+        p = np.exp(logw)
         cump = np.cumsum(p, axis=-1)
-        u = np.random.rand(*size, *p.shape[:-1])
+        if broadcast:
+            u = np.random.rand(*size).reshape(-1, *p.shape[:-1])
+        else:
+            u = np.random.rand(np.prod(size, dtype=int), *p.shape[:-1])
         i = np.argmax(np.array(u)[..., None] < cump, axis=-1)
         mean = np.broadcast_to(self.mean, (*self.shape, self.dim))
-        mean = np.choose(i[..., None], np.moveaxis(mean, -2, 0))
-        x = np.random.randn(*size, *self.shape[:-1], self.dim)
+        mean = np.take_along_axis(np.moveaxis(mean, -2, 0), i[..., None], axis=0)
+        if broadcast:
+            x = np.random.randn(*size, self.dim)
+        else:
+            x = np.random.randn(np.prod(size, dtype=int), *self.shape[:-1], self.dim)
         if self.diagonal:
             L = np.sqrt(self.cov)
             L = np.broadcast_to(L, (*self.shape, self.dim))
-            L = np.choose(i[..., None], np.moveaxis(L, -2, 0))
-            return mean + L * x
+            L = np.take_along_axis(np.moveaxis(L, -2, 0), i[..., None], axis=0)
+            rvs = mean + L * x
         else:
             L = cholesky(self.cov)
             L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
-            L = np.choose(i[..., None, None], np.moveaxis(L, -3, 0))
-            return mean + np.einsum("...ij,...j->...i", L, x)
+            L = np.take_along_axis(np.moveaxis(L, -3, 0), i[..., None, None], axis=0)
+            rvs = mean + np.einsum("...ij,...j->...i", L, x)
+        if broadcast:
+            return rvs.reshape(*size, self.dim)
+        else:
+            return rvs.reshape(*size, *self.shape[:-1], self.dim)
 
     def condition(self, indices, values):
         """Condition on indices with values.
@@ -518,7 +536,8 @@ class mixture_normal(multivariate_normal):
         dist = super().condition(indices, np.expand_dims(values, -2))
         dist.__class__ = mixture_normal
         marg = self.marginalise(self._bar(indices))
-        dist.logA = marg.logpdf(values, broadcast=True, joint=True)
+        dist.logw = marg.logpdf(values, broadcast=True, joint=True)
+        dist.logw = dist.logw - logsumexp(dist.logw, axis=-1, keepdims=True)
         return dist
 
     def bijector(self, x, inverse=False):
@@ -561,7 +580,7 @@ class mixture_normal(multivariate_normal):
                 c = np.atleast_1d(dist.cov)[..., 0]
             else:
                 c = np.atleast_2d(dist.cov)[..., 0, 0]
-            A = np.exp(dist.logA - logsumexp(dist.logA, axis=-1)[..., None])
+            A = np.exp(dist.logw - logsumexp(dist.logw, axis=-1)[..., None])
             m = np.broadcast_to(m, dist.shape)
 
             def f(t):
@@ -585,7 +604,7 @@ class mixture_normal(multivariate_normal):
     def __getitem__(self, arg):  # noqa: D105
         dist = super().__getitem__(arg)
         dist.__class__ = mixture_normal
-        dist.logA = np.broadcast_to(self.logA, self.shape)[arg]
+        dist.logw = np.broadcast_to(self.logw, self.shape)[arg]
         return dist
 
     def plot_1d(self, axes=None, *args, **kwargs):  # noqa: D102
@@ -609,3 +628,43 @@ class mixture_normal(multivariate_normal):
 
 mixture_normal.plot_1d.__doc__ = lsbi.plot.plot_1d.__doc__
 mixture_normal.plot_2d.__doc__ = lsbi.plot.plot_2d.__doc__
+
+
+def dkl(p, q, n=0):
+    """Kullback-Leibler divergence between two distributions.
+
+    Parameters
+    ----------
+    p : lsbi.stats.multivariate_normal
+    q : lsbi.stats.multivariate_normal
+    n : int, optional, default=0
+        Number of samples to mcmc estimate the divergence.
+
+    Returns
+    -------
+    dkl : array_like
+        Kullback-Leibler divergence between p and q.
+    """
+    shape = np.broadcast_shapes(p.shape, q.shape)
+    if n:
+        x = p.rvs(size=(n, *shape), broadcast=True)
+        return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).mean(axis=0)
+    dkl = -p.dim * np.ones(shape)
+    dkl = dkl + logdet(q.cov * np.ones(q.dim), q.diagonal)
+    dkl = dkl - logdet(p.cov * np.ones(p.dim), p.diagonal)
+    pq = (p.mean - q.mean) * np.ones(p.dim)
+    if q.diagonal:
+        dkl = dkl + (pq**2 / q.cov).sum(axis=-1)
+        if p.diagonal:
+            dkl = dkl + (p.cov / q.cov * np.ones(q.dim)).sum(axis=-1)
+        else:
+            dkl = dkl + (np.diagonal(p.cov, 0, -2, -1) / q.cov).sum(axis=-1)
+    else:
+        invq = inv(q.cov)
+        dkl = dkl + np.einsum("...i,...ij,...j->...", pq, invq, pq)
+        if p.diagonal:
+            dkl = dkl + (p.cov * np.diagonal(invq, 0, -2, -1)).sum(axis=-1)
+        else:
+            dkl = dkl + np.einsum("...ij,...ji->...", invq, p.cov)
+
+    return dkl / 2
