@@ -345,21 +345,19 @@ class multivariate_normal(object):
 
     def plot_1d(self, axes=None, *args, **kwargs):  # noqa: D102
         if self.shape:
-            return [
-                self.plot_1d(self[i], axes=axes, *args, **kwargs)
-                for i in range(self.shape[0])
-            ]
+            for i in range(self.shape[0]):
+                axes = self[i].plot_1d(axes, *args, **kwargs)
         else:
-            return lsbi.stats.plot_2d(self, axes=axes, *args, **kwargs)
+            return lsbi.plot.plot_1d(self, axes, *args, **kwargs)
+        return axes
 
     def plot_2d(self, axes=None, *args, **kwargs):  # noqa:D102
         if self.shape:
-            return [
-                self.plot_2d(self[i], axes=axes, *args, **kwargs)
-                for i in range(self.shape[0])
-            ]
+            for i in range(self.shape[0]):
+                axes = self[i].plot_2d(axes, *args, **kwargs)
         else:
-            return lsbi.stats.plot_2d(self, axes=axes, *args, **kwargs)
+            return lsbi.plot.plot_1d(self, axes, *args, **kwargs)
+        return axes
 
 
 multivariate_normal.plot_1d.__doc__ = lsbi.plot.plot_1d.__doc__
@@ -609,21 +607,19 @@ class mixture_normal(multivariate_normal):
 
     def plot_1d(self, axes=None, *args, **kwargs):  # noqa: D102
         if self.shape[:-1]:
-            return [
-                self.plot_1d(self[i], axes=axes, *args, **kwargs)
-                for i in range(self.shape[0])
-            ]
+            for i in range(self.shape[0]):
+                axes = self[i].plot_1d(axes=axes, *args, **kwargs)
         else:
-            return lsbi.stats.plot_2d(self, axes=axes, *args, **kwargs)
+            return lsbi.plot.plot_1d(self, axes=axes, *args, **kwargs)
+        return axes
 
     def plot_2d(self, axes=None, *args, **kwargs):  # noqa:D102
         if self.shape[:-1]:
-            return [
-                self.plot_2d(self[i], axes=axes, *args, **kwargs)
-                for i in range(self.shape[0])
-            ]
+            for i in range(self.shape[0]):
+                axes = self[i].plot_2d(axes=axes, *args, **kwargs)
         else:
-            return lsbi.stats.plot_2d(self, axes=axes, *args, **kwargs)
+            return lsbi.plot.plot_2d(self, axes=axes, *args, **kwargs)
+        return axes
 
 
 mixture_normal.plot_1d.__doc__ = lsbi.plot.plot_1d.__doc__
