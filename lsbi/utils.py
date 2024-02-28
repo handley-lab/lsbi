@@ -1,10 +1,14 @@
 """Utility functions for lsbi."""
+
 import numpy as np
 
 
-def logdet(A):
+def logdet(A, diagonal=False):
     """log(abs(det(A)))."""
-    return np.linalg.slogdet(A)[1]
+    if diagonal:
+        return np.log(np.abs(A)).sum(axis=-1)
+    else:
+        return np.linalg.slogdet(A)[1]
 
 
 def quantise(f, x, tol=1e-8):
@@ -55,3 +59,51 @@ def bisect(f, a, b, args=(), tol=1e-8):
         b = np.where(fq == 0, q, b)
         b = np.where(fb * fq > 0, q, b)
     return (a + b) / 2
+
+
+def dediagonalise(x, diagonal, *args):
+    """Optionally construct a dense matrix with x on the diagonal."""
+    if diagonal:
+        return np.atleast_1d(x)[..., None, :] * np.eye(*args)
+    else:
+        return x
+
+
+def alias(cls, name, alias):
+    """Create an alias for a property.
+
+    Parameters
+    ----------
+    cls : class
+        Class to add the alias to.
+    name : str
+        Name of the property to alias.
+    alias : str
+        Name of the alias.
+
+    Examples
+    --------
+    >>> class MyCls:
+    ...     def __init__(self, name):
+    ...         self.name = name
+    ...
+    >>> alias(MyCls, 'name', 'n')
+    >>> obj = MyCls('will')
+    >>> obj.name
+    'will'
+    >>> obj.n
+    'will'
+    >>> obj.n = 'bill'
+    >>> obj.name
+    'bill'
+    """
+
+    @property
+    def f(self):
+        return getattr(self, name)
+
+    @f.setter
+    def f(self, x):
+        setattr(self, name, x)
+
+    setattr(cls, alias, f)

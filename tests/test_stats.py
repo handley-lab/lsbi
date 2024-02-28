@@ -1,375 +1,584 @@
 import numpy as np
 import pytest
-import scipy.special
+import scipy
 from numpy.testing import assert_allclose
-from scipy.stats import invwishart, kstest
+from scipy.special import logsumexp
+from scipy.stats import multivariate_normal as scipy_multivariate_normal
 
-from lsbi.stats import (
-    mixture_multivariate_normal,
-    multimultivariate_normal,
-    multivariate_normal,
-)
+from lsbi.stats import dkl, mixture_normal, multivariate_normal
 
-N = 1000
+shapes = [(2, 3), (3,), ()]
+sizes = [(6, 5), (5,), ()]
+dims = [1, 2, 4]
+pvalue = 1e-7
+
+tests = []
+A_tests = []
+p_tests = []
+
+for dim in dims:
+    for shape in shapes:
+        for mean_shape in shapes + ["scalar"]:
+            for cov_shape in shapes + ["scalar"]:
+                for diagonal in [True, False]:
+                    tests.append((dim, shape, mean_shape, cov_shape, diagonal))
+                    for A_shape in shapes + ["scalar"]:
+                        for diagonal_A in [True, False]:
+                            for b_shape in shapes + ["scalar"]:
+                                for k in dims:
+                                    if (diagonal_A or A_shape == "scalar") and (
+                                        b_shape != "scalar" or k != dim
+                                    ):
+                                        continue
+                                    A_tests.append(
+                                        (
+                                            dim,
+                                            shape,
+                                            mean_shape,
+                                            cov_shape,
+                                            diagonal,
+                                            A_shape,
+                                            diagonal_A,
+                                            b_shape,
+                                            k,
+                                        )
+                                    )
+
+                    for p in dims:
+                        if dim < p:
+                            continue
+                        p_tests.append((dim, shape, mean_shape, cov_shape, diagonal, p))
 
 
-@pytest.mark.parametrize("d", [1, 2, 5, 10])
-@pytest.mark.parametrize("k", [1, 2, 5, 10])
-class TestMixtureMultivariateNormal(object):
-    cls = mixture_multivariate_normal
-
-    def random(self, k, d):
-        means = np.random.randn(k, d)
-        covs = invwishart(scale=np.eye(d), df=d * 10).rvs(k)
-        if k == 1:
-            covs = np.array([covs])
-        logA = np.log(scipy.stats.dirichlet(np.ones(k)).rvs())[0] + 10
-        return self.cls(means, covs, logA)
-
-    def test_rvs(self, k, d):
-        dist = self.random(k, d)
-        logA = dist.logA
-        logA -= scipy.special.logsumexp(logA)
-        mvns = [
-            scipy.stats.multivariate_normal(dist.means[i], dist.covs[i])
-            for i in range(k)
-        ]
-
-        samples_1, logpdfs_1 = [], []
-        for _ in range(N):
-            i = np.random.choice(k, p=np.exp(logA))
-            x = mvns[i].rvs()
-            samples_1.append(x)
-            logpdf = scipy.special.logsumexp(
-                [mvns[j].logpdf(x) + logA[j] for j in range(k)]
-            )
-            assert_allclose(logpdf, dist.logpdf(x))
-            logpdfs_1.append(logpdf)
-        samples_1, logpdfs_1 = np.array(samples_1), np.array(logpdfs_1)
-
-        samples_2 = dist.rvs(N)
-        logpdfs_2 = dist.logpdf(samples_2)
-
-        for i in range(d):
-            if d == 1:
-                p = kstest(samples_1, samples_2).pvalue
-            else:
-                p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
-            assert p > 1e-5
-
-        p = kstest(logpdfs_1, logpdfs_2).pvalue
-        assert p > 1e-5
-
-        for shape in [(d,), (3, d), (3, 4, d)]:
-            x = np.random.rand(*shape)
-            assert mvns[0].logpdf(x).shape == dist.logpdf(x).shape
-
-    def test_bijector(self, k, d):
-        dist = self.random(k, d)
-
-        # Test inversion
-        x = np.random.rand(N, d)
-        theta = dist.bijector(x)
-        assert_allclose(dist.bijector(theta, inverse=True), x, atol=1e-6)
-
-        # Test sampling
-        samples = dist.rvs(N)
-        for i in range(d):
-            if d == 1:
-                p = kstest(np.squeeze(theta), samples).pvalue
-            else:
-                p = kstest(theta[:, i], samples[:, i]).pvalue
-            assert p > 1e-5
-
-        p = kstest(dist.logpdf(samples), dist.logpdf(theta)).pvalue
-        assert p > 1e-5
-
-        # Test shapes
-        x = np.random.rand(d)
-        theta = dist.bijector(x)
-        assert theta.shape == x.shape
-        assert dist.bijector(theta, inverse=True).shape == x.shape
-
-        x = np.random.rand(3, 4, d)
-        theta = dist.bijector(x)
-        assert theta.shape == x.shape
-        assert dist.bijector(theta, inverse=True).shape == x.shape
-
-    @pytest.mark.parametrize("p", np.arange(1, 5))
-    def test_marginalise_condition(self, k, d, p):
-        if d <= p:
-            pytest.skip("d <= p")
-        i = np.random.choice(d, p, replace=False)
-        j = np.array([x for x in range(d) if x not in i])
-        dist = self.random(k, d)
-        mixture_2 = dist.marginalise(i)
-        assert isinstance(mixture_2, self.cls)
-        assert mixture_2.means.shape == (k, d - p)
-        assert mixture_2.covs.shape == (k, d - p, d - p)
-        assert_allclose(dist.means[:, j], mixture_2.means)
-        assert_allclose(dist.covs[:, j][:, :, j], mixture_2.covs)
-
-        v = np.random.randn(k, p)
-        mixture_3 = dist.condition(i, v)
-        assert isinstance(mixture_3, self.cls)
-        assert mixture_3.means.shape == (k, d - p)
-        assert mixture_3.covs.shape == (k, d - p, d - p)
-
-        v = np.random.randn(p)
-        mixture_3 = dist.condition(i, v)
-        assert mixture_3.means.shape == (k, d - p)
-        assert mixture_3.covs.shape == (k, d - p, d - p)
-
-    @pytest.mark.parametrize("q", [1, 2, 5, 10])
-    def test_predict(self, q, k, d):
-        dist = self.random(k, d)
-        A = np.random.randn(k, q, d)
-        y = dist.predict(A)
-        assert isinstance(y, self.cls)
-        assert y.means.shape == (k, q)
-        assert y.covs.shape == (k, q, q)
-
-        b = np.random.randn(q)
-        y = dist.predict(A, b)
-        assert isinstance(y, self.cls)
-        assert y.means.shape == (
-            k,
-            q,
+def flatten(dist):
+    """Convert a multivariate_normal to a list of scipy.stats.multivariate_normal"""
+    mean = np.broadcast_to(dist.mean, dist.shape + (dist.dim,)).reshape(-1, dist.dim)
+    if dist.diagonal:
+        cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim,)).reshape(-1, dist.dim)
+    else:
+        cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim, dist.dim)).reshape(
+            -1, dist.dim, dist.dim
         )
-        assert y.covs.shape == (k, q, q)
+
+    flat_dist = [
+        scipy_multivariate_normal(m, c, allow_singular=True)
+        for (m, c) in zip(mean, cov)
+    ]
+    return flat_dist
 
 
-@pytest.mark.parametrize("d", [1, 2, 5, 10])
 class TestMultivariateNormal(object):
     cls = multivariate_normal
 
-    def random(self, d):
-        mean = np.random.randn(d)
-        cov = invwishart(scale=np.eye(d), df=d * 10).rvs()
-        return self.cls(mean, cov)
+    def random(self, dim, shape, mean_shape, cov_shape, diagonal):
+        if mean_shape == "scalar":
+            mean = np.random.randn()
+        else:
+            mean = np.random.randn(*mean_shape, dim)
 
-    def test_rvs(self, d):
-        dist = self.random(d)
-        mvn = scipy.stats.multivariate_normal(dist.mean, dist.cov)
+        if cov_shape == "scalar":
+            cov = np.random.randn() ** 2 + dim
+        elif diagonal:
+            cov = np.random.randn(*cov_shape, dim) ** 2 + dim
+        else:
+            cov = np.random.randn(*cov_shape, dim, dim)
+            cov = np.einsum("...ij,...kj->...ik", cov, cov) + dim * np.eye(dim)
 
-        samples_1 = mvn.rvs(N)
-        logpdfs_1 = mvn.logpdf(samples_1)
-        assert_allclose(logpdfs_1, dist.logpdf(samples_1))
-        samples_2 = dist.rvs(N)
-        logpdfs_2 = dist.logpdf(samples_2)
+        dist = multivariate_normal(mean, cov, shape, dim, diagonal)
 
-        for i in range(d):
-            if d == 1:
-                p = kstest(samples_1, samples_2).pvalue
-            else:
-                p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
-            assert p > 1e-5
+        assert dist.dim == dim
+        assert np.all(dist.mean == mean)
+        assert np.all(dist.cov == cov)
+        return dist
 
-        p = kstest(logpdfs_1, logpdfs_2).pvalue
-        assert p > 1e-5
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal", tests)
+    def test_getitem(self, dim, shape, mean_shape, cov_shape, diagonal):
+        dist = self.random(dim, shape, mean_shape, cov_shape, diagonal)
 
-        for shape in [(), (d,), (3, d), (3, 4, d)]:
-            x = np.random.rand(*shape)
-            assert mvn.logpdf(x).shape == dist.logpdf(x).shape
+        if len(dist.shape) > 0:
+            dist_2 = dist[0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[1:]
+            assert dist_2.dim == dim
 
-    def test_bijector(self, d):
-        dist = self.random(d)
-        # Test inversion
-        x = np.random.rand(N, d)
-        theta = dist.bijector(x)
-        assert_allclose(dist.bijector(theta, inverse=True), x, atol=1e-6)
+        if len(dist.shape) > 1:
+            dist_2 = dist[0, 0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[2:]
+            assert dist_2.dim == dim
 
-        # Test sampling
-        samples = dist.rvs(N)
-        for i in range(d):
-            if d == 1:
-                p = kstest(np.squeeze(theta), samples).pvalue
-            else:
-                p = kstest(theta[:, i], samples[:, i]).pvalue
-            assert p > 1e-5
+            dist_2 = dist[0, :]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[1:]
+            assert dist_2.dim == dim
 
-        p = kstest(dist.logpdf(samples), dist.logpdf(theta)).pvalue
-        assert p > 1e-5
+            dist_2 = dist[:, 0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[:-1]
+            assert dist_2.dim == dim
 
-        # Test shapes
-        x = np.random.rand(d)
-        theta = dist.bijector(x)
-        assert theta.shape == x.shape
-        assert dist.bijector(theta, inverse=True).shape == x.shape
+    @pytest.mark.parametrize("size", sizes)
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal", tests)
+    def test_logpdf(self, dim, shape, mean_shape, cov_shape, diagonal, size):
+        dist = self.random(dim, shape, mean_shape, cov_shape, diagonal)
+        x = np.random.randn(*size, dim)
+        logpdf = dist.logpdf(x)
+        assert logpdf.shape == size + dist.shape
 
-        x = np.random.rand(3, 4, d)
-        theta = dist.bijector(x)
-        assert theta.shape == x.shape
-        assert dist.bijector(theta, inverse=True).shape == x.shape
+        flat_dist = flatten(dist)
+        flat_logpdf = np.array([d.logpdf(x) for d in flat_dist])
+        flat_logpdf = np.moveaxis(flat_logpdf, 0, -1).reshape(logpdf.shape)
+        assert_allclose(logpdf, flat_logpdf)
 
-    @pytest.mark.parametrize("p", np.arange(1, 5))
-    def test_marginalise_condition_multivariate_normal(self, d, p):
-        if d <= p:
-            pytest.skip("d <= p")
-        i = np.random.choice(d, p, replace=False)
-        j = np.array([x for x in range(d) if x not in i])
-        dist_1 = self.random(d)
-        dist_2 = dist_1.marginalise(i)
-        assert isinstance(dist_2, self.cls)
-        assert dist_2.mean.shape == (d - p,)
-        assert dist_2.cov.shape == (d - p, d - p)
-        assert_allclose(dist_1.mean[j], dist_2.mean)
-        assert_allclose(dist_1.cov[j][:, j], dist_2.cov)
+        assert_allclose(np.exp(logpdf), dist.pdf(x))
 
-        v = np.random.randn(p)
-        dist_3 = dist_1.condition(i, v)
-        assert isinstance(dist_3, self.cls)
-        assert dist_3.mean.shape == (d - p,)
-        assert dist_3.cov.shape == (d - p, d - p)
+    @pytest.mark.parametrize("size", sizes)
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal", tests)
+    def test_rvs_shape(self, dim, shape, mean_shape, cov_shape, diagonal, size):
+        dist = self.random(dim, shape, mean_shape, cov_shape, diagonal)
+        rvs = dist.rvs(size)
+        assert rvs.shape == size + dist.shape + (dim,)
 
-    @pytest.mark.parametrize("q", [1, 2, 5, 10])
-    def test_predict(self, q, d):
-        dist = self.random(d)
-        A = np.random.randn(q, d)
-        y = dist.predict(A)
-        assert isinstance(y, self.cls)
-        assert y.mean.shape == (q,)
-        assert y.cov.shape == (q, q)
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal", tests)
+    def test_rvs(self, dim, shape, mean_shape, cov_shape, diagonal):
+        size = 100
+        dist = self.random(dim, shape, mean_shape, cov_shape, diagonal)
+        rvs = dist.rvs(size)
 
-        b = np.random.randn(q)
-        y = dist.predict(A, b)
-        assert isinstance(y, self.cls)
-        assert y.mean.shape == (q,)
-        assert y.cov.shape == (q, q)
-
-
-@pytest.mark.parametrize("d", [1, 2, 5, 10])
-@pytest.mark.parametrize("k", [1, 2, 5, 10])
-class TestMultiMultivariateNormal(object):
-    cls = multimultivariate_normal
-
-    def random(self, k, d):
-        means = np.random.randn(k, d)
-        covs = invwishart(scale=np.eye(d), df=d * 10).rvs(k)
-        if k == 1:
-            covs = np.array([covs])
-        return self.cls(means, covs)
-
-    def test_rvs(self, k, d):
-        dist = self.random(k, d)
-        mvns = [
-            scipy.stats.multivariate_normal(dist.means[i], dist.covs[i])
-            for i in range(k)
-        ]
-
-        samples_1, logpdfs_1 = [], []
-        for _ in range(N):
-            xs = [mvn.rvs() for mvn in mvns]
-            samples_1.append(xs)
-            logpdf = [mvn.logpdf(x) for x, mvn in zip(xs, mvns)]
-            assert_allclose(logpdf, dist.logpdf(xs))
-            logpdfs_1.append(logpdf)
-        samples_1, logpdfs_1 = np.array(samples_1), np.array(logpdfs_1)
-
-        samples_2 = dist.rvs(N)
-        if d == 1:
-            samples_2 = samples_2[..., None]
-        logpdfs_2 = dist.logpdf(samples_2)
-
-        for j in range(k):
-            for i in range(d):
-                if k == 1 and d == 1:
-                    p = kstest(samples_1[:, i], samples_2[:, i]).pvalue
-                elif k == 1:
-                    p = kstest(samples_1[:, j, i], samples_2[:, i]).pvalue
-                elif d == 1:
-                    p = kstest(samples_1[:, j], samples_2[:, j, i]).pvalue
-                else:
-                    p = kstest(samples_1[:, j, i], samples_2[:, j, i]).pvalue
-                assert p > 1e-5
-
-            if k == 1:
-                p = kstest(logpdfs_1[j], logpdfs_2).pvalue
-            else:
-                p = kstest(logpdfs_1[j], logpdfs_2[j]).pvalue
-            assert p > 1e-5
-
-        for shape in [(k, d), (3, k, d), (3, 4, k, d)]:
-            xs = np.random.rand(*shape)
-            logpdfs_1 = [mvn.logpdf(xs[..., i, :]) for i, mvn in enumerate(mvns)]
-            logpdfs_2 = dist.logpdf(xs)
-            if k == 1:
-                logpdfs_2 = np.array(logpdfs_2)[..., None]
-            for j in range(k):
-                assert np.shape(logpdfs_1[j]) == logpdfs_2[..., j].shape
-
-    def test_bijector(self, k, d):
-        dist = self.random(k, d)
-
-        # Test inversion
-        xs = np.random.rand(N, k, d)
-        theta = dist.bijector(xs)
-        assert_allclose(dist.bijector(theta, inverse=True), xs, atol=1e-6)
-
-        # Test sampling
-        samples = dist.rvs(N)
-        if d == 1:
-            samples = samples[..., None]
-        logpdf_1 = dist.logpdf(samples)
-        logpdf_2 = dist.logpdf(theta)
-        for j in range(k):
-            for i in range(d):
-                if k == 1:
-                    p = kstest(theta[:, j, i], samples[:, i]).pvalue
-                else:
-                    p = kstest(theta[:, j, i], samples[:, j, i]).pvalue
-                assert p > 1e-5
-            if k == 1:
-                p = kstest(logpdf_1, logpdf_2).pvalue
-            else:
-                p = kstest(logpdf_1[j], logpdf_2[j]).pvalue
-            assert p > 1e-5
-
-        # Test shapes
-        xs = np.random.rand(k, d)
-        theta = dist.bijector(xs)
-        assert theta.shape == xs.shape
-        assert dist.bijector(theta, inverse=True).shape == xs.shape
-
-        xs = np.random.rand(3, 4, k, d)
-        theta = dist.bijector(xs)
-        assert theta.shape == xs.shape
-        assert dist.bijector(theta, inverse=True).shape == xs.shape
-
-    @pytest.mark.parametrize("p", np.arange(1, 5))
-    def test_marginalise_condition(self, k, d, p):
-        if d <= p:
-            pytest.skip("d <= p")
-        i = np.random.choice(d, p, replace=False)
-        j = np.array([x for x in range(d) if x not in i])
-        dist = self.random(k, d)
-        mixture_2 = dist.marginalise(i)
-        assert isinstance(mixture_2, self.cls)
-        assert mixture_2.means.shape == (k, d - p)
-        assert mixture_2.covs.shape == (k, d - p, d - p)
-        assert_allclose(dist.means[:, j], mixture_2.means)
-        assert_allclose(dist.covs[:, j][:, :, j], mixture_2.covs)
-
-        v = np.random.randn(k, p)
-        mixture_3 = dist.condition(i, v)
-        assert isinstance(mixture_3, self.cls)
-        assert mixture_3.means.shape == (k, d - p)
-        assert mixture_3.covs.shape == (k, d - p, d - p)
-
-    @pytest.mark.parametrize("q", [1, 2, 5, 10])
-    def test_predict(self, q, k, d):
-        dist = self.random(k, d)
-        A = np.random.randn(k, q, d)
-        y = dist.predict(A)
-        assert isinstance(y, self.cls)
-        assert y.means.shape == (k, q)
-        assert y.covs.shape == (k, q, q)
-
-        b = np.random.randn(q)
-        y = dist.predict(A, b)
-        assert isinstance(y, self.cls)
-        assert y.means.shape == (
-            k,
-            q,
+        mean = np.broadcast_to(dist.mean, dist.shape + (dist.dim,)).reshape(
+            -1, dist.dim
         )
-        assert y.covs.shape == (k, q, q)
+        if dist.diagonal:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim,)).reshape(
+                -1, dist.dim
+            )
+        else:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim, dist.dim)).reshape(
+                -1, dist.dim, dist.dim
+            )
+
+        rvs_ = np.array(
+            [
+                scipy_multivariate_normal(ms, cs, allow_singular=True).rvs(size)
+                for ms, cs in zip(mean, cov)
+            ]
+        ).reshape(-1, size, dim)
+
+        rvs = np.moveaxis(rvs.reshape(size, -1, dim), 1, 0)
+
+        for a, b in zip(rvs, rvs_):
+            for i in range(dim):
+                assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > pvalue
+
+    @pytest.mark.parametrize(
+        "dim, shape, mean_shape, cov_shape, diagonal, A_shape, diagonal_A, b_shape, k",
+        A_tests,
+    )
+    def test_predict(
+        self,
+        dim,
+        shape,
+        mean_shape,
+        cov_shape,
+        diagonal,
+        k,
+        A_shape,
+        diagonal_A,
+        b_shape,
+    ):
+        dist = self.random(dim, shape, mean_shape, cov_shape, diagonal)
+
+        if b_shape == "scalar":
+            b = np.random.randn()
+        else:
+            b = np.random.randn(*b_shape, k)
+
+        if A_shape == "scalar":
+            A = np.random.randn()
+        elif diagonal_A:
+            A = np.random.randn(*A_shape, dim)
+        else:
+            A = np.random.randn(*A_shape, k, dim)
+
+        dist_2 = dist.predict(A, b, diagonal_A)
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == np.broadcast_shapes(
+            dist.shape, np.shape(A)[: -2 + diagonal_A], np.shape(b)[:-1]
+        )
+        assert np.shape(dist_2.cov)[: -2 + dist_2.diagonal] == np.broadcast_shapes(
+            np.shape(dist.cov)[: -2 + diagonal], np.shape(A)[: -2 + diagonal_A]
+        )
+        assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
+            np.shape(dist.mean)[:-1], np.shape(A)[: -2 + diagonal_A], np.shape(b)[:-1]
+        )
+        assert dist_2.dim == k
+
+        dist_2 = dist.predict(A, diagonal=diagonal_A)
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == np.broadcast_shapes(
+            dist.shape, np.shape(A)[: -2 + diagonal_A]
+        )
+        assert np.shape(dist_2.cov)[: -2 + dist_2.diagonal] == np.broadcast_shapes(
+            np.shape(dist.cov)[: -2 + diagonal], np.shape(A)[: -2 + diagonal_A]
+        )
+        assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
+            np.shape(dist.mean)[:-1], np.shape(A)[: -2 + diagonal_A]
+        )
+        assert dist_2.dim == k
+
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal, p", p_tests)
+    def test_marginalise(self, dim, shape, mean_shape, cov_shape, diagonal, p):
+        indices = np.random.choice(dim, p, replace=False)
+        dist = self.random(dim, shape, mean_shape, cov_shape, diagonal)
+        dist_2 = dist.marginalise(indices)
+
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == dist.shape
+        assert (
+            np.shape(dist_2.cov)[: -2 + dist_2.diagonal]
+            == np.shape(dist.cov)[: -2 + diagonal]
+        )
+        assert np.shape(dist_2.mean)[:-1] == np.shape(dist.mean)[:-1]
+        assert dist_2.dim == dim - p
+
+    @pytest.mark.parametrize("values_shape", shapes)
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal, p", p_tests)
+    def test_condition(
+        self, dim, shape, mean_shape, cov_shape, diagonal, p, values_shape
+    ):
+        indices = np.random.choice(dim, p, replace=False)
+        values = np.random.randn(*values_shape, p)
+        dist = self.random(dim, shape, mean_shape, cov_shape, diagonal)
+        dist_2 = dist.condition(indices, values)
+
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == np.broadcast_shapes(dist.shape, values_shape)
+        assert (
+            np.shape(dist_2.cov)[: -2 + dist_2.diagonal]
+            == np.shape(dist.cov)[: -2 + diagonal]
+        )
+        if cov_shape == "scalar" or diagonal:
+            assert np.shape(dist_2.mean)[:-1] == np.shape(dist.mean)[:-1]
+        else:
+            assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
+                np.shape(dist.mean)[:-1],
+                np.shape(dist.cov)[: -2 + diagonal],
+                values_shape,
+            )
+        assert dist_2.dim == dim - p
+
+    @pytest.mark.parametrize("x_shape", shapes)
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal", tests)
+    def test_bijector(self, dim, shape, mean_shape, cov_shape, diagonal, x_shape):
+        dist = self.random(dim, shape, mean_shape, cov_shape, diagonal)
+        x = np.random.rand(*x_shape, dim)
+        y = dist.bijector(x)
+        assert y.shape == np.broadcast_shapes(dist.shape + (dim,), x.shape)
+
+        y = np.random.rand(*x_shape, dim)
+        x = dist.bijector(y, inverse=True)
+
+        assert x.shape == np.broadcast_shapes(dist.shape + (dim,), x.shape)
+
+        x = np.random.rand(*x_shape, dim)
+        y = dist.bijector(x)
+        assert_allclose(np.broadcast_to(x, y.shape), dist.bijector(y, inverse=True))
+
+
+@pytest.mark.parametrize("logw_shape", shapes)
+class TestMixtureNormal(TestMultivariateNormal):
+    cls = mixture_normal
+
+    def random(self, dim, shape, logw_shape, mean_shape, cov_shape, diagonal):
+        dist = super().random(dim, shape, mean_shape, cov_shape, diagonal)
+        logw = np.random.randn(*logw_shape)
+        dist = mixture_normal(
+            logw, dist.mean, dist.cov, dist.shape, dist.dim, dist.diagonal
+        )
+        assert np.all(dist.logw == logw)
+        if dist.shape:
+            assert dist.k == dist.shape[-1]
+        else:
+            assert dist.k == 1
+        return dist
+
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal", tests)
+    def test_getitem(self, dim, shape, logw_shape, mean_shape, cov_shape, diagonal):
+        dist = self.random(dim, shape, logw_shape, mean_shape, cov_shape, diagonal)
+
+        if len(dist.shape) > 0:
+            dist_2 = dist[0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[1:]
+            assert dist_2.dim == dim
+
+        if len(dist.shape) > 1:
+            dist_2 = dist[0, 0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[2:]
+            assert dist_2.dim == dim
+
+            dist_2 = dist[0, :]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[1:]
+            assert dist_2.dim == dim
+
+            dist_2 = dist[:, 0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == dist.shape[:-1]
+            assert dist_2.dim == dim
+
+    @pytest.mark.parametrize("size", sizes)
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal", tests)
+    def test_logpdf(
+        self, dim, shape, logw_shape, mean_shape, cov_shape, diagonal, size
+    ):
+        dist = self.random(dim, shape, logw_shape, mean_shape, cov_shape, diagonal)
+        x = np.random.randn(*size, dim)
+        logpdf = dist.logpdf(x)
+        assert logpdf.shape == size + dist.shape[:-1]
+
+        assert_allclose(np.exp(logpdf), dist.pdf(x))
+
+        logw = np.broadcast_to(dist.logw, dist.shape).reshape(-1, dist.k).copy()
+        logw -= logsumexp(logw, axis=-1, keepdims=True)
+        mean = np.broadcast_to(dist.mean, dist.shape + (dist.dim,)).reshape(
+            -1, dist.k, dist.dim
+        )
+        if dist.diagonal:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim,)).reshape(
+                -1, dist.k, dist.dim
+            )
+        else:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim, dist.dim)).reshape(
+                -1, dist.k, dist.dim, dist.dim
+            )
+
+        flat_dist = [
+            [
+                scipy_multivariate_normal(m, c, allow_singular=True)
+                for (m, c) in zip(ms, cs)
+            ]
+            for (ms, cs) in zip(mean, cov)
+        ]
+        flat_logpdf = np.array(
+            [
+                logsumexp([la + d.logpdf(x) for la, d in zip(las, ds)], axis=0)
+                for las, ds in zip(logw, flat_dist)
+            ]
+        )
+        flat_logpdf = np.moveaxis(flat_logpdf, 0, -1).reshape(logpdf.shape)
+        assert_allclose(logpdf, flat_logpdf)
+
+    @pytest.mark.parametrize("size", sizes)
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal", tests)
+    def test_rvs_shape(
+        self, dim, shape, logw_shape, mean_shape, cov_shape, diagonal, size
+    ):
+        dist = self.random(dim, shape, logw_shape, mean_shape, cov_shape, diagonal)
+        rvs = dist.rvs(size)
+        assert rvs.shape == size + dist.shape[:-1] + (dim,)
+
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal", tests)
+    def test_rvs(self, dim, shape, logw_shape, mean_shape, cov_shape, diagonal):
+        size = 100
+        dist = self.random(dim, shape, logw_shape, mean_shape, cov_shape, diagonal)
+        rvs = dist.rvs(size)
+        logw = np.broadcast_to(dist.logw, dist.shape).reshape(-1, dist.k).copy()
+        logw -= logsumexp(logw, axis=-1, keepdims=True)
+        p = np.exp(logw)
+        mean = np.broadcast_to(dist.mean, dist.shape + (dist.dim,)).reshape(
+            -1, dist.k, dist.dim
+        )
+        if dist.diagonal:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim,)).reshape(
+                -1, dist.k, dist.dim
+            )
+        else:
+            cov = np.broadcast_to(dist.cov, dist.shape + (dist.dim, dist.dim)).reshape(
+                -1, dist.k, dist.dim, dist.dim
+            )
+
+        rvs_ = np.array(
+            [
+                [
+                    scipy_multivariate_normal(ms[j], cs[j], allow_singular=True).rvs()
+                    for j in np.random.choice(len(ms), p=ps, size=size)
+                ]
+                for ms, cs, ps in zip(mean, cov, p)
+            ]
+        ).reshape(-1, size, dim)
+        rvs = np.moveaxis(rvs, -2, 0).reshape(-1, size, dim)
+
+        for a, b in zip(rvs, rvs_):
+            for i in range(dim):
+                assert scipy.stats.kstest(a[:, i], b[:, i]).pvalue > pvalue
+
+    @pytest.mark.parametrize(
+        "dim, shape, mean_shape, cov_shape, diagonal, A_shape, diagonal_A, b_shape, k",
+        A_tests,
+    )
+    def test_predict(
+        self,
+        dim,
+        shape,
+        logw_shape,
+        mean_shape,
+        cov_shape,
+        diagonal,
+        A_shape,
+        diagonal_A,
+        b_shape,
+        k,
+    ):
+        dist = self.random(dim, shape, logw_shape, mean_shape, cov_shape, diagonal)
+
+        if b_shape == "scalar":
+            b = np.random.randn()
+        else:
+            b = np.random.randn(*b_shape, k)
+
+        if A_shape == "scalar":
+            A = np.random.randn()
+        elif diagonal_A:
+            A = np.random.randn(*A_shape, dim)
+        else:
+            A = np.random.randn(*A_shape, k, dim)
+
+        dist_2 = dist.predict(A, b, diagonal_A)
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == np.broadcast_shapes(
+            dist.shape,
+            np.shape(A)[: -2 + diagonal_A],
+            np.shape(b)[:-1],
+        )
+        assert np.shape(dist_2.cov)[: -2 + dist_2.diagonal] == np.broadcast_shapes(
+            np.shape(dist.cov)[: -2 + diagonal], np.shape(A)[: -2 + diagonal_A]
+        )
+        assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
+            np.shape(dist.mean)[:-1],
+            np.shape(A)[: -2 + diagonal_A],
+            np.shape(b)[:-1],
+        )
+        assert dist_2.dim == k
+
+        dist_2 = dist.predict(A, diagonal=diagonal_A)
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == np.broadcast_shapes(
+            dist.shape, np.shape(A)[: -2 + diagonal_A]
+        )
+        assert np.shape(dist_2.cov)[: -2 + dist_2.diagonal] == np.broadcast_shapes(
+            np.shape(dist.cov)[: -2 + diagonal], np.shape(A)[: -2 + diagonal_A]
+        )
+        assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
+            np.shape(dist.mean)[:-1], np.shape(A)[: -2 + diagonal_A]
+        )
+        assert dist_2.dim == k
+
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal, p", p_tests)
+    def test_marginalise(
+        self, dim, shape, logw_shape, mean_shape, cov_shape, diagonal, p
+    ):
+        indices = np.random.choice(dim, p, replace=False)
+        dist = self.random(dim, shape, logw_shape, mean_shape, cov_shape, diagonal)
+        dist_2 = dist.marginalise(indices)
+
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == dist.shape
+        assert (
+            np.shape(dist_2.cov)[: -2 + dist_2.diagonal]
+            == np.shape(dist.cov)[: -2 + diagonal]
+        )
+        assert np.shape(dist_2.mean)[:-1] == np.shape(dist.mean)[:-1]
+        assert np.shape(dist_2.logw) == np.shape(dist.logw)
+        assert dist_2.dim == dim - p
+
+    @pytest.mark.parametrize("values_shape", shapes)
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal, p", p_tests)
+    def test_condition(
+        self,
+        dim,
+        shape,
+        logw_shape,
+        mean_shape,
+        cov_shape,
+        diagonal,
+        p,
+        values_shape,
+    ):
+        indices = np.random.choice(dim, p, replace=False)
+        values = np.random.randn(*values_shape[:-1], p)
+        dist = self.random(dim, shape, logw_shape, mean_shape, cov_shape, diagonal)
+        dist_2 = dist.condition(indices, values)
+
+        assert isinstance(dist_2, self.cls)
+        assert dist_2.shape == np.broadcast_shapes(dist.shape, values_shape[:-1] + (1,))
+        assert (
+            np.shape(dist_2.cov)[: -2 + dist_2.diagonal]
+            == np.shape(dist.cov)[: -2 + diagonal]
+        )
+        if cov_shape == "scalar" or diagonal:
+            assert np.shape(dist_2.mean)[:-1] == np.shape(dist.mean)[:-1]
+        else:
+            assert np.shape(dist_2.mean)[:-1] == np.broadcast_shapes(
+                np.shape(dist.mean)[:-1],
+                np.shape(dist.cov)[: -2 + diagonal],
+                values_shape[:-1] + (1,),
+            )
+        assert np.shape(dist_2.logw) == dist_2.shape
+        assert dist_2.dim == dim - p
+
+    @pytest.mark.parametrize("x_shape", shapes)
+    @pytest.mark.parametrize("dim, shape, mean_shape, cov_shape, diagonal", tests)
+    def test_bijector(
+        self, dim, shape, logw_shape, mean_shape, cov_shape, diagonal, x_shape
+    ):
+        dist = self.random(dim, shape, logw_shape, mean_shape, cov_shape, diagonal)
+        x = np.random.rand(*x_shape[:-1], dim)
+        y = dist.bijector(x)
+        assert y.shape == np.broadcast_shapes(x.shape, dist.shape[:-1] + (dim,))
+
+        y = np.random.rand(*x_shape[:-1], dim)
+        x = dist.bijector(y, inverse=True)
+        assert x.shape == np.broadcast_shapes(y.shape, dist.shape[:-1] + (dim,))
+
+        x = np.random.rand(*x_shape[:-1], dim)
+        y = dist.bijector(x)
+        assert_allclose(
+            np.broadcast_to(x, y.shape), dist.bijector(y, inverse=True), atol=1e-4
+        )
+
+
+@pytest.mark.parametrize("dim_p, shape_p, mean_shape_p, cov_shape_p, diagonal_p", tests)
+@pytest.mark.parametrize("dim_q, shape_q, mean_shape_q, cov_shape_q, diagonal_q", tests)
+def test_dkl(
+    dim_p,
+    shape_p,
+    mean_shape_p,
+    cov_shape_p,
+    diagonal_p,
+    dim_q,
+    shape_q,
+    mean_shape_q,
+    cov_shape_q,
+    diagonal_q,
+):
+    p = TestMultivariateNormal().random(
+        dim, shape_p, mean_shape_p, cov_shape_p, diagonal_p
+    )
+    q = TestMultivariateNormal().random(
+        dim, shape_q, mean_shape_q, cov_shape_q, diagonal_q
+    )
+
+    dkl_pq = dkl(p, q)
+
+    assert_allclose(dkl(p, p), 0, atol=1e-10)
+    assert_allclose(dkl(q, q), 0, atol=1e-10)
+
+    assert (dkl_pq >= 0).all()
+    assert dkl_pq.shape == np.broadcast_shapes(p.shape, q.shape)
+
+    dkl_mc = dkl(p, q, 1000)
+    assert dkl_mc.shape == np.broadcast_shapes(p.shape, q.shape)
+
+    assert_allclose(dkl_pq, dkl_mc, atol=1)
