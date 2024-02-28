@@ -356,7 +356,7 @@ class multivariate_normal(object):
             for i in range(self.shape[0]):
                 axes = self[i].plot_2d(axes, *args, **kwargs)
         else:
-            return lsbi.plot.plot_1d(self, axes, *args, **kwargs)
+            return lsbi.plot.plot_2d(self, axes, *args, **kwargs)
         return axes
 
 
