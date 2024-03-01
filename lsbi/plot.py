@@ -91,13 +91,13 @@ def pdf_plot_1d(ax, dist, *args, **kwargs):
         if facecolor is True:
             facecolor = color
 
-        c = iso_probability_contours_from_samples(pp, contours=levels)
+        c = iso_probability_contours_from_samples(pdf, contours=levels)
         cmap = basic_cmap(facecolor)
         fill = []
         for j in range(len(c) - 1):
             fill.append(
                 ax.fill_between(
-                    x, pp, where=pp >= c[j], color=cmap(c[j]), edgecolor=edgecolor
+                    x, pdf, where=pdf >= c[j], color=cmap(c[j]), edgecolor=edgecolor
                 )
             )
 

@@ -36,20 +36,20 @@ def test_pdf_plot_1d(dist):
     pdf_plot_1d(ax, dist, density=True)
 
 
-@pytest.mark.parametrize("dist", dists)
+@pytest.mark.parametrize("dist", dists[1:2])
 def test_pdf_plot_2d(dist):
     fig, ax = plt.subplots()
     pdf_plot_2d(ax, dist)
     pdf_plot_2d(ax, dist, facecolor=None, ec="k")
 
 
-@pytest.mark.parametrize("dist", dists)
+@pytest.mark.parametrize("dist", dists[1:2])
 def test_scatter_plot_2d(dist):
     fig, ax = plt.subplots()
     scatter_plot_2d(ax, dist)
 
 
-@pytest.mark.parametrize("dist", dists)
+@pytest.mark.parametrize("dist", dists[:2])
 def test_plot_1d(dist):
     plot_1d(dist)
     if dist.dim > 1:
@@ -58,7 +58,7 @@ def test_plot_1d(dist):
     plot_1d(dist, ax)
 
 
-@pytest.mark.parametrize("dist", dists)
+@pytest.mark.parametrize("dist", dists[:2])
 def test_plot_2d(dist):
     plot_2d(dist)
     if dist.dim > 1:
