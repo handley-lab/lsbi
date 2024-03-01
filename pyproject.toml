@@ -16,7 +16,6 @@ requires-python = ">=3.8"
 dependencies = [
     'numpy',
     'scipy',
-    'matplotlib',
     'torch',
 ]
 classifiers = [
@@ -43,6 +42,7 @@ classifiers = [
 [project.optional-dependencies]
 docs = ["sphinx", "sphinx_rtd_theme", "numpydoc"]
 test = ["pytest", "pytest-cov", "flake8", "pydocstyle", "packaging", "pre-commit"]
+plot = ["anesthetic"]
 
 [tool.setuptools.dynamic]
 version = {attr = "lsbi._version.__version__"}
