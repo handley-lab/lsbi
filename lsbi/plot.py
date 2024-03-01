@@ -5,7 +5,13 @@ import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
 import numpy as np
 from anesthetic import make_1d_axes, make_2d_axes
-from anesthetic.plot import basic_cmap, normalize_kwargs, quantile_plot_interval
+from anesthetic.plot import (
+    AxesDataFrame,
+    AxesSeries,
+    basic_cmap,
+    normalize_kwargs,
+    quantile_plot_interval,
+)
 from anesthetic.plot import scatter_plot_2d as anesthetic_scatter_plot_2d
 from anesthetic.plot import set_colors
 from anesthetic.utils import (
@@ -15,7 +21,7 @@ from anesthetic.utils import (
 from matplotlib.colors import LinearSegmentedColormap
 
 
-def pdf_plot_1d(ax, dist, index=0, *args, **kwargs):
+def pdf_plot_1d(ax, dist, *args, **kwargs):
     """Plot a 1D probability density estimate.
 
     This is in the same style as anesthetic, but since we have analytic expressions for the marginal densities we can plot the pdf directly
@@ -71,7 +77,7 @@ def pdf_plot_1d(ax, dist, index=0, *args, **kwargs):
     x = dist.rvs(nplot)
     logpdf = dist.logpdf(x)
     logpdfmin = np.sort(logpdf)[::-1][int(0.997 * nplot)]
-    x = np.atleast_2d(x)[..., index]
+    x = np.atleast_2d(x)[..., 0]
     i = np.argsort(x)
     x = x[i]
     logpdf = logpdf[i]
@@ -105,7 +111,7 @@ def pdf_plot_1d(ax, dist, index=0, *args, **kwargs):
     return ans
 
 
-def pdf_plot_2d(ax, dist, index=[0, 1], *args, **kwargs):
+def pdf_plot_2d(ax, dist, *args, **kwargs):
     """Plot a 2d marginalised distribution as contours.
 
     This is in the same style as anesthetic, but since we have analytic expressions for the marginal densities we can plot the pdf directly
@@ -166,8 +172,8 @@ def pdf_plot_2d(ax, dist, index=[0, 1], *args, **kwargs):
     x = dist.rvs(nplot)
     P = dist.pdf(x)
     levels = iso_probability_contours_from_samples(P, contours=levels)
-    y = np.atleast_1d(x[..., index[1]])
-    x = np.atleast_1d(x[..., index[0]])
+    y = np.atleast_1d(x[..., 1])
+    x = np.atleast_1d(x[..., 0])
 
     if facecolor not in [None, "None", "none"]:
         linewidths = kwargs.pop("linewidths", 0.5)
@@ -216,7 +222,7 @@ def pdf_plot_2d(ax, dist, index=[0, 1], *args, **kwargs):
     return contf, cont
 
 
-def scatter_plot_2d(ax, dist, index=[0, 1], *args, **kwargs):
+def scatter_plot_2d(ax, dist, *args, **kwargs):
     """Plot samples from a 2d marginalised distribution.
 
     This functions as a wrapper around :meth:`matplotlib.axes.Axes.plot`,
@@ -240,8 +246,8 @@ def scatter_plot_2d(ax, dist, index=[0, 1], *args, **kwargs):
     """
     nplot = kwargs.pop("nplot_2d", 1000)
     x = dist.rvs(nplot)
-    y = x[:, index[1]]
-    x = x[:, index[0]]
+    y = x[:, 1]
+    x = x[:, 0]
     return anesthetic_scatter_plot_2d(ax, x, y, *args, **kwargs)
 
 
@@ -273,11 +279,12 @@ def plot_1d(dist, axes=None, *args, **kwargs):
         Pandas array of axes objects
 
     """
-    params = kwargs.pop("params", list(range(dist.dim)))
     if axes is None:
-        fig, axes = make_1d_axes(params)
+        axes = list(range(dist.dim))
+    if not isinstance(axes, AxesSeries):
+        fig, axes = make_1d_axes(axes)
     for i, ax in enumerate(axes):
-        d = dist.marginalise(list(set(params) - {i}))
+        d = dist[i]
         pdf_plot_1d(ax, d, *args, **kwargs)
     return axes
 
@@ -324,17 +331,16 @@ def plot_2d(dist, axes=None, *args, **kwargs):
         Pandas array of axes objects
 
     """
-    params = kwargs.pop("params", list(range(dist.dim)))
     if axes is None:
-        fig, axes = make_2d_axes(params)
-    rvs = dist.rvs(1000).reshape(1000, -1, dist.dim)
+        axes = list(range(dist.dim))
+    if not isinstance(axes, AxesDataFrame):
+        fig, axes = make_2d_axes(axes)
     for y, row in axes.iterrows():
         for x, ax in row.items():
-            marg = dist.marginalise(list(set(params) - {x, y}))
             if ax.position == "diagonal":
-                pdf_plot_1d(ax.twin, marg, *args, **kwargs)
+                pdf_plot_1d(ax.twin, dist[x], *args, **kwargs)
             elif ax.position == "lower":
-                pdf_plot_2d(ax, marg, *args, **kwargs)
+                pdf_plot_2d(ax, dist[[x, y]], *args, **kwargs)
             elif ax.position == "upper":
-                scatter_plot_2d(ax, marg, index=[1, 0], *args, **kwargs)
+                scatter_plot_2d(ax, dist[[x, y]], *args, **kwargs)
     return axes

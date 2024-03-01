@@ -334,13 +334,23 @@ class multivariate_normal(object):
         (2,)
         """
         dist = deepcopy(self)
-        dist.mean = np.broadcast_to(self.mean, (*self.shape, self.dim))[arg]
-        if self.diagonal:
-            dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim))[arg]
+        if self.shape == ():
+            dist.mean = (np.ones(self.dim) * self.mean)[..., arg]
+            if self.diagonal:
+                dist.cov = (np.ones(self.dim) * self.cov)[..., arg]
+            else:
+                dist.cov = self.cov[..., arg, :][..., arg]
+            dist._dim = len(np.atleast_1d(dist.mean))
         else:
-            dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim, self.dim))[arg]
-        dist._shape = dist.mean.shape[:-1]
-        dist._dim = dist.mean.shape[-1]
+            dist.mean = np.broadcast_to(self.mean, (*self.shape, self.dim))[arg]
+            if dist.diagonal:
+                dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim))[arg]
+            else:
+                dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim, self.dim))[
+                    arg
+                ]
+            dist._shape = dist.mean.shape[:-1]
+            dist._dim = dist.mean.shape[-1]
         return dist
 
     def plot_1d(self, axes=None, *args, **kwargs):  # noqa: D102
