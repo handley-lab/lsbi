@@ -6,7 +6,7 @@ import numpy as np
 from numpy.linalg import inv, solve
 from scipy.special import logsumexp
 
-from lsbi.stats import dkl, mixture_normal, multivariate_normal
+from lsbi.stats import bmd, dkl, mixture_normal, multivariate_normal
 from lsbi.utils import alias, dediagonalise, logdet
 
 
@@ -264,6 +264,10 @@ class LinearModel(object):
     def dkl(self, D, n=0):
         """KL divergence between the posterior and prior.
 
+        Analytically this is
+
+        1/2 (log|1 + M Σ M'/ C| + tr(Σ_P/Σ)
+
         Parameters
         ----------
         D : array_like, shape (..., d)
@@ -272,6 +276,26 @@ class LinearModel(object):
             Number of samples for a monte carlo estimate, defaults to 0
         """
         return dkl(self.posterior(D), self.prior(), n)
+
+    def bmd(self, D, n=0):
+        """Bayesian model dimensionality.
+
+        Parameters
+        ----------
+        D : array_like, shape (..., d)
+            Data to form the posterior
+        n : int, optional
+            Number of samples for a monte carlo estimate, defaults to 0
+        """
+        return bmd(self.posterior(D), self.prior(), n)
+
+    def mutual_information(self):
+        """Mutual information.
+
+        Analytically this is
+
+        """
+        return inv(self.posterior(D).cov)
 
     @property
     def _M(self):
@@ -462,6 +486,24 @@ class MixtureModel(LinearModel):
         q = self.prior()
         x = p.rvs(size=(n, *self.shape[:-1]), broadcast=True)
         return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).mean(axis=0)
+
+    def bmd(self, D, n=0):
+        """Bayesian model dimensionality.
+
+        Parameters
+        ----------
+        D : array_like, shape (..., d)
+            Data to form the posterior
+        n : int, optional
+            Number of samples for a monte carlo estimate, defaults to 0
+        """
+        if n == 0:
+            raise ValueError("MixtureModel requires a monte carlo estimate. Use n>0.")
+
+        p = self.posterior(D)
+        q = self.prior()
+        x = p.rvs(size=(n, *self.shape[:-1]), broadcast=True)
+        return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).var(axis=0)
 
 
 class ReducedLinearModel(object):

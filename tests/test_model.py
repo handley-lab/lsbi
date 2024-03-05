@@ -265,6 +265,10 @@ class TestLinearModel(object):
         assert dkl.shape == model.shape
         assert (dkl >= 0).all()
 
+        bmd = model.bmd(D)
+        assert bmd.shape == model.shape
+        assert (bmd >= 0).all()
+
     def test_evidence(
         self,
         M_shape,
@@ -619,6 +623,12 @@ class TestMixtureModel(TestLinearModel):
 
         dkl = model.dkl(D, 10)
         assert dkl.shape == model.shape[:-1]
+
+        with pytest.raises(ValueError):
+            model.bmd(D)
+
+        bmd = model.bmd(D, 10)
+        assert bmd.shape == model.shape[:-1]
 
     def test_evidence(
         self,
