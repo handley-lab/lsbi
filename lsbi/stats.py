@@ -586,12 +586,12 @@ class mixture_normal(multivariate_normal):
 
 
 def dkl(p, q, N=0, mcerror=False):
-    """Kullback-Leibler divergence between two distributions.
+    r"""Kullback-Leibler divergence between two distributions.
 
     if P ~ N(p,P) and Q ~ N(q,Q) then
 
-    D_KL(P||Q) = <log(P/Q)>_P
-    = 1/2 * (log(|Q|/|P|) - d + tr(Q^{-1} P) + (q - p)' Q^{-1} (q - p))
+    D_KL(P\||Q) = <log(P/Q)>_P =
+    1/2 * (log(\|Q|/\|P|) - d + tr(Q^{-1} P) + (q - p)' Q^{-1} (q - p))
 
     Parameters
     ----------

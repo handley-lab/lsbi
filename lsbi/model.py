@@ -266,9 +266,8 @@ class LinearModel(object):
 
         Analytically this is
 
-        <log P(θ|D)/P(θ)>_P(θ|D)
-
-        1/2 (log|1 + M Σ M'/ C| - tr M Σ M'/ (C+M Σ M')  + (μ - μ_P)' Σ^-1 (μ - μ_P))
+        <log P(θ|D)/P(θ)>_P(θ|D) = 1/2 (log|1 + M Σ M'/ C|
+        - tr M Σ M'/ (C+M Σ M')  + (μ - μ_P)' Σ^-1 (μ - μ_P))
 
         Parameters
         ----------
@@ -283,9 +282,9 @@ class LinearModel(object):
         """Bayesian model dimensionality.
 
         Analytically this is
-        bmd/2 = var(log P(θ|D)/P(θ))_P(θ|D)
 
-        = 1/2 tr(M Σ M'/ (C+M Σ M'))^2 + (μ - μ_P)' Σ^-1 Σ_P Σ^-1(μ - μ_P)
+        var(log P(θ|D)/P(θ))_P(θ|D) = 1/2 tr(M Σ M'/ (C+M Σ M'))^2
+        + (μ - μ_P)' Σ^-1 Σ_P Σ^-1(μ - μ_P)
 
         Parameters
         ----------
@@ -301,9 +300,8 @@ class LinearModel(object):
 
         Analytically this is
 
-        <log P(D|θ)/P(D)>_P(D|θ)
+        <log P(D|θ)/P(D)>_P(D,θ) = log|1 + M Σ M'/ C|/2
 
-        = log|1 + M Σ M'/ C|/2
         Parameters
         ----------
         N : int, optional
@@ -333,9 +331,7 @@ class LinearModel(object):
 
         Analytically this is
 
-        bmd/2 = <bmd/2>_P(D)
-
-        = tr(M Σ M'/ (C+M Σ M'))  - 1/2 tr(M Σ M'/ (C+M Σ M'))^2
+        <bmd/2>_P(D) = tr(M Σ M'/ (C+M Σ M'))  - 1/2 tr(M Σ M'/ (C+M Σ M'))^2
 
         Parameters
         ----------
