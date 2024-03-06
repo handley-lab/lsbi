@@ -5,7 +5,7 @@ from numpy.testing import assert_allclose
 from scipy.special import logsumexp
 from scipy.stats import multivariate_normal as scipy_multivariate_normal
 
-from lsbi.stats import dkl, mixture_normal, multivariate_normal
+from lsbi.stats import bmd, dkl, mixture_normal, multivariate_normal
 
 shapes = [(2, 3), (3,), ()]
 sizes = [(6, 5), (5,), ()]
@@ -563,6 +563,7 @@ def test_dkl(
     cov_shape_q,
     diagonal_q,
 ):
+    dim = dim_p
     p = TestMultivariateNormal().random(
         dim, shape_p, mean_shape_p, cov_shape_p, diagonal_p
     )
@@ -578,7 +579,42 @@ def test_dkl(
     assert (dkl_pq >= 0).all()
     assert dkl_pq.shape == np.broadcast_shapes(p.shape, q.shape)
 
-    dkl_mc = dkl(p, q, 1000)
+    dkl_mc, err = dkl(p, q, 1000, True)
     assert dkl_mc.shape == np.broadcast_shapes(p.shape, q.shape)
 
-    assert_allclose(dkl_pq, dkl_mc, atol=1)
+    assert_allclose((dkl_pq - dkl_mc) / err, 0, atol=10)
+
+
+@pytest.mark.parametrize("dim_p, shape_p, mean_shape_p, cov_shape_p, diagonal_p", tests)
+@pytest.mark.parametrize("dim_q, shape_q, mean_shape_q, cov_shape_q, diagonal_q", tests)
+def test_bmd(
+    dim_p,
+    shape_p,
+    mean_shape_p,
+    cov_shape_p,
+    diagonal_p,
+    dim_q,
+    shape_q,
+    mean_shape_q,
+    cov_shape_q,
+    diagonal_q,
+):
+    dim = dim_p
+    p = TestMultivariateNormal().random(
+        dim, shape_p, mean_shape_p, cov_shape_p, diagonal_p
+    )
+    q = TestMultivariateNormal().random(
+        dim, shape_q, mean_shape_q, cov_shape_q, diagonal_q
+    )
+
+    bmd_pq = bmd(p, q)
+
+    assert_allclose(bmd(p, p), 0, atol=1e-10)
+    assert_allclose(bmd(q, q), 0, atol=1e-10)
+
+    assert (bmd_pq >= 0).all()
+    assert bmd_pq.shape == np.broadcast_shapes(p.shape, q.shape)
+
+    bmd_mc, err = bmd(p, q, 1000, True)
+    assert bmd_mc.shape == np.broadcast_shapes(p.shape, q.shape)
+    assert_allclose((bmd_pq - bmd_mc) / err, 0, atol=10)

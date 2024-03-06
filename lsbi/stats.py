@@ -585,15 +585,22 @@ class mixture_normal(multivariate_normal):
         return dist
 
 
-def dkl(p, q, n=0):
-    """Kullback-Leibler divergence between two distributions.
+def dkl(p, q, N=0, mcerror=False):
+    r"""Kullback-Leibler divergence between two distributions.
+
+    if P ~ N(p,P) and Q ~ N(q,Q) then
+
+    D_KL(P\||Q) = <log(P/Q)>_P =
+    1/2 * (log(\|Q|/\|P|) - d + tr(Q^{-1} P) + (q - p)' Q^{-1} (q - p))
 
     Parameters
     ----------
     p : lsbi.stats.multivariate_normal
     q : lsbi.stats.multivariate_normal
-    n : int, optional, default=0
+    N : int, optional, default=0
         Number of samples to mcmc estimate the divergence.
+    mcerror: bool, optional, default=False
+        Produce a Monte Carlo error estimate
 
     Returns
     -------
@@ -601,9 +608,15 @@ def dkl(p, q, n=0):
         Kullback-Leibler divergence between p and q.
     """
     shape = np.broadcast_shapes(p.shape, q.shape)
-    if n:
-        x = p.rvs(size=(n, *shape), broadcast=True)
-        return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).mean(axis=0)
+    if N:
+        x = p.rvs(size=(N, *shape), broadcast=True)
+        logR = p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)
+        ans = logR.mean(axis=0)
+        if mcerror:
+            err = (logR.var(axis=0) / (N - 1)) ** 0.5
+            ans = (ans, err)
+        return ans
+
     dkl = -p.dim * np.ones(shape)
     dkl = dkl + logdet(q.cov * np.ones(q.dim), q.diagonal)
     dkl = dkl - logdet(p.cov * np.ones(p.dim), p.diagonal)
@@ -623,3 +636,73 @@ def dkl(p, q, n=0):
             dkl = dkl + np.einsum("...ij,...ji->...", invq, p.cov)
 
     return dkl / 2
+
+
+def bmd(p, q, N=0, mcerror=False):
+    """Bayesian model dimensionality between two distributions.
+
+    if P ~ N(p,P) and Q ~ N(q,Q) then
+
+    bmd/2 = var(log P/Q)_P
+    = 1/2 tr(Q^{-1} P Q^{-1} P) - 1/2 (tr(Q^{-1} P))^2
+    + (q - p)' Q^{-1} P Q^{-1} (q - p) + d/2
+
+    Parameters
+    ----------
+    p : lsbi.stats.multivariate_normal
+    q : lsbi.stats.multivariate_normal
+    N : int, optional, default=0
+        Number of samples to mcmc estimate the divergence.
+    mcerror: bool, optional, default=False
+        Produce a Monte Carlo error estimate
+
+    Returns
+    -------
+    bmd : array_like
+        Bayesian model dimensionality between p and q.
+    """
+    shape = np.broadcast_shapes(p.shape, q.shape)
+    if N:
+        x = p.rvs(size=(N, *shape), broadcast=True)
+        logR = p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)
+        ans = logR.var(axis=0) * 2
+        if mcerror:
+            err = ans * (2 / N - 1) ** 0.5
+            ans = (ans, err)
+        return ans
+
+    bmd = p.dim / 2 * np.ones(shape)
+    pq = (p.mean - q.mean) * np.ones(p.dim)
+    if p.diagonal and q.diagonal:
+        pcov = p.cov * np.ones(p.dim)
+        qcov = q.cov * np.ones(q.dim)
+        bmd = bmd + (pq**2 * pcov / qcov**2).sum(axis=-1)
+        bmd = bmd + (pcov**2 / qcov**2).sum(axis=-1) / 2
+        bmd = bmd - (pcov / qcov).sum(axis=-1)
+    elif p.diagonal:
+        invq = inv(q.cov)
+        pcov = p.cov * np.ones(p.dim)
+        bmd = bmd + np.einsum(
+            "...i,...ij,...j,...jl,...l->...", pq, invq, pcov, invq, pq
+        )
+        bmd = bmd - np.einsum("...jj,...j->...", invq, pcov)
+        bmd = bmd + np.einsum("...lj,...j,...jl,...l->...", invq, pcov, invq, pcov) / 2
+    elif q.diagonal:
+        invq = np.ones(q.dim) / q.cov
+        pcov = p.cov * np.ones(p.dim)
+        bmd = bmd + np.einsum(
+            "...i,...i,...ik,...k,...k->...", pq, invq, pcov, invq, pq
+        )
+        bmd = bmd - np.einsum("...j,...jj->...", invq, pcov)
+        bmd = bmd + np.einsum("...j,...jk,...k,...kj->...", invq, pcov, invq, pcov) / 2
+    else:
+        invq = inv(q.cov)
+        bmd = bmd + np.einsum(
+            "...i,...ij,...jk,...kl,...l->...", pq, invq, p.cov, invq, pq
+        )
+        bmd = bmd - np.einsum("...ij,...ji->...", invq, p.cov)
+        bmd = (
+            bmd
+            + np.einsum("...ij,...jk,...kl,...li->...", invq, p.cov, invq, p.cov) / 2
+        )
+    return bmd * 2
