@@ -296,7 +296,7 @@ class LinearModel(object):
         """
         return bmd(self.posterior(D), self.prior(), N)
 
-    def mutual_information(self, N=0):
+    def mutual_information(self, N=0, mcerror=False):
         """Mutual information between the parameters and the data.
 
         Analytically this is
@@ -304,25 +304,31 @@ class LinearModel(object):
         <log P(D|θ)/P(D)>_P(D|θ)
 
         = log|1 + M Σ M'/ C|/2
+        Parameters
+        ----------
+        N : int, optional
+            Number of samples for a monte carlo estimate, defaults to 0
+        mcerror: bool, optional
+            Produce a monte carlo error estimate
         """
         if N > 0:
             N = int(N**0.5)
             D = self.evidence().rvs(N)
-            θ = self.posterior(D).rvs(N)
-            return (
-                (
-                    self.posterior(D).logpdf(θ, broadcast=True)
-                    - self.prior().logpdf(θ, broadcast=True)
-                )
-                .mean(axis=0)
-                .mean(axis=0)
+            θ = self.posterior(D).rvs()
+            logR = self.posterior(D).logpdf(θ, broadcast=True) - self.prior().logpdf(
+                θ, broadcast=True
             )
+            ans = logR.mean(axis=0)
+            if mcerror:
+                var = logR.var(axis=0) / (N - 1)
+                ans = (ans, var**0.5)
+            return ans
 
         MΣM = np.einsum("...ja,...ab,...kb->...jk", self._M, self._Σ, self._M)
         C = self._C
         return np.broadcast_to(logdet(C + MΣM) / 2 - logdet(C) / 2, self.shape)
 
-    def dimensionality(self, N=0):
+    def dimensionality(self, N=0, mcerror=False):
         """Model dimensionality.
 
         Analytically this is
@@ -330,6 +336,13 @@ class LinearModel(object):
         bmd/2 = <bmd/2>_P(D)
 
         = tr(M Σ M'/ (C+M Σ M'))  - 1/2 tr(M Σ M'/ (C+M Σ M'))^2
+
+        Parameters
+        ----------
+        N : int, optional
+            Number of samples for a monte carlo estimate, defaults to 0
+        mcerror: bool, optional
+            Produce a monte carlo error estimate
         """
         if N > 0:
             N = int(N**0.5)
@@ -338,7 +351,12 @@ class LinearModel(object):
             logR = self.posterior(D).logpdf(θ, broadcast=True) - self.prior().logpdf(
                 θ, broadcast=True
             )
-            return logR.var(axis=0).mean(axis=0) * 2
+            ans = logR.var(axis=0).mean(axis=0) * 2
+            if mcerror:
+                var = logR.var(axis=0).var(axis=0) / (2 * (N - 1) * (N - 1))
+                ans = (ans, var**0.5)
+            return ans
+
         MΣM = np.einsum("...ja,...ab,...kb->...jk", self._M, self._Σ, self._M)
         C = self._C
         invCpMΣM = inv(C + MΣM)
@@ -557,17 +575,33 @@ class MixtureModel(LinearModel):
         x = p.rvs(size=(N, *self.shape[:-1]), broadcast=True)
         return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).var(axis=0)
 
-    def mutual_information(self, N=0):
-        """Mutual information between the parameters and the data."""
-        if N == 0:
-            raise ValueError("MixtureModel requires a monte carlo estimate. Use N>0.")
-        return super().mutual_information(N)
+    def mutual_information(self, N=0, mcerror=False):
+        """Mutual information between the parameters and the data.
 
-    def dimensionality(self):
-        """Model dimensionality."""
+        Parameters
+        ----------
+        N : int, optional
+            Number of samples for a monte carlo estimate, defaults to 0
+        mcerror: bool, optional
+            Produce a monte carlo error estimate
+        """
         if N == 0:
             raise ValueError("MixtureModel requires a monte carlo estimate. Use N>0.")
-        return super().dimensionality(N)
+        return super().mutual_information(N, mcerror)
+
+    def dimensionality(self, N=0, mcerror=False):
+        """Model dimensionality.
+
+        Parameters
+        ----------
+        N : int, optional
+            Number of samples for a monte carlo estimate, defaults to 0
+        mcerror: bool, optional
+            Produce a monte carlo error estimate
+        """
+        if N == 0:
+            raise ValueError("MixtureModel requires a monte carlo estimate. Use N>0.")
+        return super().dimensionality(N, mcerror)
 
 
 class ReducedLinearModel(object):

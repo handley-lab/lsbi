@@ -585,7 +585,7 @@ class mixture_normal(multivariate_normal):
         return dist
 
 
-def dkl(p, q, n=0):
+def dkl(p, q, N=0, mcerror=False):
     """Kullback-Leibler divergence between two distributions.
 
     if P ~ N(p,P) and Q ~ N(q,Q) then
@@ -597,8 +597,10 @@ def dkl(p, q, n=0):
     ----------
     p : lsbi.stats.multivariate_normal
     q : lsbi.stats.multivariate_normal
-    n : int, optional, default=0
+    N : int, optional, default=0
         Number of samples to mcmc estimate the divergence.
+    mcerror: bool, optional, default=False
+        Produce a Monte Carlo error estimate
 
     Returns
     -------
@@ -606,9 +608,15 @@ def dkl(p, q, n=0):
         Kullback-Leibler divergence between p and q.
     """
     shape = np.broadcast_shapes(p.shape, q.shape)
-    if n:
-        x = p.rvs(size=(n, *shape), broadcast=True)
-        return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).mean(axis=0)
+    if N:
+        x = p.rvs(size=(N, *shape), broadcast=True)
+        logR = p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)
+        ans = logR.mean(axis=0)
+        if mcerror:
+            var = logR.var(axis=0) / N
+            ans = (ans, var**0.5)
+        return ans
+
     dkl = -p.dim * np.ones(shape)
     dkl = dkl + logdet(q.cov * np.ones(q.dim), q.diagonal)
     dkl = dkl - logdet(p.cov * np.ones(p.dim), p.diagonal)
@@ -630,7 +638,7 @@ def dkl(p, q, n=0):
     return dkl / 2
 
 
-def bmd(p, q, n=0):
+def bmd(p, q, N=0, mcerror=False):
     """Bayesian model dimensionality between two distributions.
 
     if P ~ N(p,P) and Q ~ N(q,Q) then
@@ -643,8 +651,10 @@ def bmd(p, q, n=0):
     ----------
     p : lsbi.stats.multivariate_normal
     q : lsbi.stats.multivariate_normal
-    n : int, optional, default=0
+    N : int, optional, default=0
         Number of samples to mcmc estimate the divergence.
+    mcerror: bool, optional, default=False
+        Produce a Monte Carlo error estimate
 
     Returns
     -------
@@ -652,11 +662,14 @@ def bmd(p, q, n=0):
         Bayesian model dimensionality between p and q.
     """
     shape = np.broadcast_shapes(p.shape, q.shape)
-    if n:
-        x = p.rvs(size=(n, *shape), broadcast=True)
-        return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).var(
-            axis=0
-        ) * 2
+    if N:
+        x = p.rvs(size=(N, *shape), broadcast=True)
+        logR = p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)
+        ans = logR.var(axis=0) * 2
+        if mcerror:
+            var = logR.var(axis=0) / (2 * (N - 1)) * 4
+            ans = (ans, var**0.5)
+        return ans
 
     bmd = p.dim / 2 * np.ones(shape)
     pq = (p.mean - q.mean) * np.ones(p.dim)
