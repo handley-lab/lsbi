@@ -306,12 +306,14 @@ class LinearModel(object):
         = log|1 + M Σ M'/ C|/2
         """
         if n > 0:
+            n = int(n**0.5)
             D = self.evidence().rvs(n)
-            θ = self.posterior(D).rvs(n, broadcast=True)
+            θ = self.posterior(D).rvs(n)
             return (
-                self.posterior(D).logpdf(θ, broadcast=True)
-                - self.prior().logpdf(θ, broadcast=True)
-            ).mean(axis=0)
+                (self.posterior(D).logpdf(θ, broadcast=True) - self.prior().logpdf(θ))
+                .mean(axis=0)
+                .mean(axis=0)
+            )
 
         MΣM = np.einsum("...ja,...ab,...kb->...jk", self._M, self._Σ, self._M)
         C = self._C

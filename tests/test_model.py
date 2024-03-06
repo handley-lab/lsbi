@@ -273,8 +273,8 @@ class TestLinearModel(object):
         assert mutual_information.shape == model.shape
         assert (mutual_information >= 0).all()
 
-        N = 1000
-        mutual_information_mc = model.mutual_information_mc(N)
+        n = 1000
+        mutual_information_mc = model.mutual_information(n)
         assert mutual_information_mc.shape == model.shape
         assert (mutual_information_mc >= 0).all()
         assert_allclose(mutual_information, mutual_information_mc, rtol=1)
@@ -283,8 +283,7 @@ class TestLinearModel(object):
         assert dimensionality.shape == model.shape
         assert (dimensionality >= 0).all()
 
-        N = 1000
-        dimensionality_mc = model.dimensionality_mc(N)
+        dimensionality_mc = model.dimensionality(n)
         assert dimensionality_mc.shape == model.shape
         assert (dimensionality_mc >= 0).all()
         assert_allclose(dimensionality, dimensionality_mc, rtol=1)
@@ -657,10 +656,10 @@ class TestMixtureModel(TestLinearModel):
         assert mutual_information.shape == model.shape[:-1]
 
         with pytest.raises(ValueError):
-            model.mutual_information()
+            model.dimensionality()
 
-        mutual_information_mc = model.mutual_information_mc(10)
-        assert mutual_information_mc.shape == model.shape[:-1]
+        dimensionality = model.dimensionality(10)
+        assert dimensionality.shape == model.shape[:-1]
 
     def test_evidence(
         self,
