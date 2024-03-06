@@ -266,7 +266,9 @@ class LinearModel(object):
 
         Analytically this is
 
-        1/2 (log|1 + M Σ M'/ C| + tr(Σ_P/Σ)
+        <log P(θ|D)/P(θ)>_P(θ|D)
+
+        1/2 (log|1 + M Σ M'/ C| - tr M Σ M'/ (C+M Σ M')  + (μ - μ_P)' Σ^-1 (μ - μ_P))
 
         Parameters
         ----------
@@ -280,6 +282,11 @@ class LinearModel(object):
     def bmd(self, D, n=0):
         """Bayesian model dimensionality.
 
+        Analytically this is
+        bmd/2 = var(log P(θ|D)/P(θ))_P(θ|D)
+
+        = 1/2 tr(M Σ M'/ (C+M Σ M'))^2 + (μ - μ_P)' Σ^-1 Σ_P Σ^-1(μ - μ_P)
+
         Parameters
         ----------
         D : array_like, shape (..., d)
@@ -289,13 +296,51 @@ class LinearModel(object):
         """
         return bmd(self.posterior(D), self.prior(), n)
 
-    def mutual_information(self):
-        """Mutual information.
+    def mutual_information(self, n=0):
+        """Mutual information between the parameters and the data.
 
         Analytically this is
 
+        <log P(D|θ)/P(D)>_P(D|θ)
+
+        = log|1 + M Σ M'/ C|/2
         """
-        return inv(self.posterior(D).cov)
+        if n > 0:
+            D = self.evidence().rvs(n)
+            θ = self.posterior(D).rvs(n, broadcast=True)
+            return (
+                self.posterior(D).logpdf(θ, broadcast=True)
+                - self.prior().logpdf(θ, broadcast=True)
+            ).mean(axis=0)
+
+        MΣM = np.einsum("...ja,...ab,...kb->...jk", self._M, self._Σ, self._M)
+        C = self._C
+        return (
+            logdet(C + np.einsum("...ja,...ab,...kb->...jk", self._M, self._Σ, self._M))
+            / 2
+            - logdet(C) / 2
+        )
+
+    def dimensionality(self):
+        """Model dimensionality.
+
+        Analytically this is
+
+        bmd/2 = <bmd/2>_P(D)
+
+        = tr(M Σ M'/ (C+M Σ M'))  - 1/2 tr(M Σ M'/ (C+M Σ M'))^2
+        """
+        if n > 0:
+            n = int(n**0.5)
+            D = self.evidence().rvs(n)
+            θ = self.posterior(D).rvs(n)
+            logR = self.posterior(D).logpdf(θ, broadcast=True) - self.prior().logpdf(θ)
+            return logR.var(axis=0).mean(axis=0) * 2
+        MΣM = np.einsum("...ja,...ab,...kb->...jk", self._M, self._Σ, self._M)
+        C = self._C
+        return 2 * np.trace(MΣM @ inv(C + MΣM)) - np.trace(
+            MΣM @ inv(C + MΣM) @ MΣM @ inv(C + MΣM)
+        )
 
     @property
     def _M(self):
@@ -504,6 +549,18 @@ class MixtureModel(LinearModel):
         q = self.prior()
         x = p.rvs(size=(n, *self.shape[:-1]), broadcast=True)
         return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).var(axis=0)
+
+    def mutual_information(self, n=0):
+        """Mutual information between the parameters and the data."""
+        if n == 0:
+            raise ValueError("MixtureModel requires a monte carlo estimate. Use n>0.")
+        return super().mutual_information(n)
+
+    def dimensionality(self):
+        """Model dimensionality."""
+        if n == 0:
+            raise ValueError("MixtureModel requires a monte carlo estimate. Use n>0.")
+        return super().dimensionality(n)
 
 
 class ReducedLinearModel(object):

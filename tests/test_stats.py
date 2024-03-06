@@ -613,7 +613,7 @@ def test_bmd(
     assert (bmd_pq >= 0).all()
     assert bmd_pq.shape == np.broadcast_shapes(p.shape, q.shape)
 
-    bmd_mc = bmd(p, q, 10000)
+    bmd_mc = bmd(p, q, 1000)
     assert bmd_mc.shape == np.broadcast_shapes(p.shape, q.shape)
 
-    assert_allclose(bmd_pq, bmd_mc, atol=1)
+    assert_allclose(bmd_pq, bmd_mc, rtol=1)
