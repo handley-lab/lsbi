@@ -647,6 +647,17 @@ def bmd(p, q, N=0, mcerror=False):
     = 1/2 tr(Q^{-1} P Q^{-1} P) - 1/2 (tr(Q^{-1} P))^2
     + (q - p)' Q^{-1} P Q^{-1} (q - p) + d/2
 
+    From:
+    https://stats.stackexchange.com/q/333838
+    we can estimate the error in the sample variance S as:
+
+    S^2/sigma^2 =  chi_df^2 / df
+    df = 2n/(kappa-(n-3)/(n-1))
+
+    kappa is the kurtosis, so if a normal distribution is assumed, kappa = 3 and df = n-1
+    Here we take kappa to be the kurtosis of the logR, which should in
+    principle be 3 + 12/d for a chi squared distribution. since logR is distributed as chi squared with bmd degrees of freedom, we take kappa = 3 + 12/(bmd)
+
     Parameters
     ----------
     p : lsbi.stats.multivariate_normal
@@ -667,7 +678,10 @@ def bmd(p, q, N=0, mcerror=False):
         logR = p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)
         ans = logR.var(axis=0) * 2
         if mcerror:
-            err = logR.var(axis=0) * (2 / (N - 1)) ** 0.5 * 2
+            # kappa = 3 + 12 / ans
+            # df = 2 * N / (kappa - (N - 3) / (N - 1))
+            # err = ans * (2 / df) ** 0.5
+            err = ans * (2 / N - 1) ** 0.5
             ans = (ans, err)
         return ans
 

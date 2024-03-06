@@ -285,6 +285,7 @@ class TestLinearModel(object):
         dimensionality_mc, err = model.dimensionality(N, True)
         assert dimensionality_mc.shape == model.shape
         assert_allclose((dimensionality - dimensionality_mc) / err, 0, atol=5)
+        plt.hist(logR[:, 0, 0], bins=100)
 
     def test_evidence(
         self,
