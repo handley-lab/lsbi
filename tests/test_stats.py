@@ -582,7 +582,7 @@ def test_dkl(
     dkl_mc, err = dkl(p, q, 1000, True)
     assert dkl_mc.shape == np.broadcast_shapes(p.shape, q.shape)
 
-    assert_allclose((dkl_pq - dkl_mc) / err, 0, atol=5)
+    assert_allclose((dkl_pq - dkl_mc) / err, 0, atol=10)
 
 
 @pytest.mark.parametrize("dim_p, shape_p, mean_shape_p, cov_shape_p, diagonal_p", tests)

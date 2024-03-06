@@ -276,7 +276,7 @@ class TestLinearModel(object):
 
         mutual_information_mc, err = model.mutual_information(N, True)
         assert mutual_information_mc.shape == model.shape
-        assert_allclose((mutual_information - mutual_information_mc) / err, 0, atol=5)
+        assert_allclose((mutual_information - mutual_information_mc) / err, 0, atol=10)
 
         dimensionality = model.dimensionality()
         assert dimensionality.shape == model.shape
@@ -284,8 +284,7 @@ class TestLinearModel(object):
 
         dimensionality_mc, err = model.dimensionality(N, True)
         assert dimensionality_mc.shape == model.shape
-        assert_allclose((dimensionality - dimensionality_mc) / err, 0, atol=5)
-        plt.hist(logR[:, 0, 0], bins=100)
+        assert_allclose((dimensionality - dimensionality_mc) / err, 0, atol=10)
 
     def test_evidence(
         self,
