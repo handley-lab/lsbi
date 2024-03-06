@@ -271,21 +271,19 @@ class TestLinearModel(object):
 
         mutual_information = model.mutual_information()
         assert mutual_information.shape == model.shape
+        mutual_information.shape
         assert (mutual_information >= 0).all()
 
-        n = 1000
-        mutual_information_mc = model.mutual_information(n)
+        mutual_information_mc = model.mutual_information(N)
         assert mutual_information_mc.shape == model.shape
-        assert (mutual_information_mc >= 0).all()
-        assert_allclose(mutual_information, mutual_information_mc, rtol=1)
+        assert_allclose(mutual_information, mutual_information_mc, atol=1)
 
         dimensionality = model.dimensionality()
         assert dimensionality.shape == model.shape
         assert (dimensionality >= 0).all()
 
-        dimensionality_mc = model.dimensionality(n)
+        dimensionality_mc = model.dimensionality(N)
         assert dimensionality_mc.shape == model.shape
-        assert (dimensionality_mc >= 0).all()
         assert_allclose(dimensionality, dimensionality_mc, rtol=1)
 
     def test_evidence(

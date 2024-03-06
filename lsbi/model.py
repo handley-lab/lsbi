@@ -261,7 +261,7 @@ class LinearModel(object):
         """P(D|D0) as a distribution object."""
         return self.update(D0).evidence()
 
-    def dkl(self, D, n=0):
+    def dkl(self, D, N=0):
         """KL divergence between the posterior and prior.
 
         Analytically this is
@@ -274,12 +274,12 @@ class LinearModel(object):
         ----------
         D : array_like, shape (..., d)
             Data to form the posterior
-        n : int, optional
+        N : int, optional
             Number of samples for a monte carlo estimate, defaults to 0
         """
-        return dkl(self.posterior(D), self.prior(), n)
+        return dkl(self.posterior(D), self.prior(), N)
 
-    def bmd(self, D, n=0):
+    def bmd(self, D, N=0):
         """Bayesian model dimensionality.
 
         Analytically this is
@@ -294,9 +294,9 @@ class LinearModel(object):
         n : int, optional
             Number of samples for a monte carlo estimate, defaults to 0
         """
-        return bmd(self.posterior(D), self.prior(), n)
+        return bmd(self.posterior(D), self.prior(), N)
 
-    def mutual_information(self, n=0):
+    def mutual_information(self, N=0):
         """Mutual information between the parameters and the data.
 
         Analytically this is
@@ -305,25 +305,24 @@ class LinearModel(object):
 
         = log|1 + M Σ M'/ C|/2
         """
-        if n > 0:
-            n = int(n**0.5)
-            D = self.evidence().rvs(n)
-            θ = self.posterior(D).rvs(n)
+        if N > 0:
+            N = int(N**0.5)
+            D = self.evidence().rvs(N)
+            θ = self.posterior(D).rvs(N)
             return (
-                (self.posterior(D).logpdf(θ, broadcast=True) - self.prior().logpdf(θ))
+                (
+                    self.posterior(D).logpdf(θ, broadcast=True)
+                    - self.prior().logpdf(θ, broadcast=True)
+                )
                 .mean(axis=0)
                 .mean(axis=0)
             )
 
         MΣM = np.einsum("...ja,...ab,...kb->...jk", self._M, self._Σ, self._M)
         C = self._C
-        return (
-            logdet(C + np.einsum("...ja,...ab,...kb->...jk", self._M, self._Σ, self._M))
-            / 2
-            - logdet(C) / 2
-        )
+        return np.broadcast_to(logdet(C + MΣM) / 2 - logdet(C) / 2, self.shape)
 
-    def dimensionality(self):
+    def dimensionality(self, N=0):
         """Model dimensionality.
 
         Analytically this is
@@ -332,16 +331,22 @@ class LinearModel(object):
 
         = tr(M Σ M'/ (C+M Σ M'))  - 1/2 tr(M Σ M'/ (C+M Σ M'))^2
         """
-        if n > 0:
-            n = int(n**0.5)
-            D = self.evidence().rvs(n)
-            θ = self.posterior(D).rvs(n)
-            logR = self.posterior(D).logpdf(θ, broadcast=True) - self.prior().logpdf(θ)
+        if N > 0:
+            N = int(N**0.5)
+            D = self.evidence().rvs(N)
+            θ = self.posterior(D).rvs(N)
+            logR = self.posterior(D).logpdf(θ, broadcast=True) - self.prior().logpdf(
+                θ, broadcast=True
+            )
             return logR.var(axis=0).mean(axis=0) * 2
         MΣM = np.einsum("...ja,...ab,...kb->...jk", self._M, self._Σ, self._M)
         C = self._C
-        return 2 * np.trace(MΣM @ inv(C + MΣM)) - np.trace(
-            MΣM @ inv(C + MΣM) @ MΣM @ inv(C + MΣM)
+        invCpMΣM = inv(C + MΣM)
+
+        return np.broadcast_to(
+            2 * np.einsum("...ij,...ji->...", MΣM, invCpMΣM)
+            - np.einsum("...ij,...jk,...kl,...li->...", MΣM, invCpMΣM, MΣM, invCpMΣM),
+            self.shape,
         )
 
     @property
@@ -516,53 +521,53 @@ class MixtureModel(LinearModel):
         if not inplace:
             return dist
 
-    def dkl(self, D, n=0):
+    def dkl(self, D, N=0):
         """KL divergence between the posterior and prior.
 
         Parameters
         ----------
         D : array_like, shape (..., d)
             Data to form the posterior
-        n : int, optional
+        N : int, optional
             Number of samples for a monte carlo estimate, defaults to 0
         """
-        if n == 0:
-            raise ValueError("MixtureModel requires a monte carlo estimate. Use n>0.")
+        if N == 0:
+            raise ValueError("MixtureModel requires a monte carlo estimate. Use N>0.")
 
         p = self.posterior(D)
         q = self.prior()
-        x = p.rvs(size=(n, *self.shape[:-1]), broadcast=True)
+        x = p.rvs(size=(N, *self.shape[:-1]), broadcast=True)
         return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).mean(axis=0)
 
-    def bmd(self, D, n=0):
+    def bmd(self, D, N=0):
         """Bayesian model dimensionality.
 
         Parameters
         ----------
         D : array_like, shape (..., d)
             Data to form the posterior
-        n : int, optional
+        N : int, optional
             Number of samples for a monte carlo estimate, defaults to 0
         """
-        if n == 0:
-            raise ValueError("MixtureModel requires a monte carlo estimate. Use n>0.")
+        if N == 0:
+            raise ValueError("MixtureModel requires a monte carlo estimate. Use N>0.")
 
         p = self.posterior(D)
         q = self.prior()
-        x = p.rvs(size=(n, *self.shape[:-1]), broadcast=True)
+        x = p.rvs(size=(N, *self.shape[:-1]), broadcast=True)
         return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).var(axis=0)
 
-    def mutual_information(self, n=0):
+    def mutual_information(self, N=0):
         """Mutual information between the parameters and the data."""
-        if n == 0:
-            raise ValueError("MixtureModel requires a monte carlo estimate. Use n>0.")
-        return super().mutual_information(n)
+        if N == 0:
+            raise ValueError("MixtureModel requires a monte carlo estimate. Use N>0.")
+        return super().mutual_information(N)
 
     def dimensionality(self):
         """Model dimensionality."""
-        if n == 0:
-            raise ValueError("MixtureModel requires a monte carlo estimate. Use n>0.")
-        return super().dimensionality(n)
+        if N == 0:
+            raise ValueError("MixtureModel requires a monte carlo estimate. Use N>0.")
+        return super().dimensionality(N)
 
 
 class ReducedLinearModel(object):
