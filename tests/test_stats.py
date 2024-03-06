@@ -581,7 +581,7 @@ def test_dkl(
     dkl_mc, err = dkl(p, q, 1000, True)
     assert dkl_mc.shape == np.broadcast_shapes(p.shape, q.shape)
 
-    assert_allclose(dkl_pq, dkl_mc, atol=(5 * err).max())
+    assert_allclose((dkl_pq - dkl_mc) / err, 0, atol=5)
 
 
 @pytest.mark.parametrize("dim_p, shape_p, mean_shape_p, cov_shape_p, diagonal_p", tests)
@@ -616,4 +616,4 @@ def test_bmd(
     bmd_mc, err = bmd(p, q, 1000, True)
     assert bmd_mc.shape == np.broadcast_shapes(p.shape, q.shape)
 
-    assert_allclose(bmd_pq, bmd_mc, atol=(5 * err).max())
+    assert_allclose((bmd_pq - bmd_mc) / err, 0, atol=5)

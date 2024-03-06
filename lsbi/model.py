@@ -320,8 +320,8 @@ class LinearModel(object):
             )
             ans = logR.mean(axis=0)
             if mcerror:
-                var = logR.var(axis=0) / (N - 1)
-                ans = (ans, var**0.5)
+                err = (logR.var(axis=0) / (N - 1)) ** 0.5
+                ans = (ans, err)
             return ans
 
         MΣM = np.einsum("...ja,...ab,...kb->...jk", self._M, self._Σ, self._M)
@@ -353,8 +353,9 @@ class LinearModel(object):
             )
             ans = logR.var(axis=0).mean(axis=0) * 2
             if mcerror:
-                var = logR.var(axis=0).var(axis=0) / (2 * (N - 1) * (N - 1))
-                ans = (ans, var**0.5)
+                err = logR.var(axis=0) * (2 / (N - 1)) ** 0.5 * 2
+                err = ((err**2).sum(axis=0) / (N - 1)) ** 0.5
+                ans = (ans, err)
             return ans
 
         MΣM = np.einsum("...ja,...ab,...kb->...jk", self._M, self._Σ, self._M)

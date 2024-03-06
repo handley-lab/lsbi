@@ -613,8 +613,8 @@ def dkl(p, q, N=0, mcerror=False):
         logR = p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)
         ans = logR.mean(axis=0)
         if mcerror:
-            var = logR.var(axis=0) / N
-            ans = (ans, var**0.5)
+            err = (logR.var(axis=0) / (N - 1)) ** 0.5
+            ans = (ans, err)
         return ans
 
     dkl = -p.dim * np.ones(shape)
@@ -667,8 +667,8 @@ def bmd(p, q, N=0, mcerror=False):
         logR = p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)
         ans = logR.var(axis=0) * 2
         if mcerror:
-            var = logR.var(axis=0) / (2 * (N - 1)) * 4
-            ans = (ans, var**0.5)
+            err = logR.var(axis=0) * (2 / (N - 1)) ** 0.5 * 2
+            ans = (ans, err)
         return ans
 
     bmd = p.dim / 2 * np.ones(shape)
