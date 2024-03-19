@@ -10,7 +10,7 @@ from lsbi.stats import dkl, mixture_normal, multivariate_normal
 from lsbi.utils import alias, dediagonalise, logdet
 
 
-class LinearModel(object):
+class LinearModel(Model):
     """A multilinear model.
 
     D|θ ~ N( m + M θ, C )
@@ -285,6 +285,38 @@ class LinearModel(object):
     def _Σ(self):
         return dediagonalise(self.Σ, self.diagonal_Σ, self.n)
 
+    def reduce(self, D):
+        """Reduce the model to a reduced model.
+
+        Parameters
+        ----------
+        D : array_like, shape (..., d)
+            Data to form the reduced model
+
+        Returns
+        -------
+        ReducedLinearModel
+        """
+        # TODO modify this to work with diagonal matrices
+        Σ_L = inv(np.einsum("...ja,...ab,...kb->...jk", self._M, inv(self._C), self._M))
+        μ_L = np.einsum(
+            "...ja,...ab,...bc,...c->...j", Σ_L, self._M, inv(self._C), D - self.m
+        )
+        logLmax = (
+            -logdet(2 * np.pi * self.C, self.diagonal_C) / 2
+            - np.einsum("...a,...ab,...b->...", D - self.m, inv(self.C), D - self.m) / 2
+        )
+        return ReducedLinearModel(
+            μ_L=μ_L,
+            Σ_L=Σ_L,
+            logLmax=logLmax,
+            n=self.n,
+            shape=self.shape,
+            μ_π=self.μ,
+            Σ_π=self.Σ,
+            diagonal_Sigma_π=self.diagonal_Σ,
+        )
+
 
 alias(LinearModel, "μ", "mu")
 alias(LinearModel, "Σ", "Sigma")
@@ -400,8 +432,7 @@ class MixtureModel(LinearModel):
         """
         dist = super().posterior(np.expand_dims(D, -2))
         dist.__class__ = mixture_normal
-        evidence = self.evidence()
-        dist.logw = evidence.logpdf(D, broadcast=True, joint=True)
+        dist.logw = self.evidence().logpdf(D, broadcast=True, joint=True)
         dist.logw = dist.logw - logsumexp(dist.logw, axis=-1, keepdims=True)
         return dist
 
@@ -463,6 +494,26 @@ class MixtureModel(LinearModel):
         x = p.rvs(size=(n, *self.shape[:-1]), broadcast=True)
         return (p.logpdf(x, broadcast=True) - q.logpdf(x, broadcast=True)).mean(axis=0)
 
+    def reduce(self, D):
+        """Reduce the model to a reduced model.
+
+        Parameters
+        ----------
+        D : array_like, shape (..., d)
+            Data to form the reduced model
+
+        Returns
+        -------
+        ReducedLinearModel
+        """
+        dist = super().reduce(np.expand_dims(D, -2))
+        dist.__class__ = ReducedMixtureModel
+        logw_P = self.evidence().logpdf(D, broadcast=True, joint=True)
+        logw_P = logw_P - logsumexp(logw_P, axis=-1, keepdims=True)
+        dist.logw = self.logw
+        dist.logw_L = logw - self.logw
+        return dist
+
 
 class ReducedLinearModel(object):
     """A model with no data.
@@ -471,49 +522,101 @@ class ReducedLinearModel(object):
     clear/efficient to phrase it in terms of a parameter covariance, parameter
     mean and peak value:
 
-    logL(θ) = logLmax - (θ - mu_L)' Sigma_L^{-1} (θ - mu_L)
+    logL(θ) = logLmax - (θ - μ_L)' Σ_L^{-1} (θ - μ_L)
 
     We can link this to a data-based model with the relations:
 
-    Sigma_L = (M' C^{-1} M)^{-1}
-    mu_L = Sigma_L M' C^{-1} (D-m)
-    logLmax =
-    - log|2 pi C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
+    Σ_L = (M' C^{-1} M)^{-1}
+    μ_L = Σ_L M' C^{-1} (D-m)
+    logLmax = - log|2 π C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
 
     Parameters
     ----------
-    mu_L : array_like
+    μ_L : array_like
         Likelihood peak
-    Sigma_L : array_like
+    Σ_L : array_like
         Likelihood covariance
     logLmax : float, optional
-        Likelihood maximum, defaults to zero
-    mmu_pi : array_like, optional
+        Likelihood maxiμm, defaults to zero
+    mμ_π : array_like, optional
         Prior mean, defaults to zero vector
-    Sigma_pi : array_like, optional
+    Σ_π : array_like, optional
         Prior covariance, defaults to identity matrix
     """
 
     def __init__(self, *args, **kwargs):
-        self.mu_L = np.atleast_1d(kwargs.pop("mu_L"))
-        self.Sigma_L = np.atleast_2d(kwargs.pop("Sigma_L", None))
+        self.μ_L = kwargs.pop("μ_L", 0)
+        self.Σ_L = kwargs.pop("Σ_L", 1)
         self.logLmax = kwargs.pop("logLmax", 0)
-        self.mu_pi = np.atleast_1d(kwargs.pop("mu_pi", np.zeros_like(self.mu_L)))
-        self.Sigma_pi = np.atleast_2d(kwargs.pop("Sigma_pi", np.eye(len(self.mu_pi))))
-        self.Sigma_P = inv(inv(self.Sigma_pi) + inv(self.Sigma_L))
-        self.mu_P = self.Sigma_P @ (
-            solve(self.Sigma_pi, self.mu_pi) + solve(self.Sigma_L, self.mu_L)
+        self.μ_π = kwargs.pop("μ_π", 0)
+        self.Σ_π = kwargs.pop("Σ_π", 1)
+        self.diagonal_Σ_L = kwargs.pop("diagonal_Σ_L", False)
+        self.diagonal_Σ_π = kwargs.pop("diagonal_Σ_π", False)
+        self._shape = kwargs.pop("shape", ())
+        self._n = kwargs.pop("n", 1)
+
+    @property
+    def shape(self):
+        """Shape of the distribution."""
+        return np.broadcast_shapes(
+            np.shape(self.μ_L)[:-1],
+            np.shape(self.Σ_L)[: -2 + self.diagonal_Σ_L],
+            np.shape(self.μ_π)[:-1],
+            np.shape(self.Σ_π)[: -2 + self.diagonal_Σ_π],
+            np.shape(self.logLmax),
+            self._shape,
+        )
+
+    @property
+    def n(self):
+        """Dimension of the distribution."""
+        return np.max(
+            [
+                *np.shape(self.Σ_L)[-2 + self.diagonal_Σ_L :],
+                *np.shape(self.μ_L)[-1:],
+                *np.shape(self.Σ_π)[-2 + self.diagonal_Σ_π :],
+                *np.shape(self.μ_π)[-1:],
+                self._n,
+            ]
         )
 
     def prior(self):
-        """P(θ) as a distribution object."""
-        return multivariate_normal(self.mu_pi, self.Sigma_pi)
+        """P(θ) as a scipy distribution object."""
+        return multivariate_normal(
+            self.μ_π, self.Σ_π, self.shape, self.n, self.diagonal_Σ_π
+        )
 
     def posterior(self):
-        """P(θ|D) as a distribution object."""
-        return multivariate_normal(self.mu_P, self.Sigma_P)
+        """P(θ|D) as a scipy distribution object."""
+        diagonal = self.diagonal_Σ_L and self.diagonal_Σ_π
 
-    def logpi(self, θ):
+        if diagonal:
+            Σ_P = 1 / (1 / self.Σ_π + 1 / self.Σ_L)
+        elif self.diagonal_Σ_L:
+            Σ_P = inv(inv(self.Σ_π) + np.eye(self.n) / self.Σ_L[..., None, :])
+        elif self.diagonal_Σ_π:
+            Σ_P = inv(np.eye(self.n) / self.Σ_π[..., None, :] + inv(self.Σ_L))
+        else:
+            Σ_P = inv(inv(self.Σ_π) + inv(self.Σ_L))
+
+        if self.diagonal_Σ_L:
+            x_L = self.μ_L / self.Σ_L
+        else:
+            x_L = np.einsum(
+                "...ij,...j->...i", inv(self.Σ_L), np.ones(self.n) * self.μ_L
+            )
+
+        if self.diagonal_Σ_π:
+            x_π = μ_π / self.Σ_π
+        else:
+            x_π = np.einsum(
+                "...ij,...j->...i", inv(self.Σ_π), np.ones(self.n) * self.μ_π
+            )
+
+        μ_P = np.einsum("...ij,...j->...i", Σ_P, x_π + x_L)
+        return multivariate_normal(μ_P, Σ_P, self.shape, self.n, diagonal)
+
+    def logπ(self, θ):
         """P(θ) as a scalar."""
         return self.prior().logpdf(θ)
 
@@ -523,32 +626,18 @@ class ReducedLinearModel(object):
 
     def logL(self, θ):
         """P(D|θ) as a scalar."""
-        return (
-            self.logLmax
-            + multivariate_normal(self.mu_L, self.Sigma_L).logpdf(θ)
-            + logdet(2 * np.pi * self.Sigma_L) / 2
+        dist = multivariate_normal(
+            self.μ_L, self.Σ_L, self.shape, self.n, self.diagonal_Σ_L
         )
+        return self.logLmax + dist.logpdf(θ) - dist.logpdf(dist.μ)
 
     def logZ(self):
         """P(D) as a scalar."""
-        return (
-            self.logLmax
-            + logdet(self.Sigma_P) / 2
-            - logdet(self.Sigma_pi) / 2
-            - (self.mu_P - self.mu_pi)
-            @ solve(self.Sigma_pi, self.mu_P - self.mu_pi)
-            / 2
-            - (self.mu_P - self.mu_L) @ solve(self.Sigma_L, self.mu_P - self.mu_L) / 2
-        )
+        return self.logLmax + self.logπ(self.μ_L) - self.logP(self.μ_L)
 
-    def DKL(self):
+    def dkl(self):
         """D_KL(P(θ|D)||P(θ)) the Kullback-Leibler divergence."""
-        return (
-            logdet(self.Sigma_pi)
-            - logdet(self.Sigma_P)
-            + np.trace(inv(self.Sigma_pi) @ self.Sigma_P - 1)
-            + (self.mu_P - self.mu_pi) @ solve(self.Sigma_pi, self.mu_P - self.mu_pi)
-        ) / 2
+        return dkl(self.posterior(), self.prior(), n)
 
 
 class ReducedLinearModelUniformPrior(object):
@@ -556,22 +645,22 @@ class ReducedLinearModelUniformPrior(object):
 
     Gaussian likelihood in the parameters
 
-    logL(θ) = logLmax - (θ - mu_L)' Sigma_L^{-1} (θ - mu_L)
+    logL(θ) = logLmax - (θ - μ)' Σ^{-1} (θ - μ)
 
     Uniform prior
 
     We can link this to a data-based model with the relations:
 
-    Sigma_L = (M' C^{-1} M)^{-1}
-    mu_L = Sigma_L M' C^{-1} (D-m)
+    Σ = (M' C^{-1} M)^{-1}
+    μ = Σ_L M' C^{-1} (D-m)
     logLmax =
-    -log|2 pi C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
+    -log|2 π C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
 
     Parameters
     ----------
-    mu_L : array_like
+    μ : array_like
         Likelihood peak
-    Sigma_L : array_like
+    Σ : array_like
         Likelihood covariance
     logLmax : float, optional
         Likelihood maximum, defaults to zero
@@ -580,18 +669,41 @@ class ReducedLinearModelUniformPrior(object):
     """
 
     def __init__(self, *args, **kwargs):
-        self.mu_L = np.atleast_1d(kwargs.pop("mu_L"))
-        self.Sigma_L = np.atleast_2d(kwargs.pop("Sigma_L"))
+        self.μ = np.atleast_1d(kwargs.pop("μ"))
+        self.Σ = np.atleast_2d(kwargs.pop("Σ"))
         self.logLmax = kwargs.pop("logLmax", 0)
         self.logV = kwargs.pop("logV", 0)
-        self.Sigma_P = self.Sigma_L
-        self.mu_P = self.mu_L
+        self.diagonal = kwargs.pop("diagonal", False)
+        self._shape = kwargs.pop("shape", ())
+        self._n = kwargs.pop("n", 1)
+
+    @property
+    def shape(self):
+        """Shape of the distribution."""
+        return np.broadcast_shapes(
+            np.shape(self.μ)[:-1],
+            np.shape(self.Σ)[: -2 + self.diagonal_Σ],
+            np.shape(self.logLmax),
+            np.shape(self.logV),
+            self._shape,
+        )
+
+    @property
+    def n(self):
+        """Dimension of the distribution."""
+        return np.max(
+            [
+                *np.shape(self.Σ)[-2 + self.diagonal_Σ_L :],
+                *np.shape(self.μ)[-1:],
+                self._n,
+            ]
+        )
 
     def posterior(self):
         """P(θ|D) as a distribution object."""
-        return multivariate_normal(self.mu_P, self.Sigma_P)
+        return multivariate_normal(self.μ, self.Σ, self.shape, self.n, self.diagonal)
 
-    def logpi(self, θ):
+    def logπ(self, θ):
         """P(θ) as a scalar."""
         return -self.logV
 
@@ -601,16 +713,134 @@ class ReducedLinearModelUniformPrior(object):
 
     def logL(self, θ):
         """P(D|θ) as a scalar."""
-        return (
-            self.logLmax
-            + logdet(2 * np.pi * self.Sigma_L) / 2
-            + multivariate_normal(self.mu_L, self.Sigma_L).logpdf(θ)
-        )
+        dist = multivariate_normal(self.μ, self.Σ, self.shape, self.n, self.diagonal)
+        return self.logLmax + dist.logpdf(θ) - dist.logpdf(dist.μ)
 
     def logZ(self):
         """P(D) as a scalar."""
-        return self.logLmax + logdet(2 * np.pi * self.Sigma_P) / 2 - self.logV
+        logZ = np.ones(self.shape) * self.logLmax
+        logZ -= self.logV
+        logZ += logdet(2 * np.pi * self.Σ, self.diagonal) / 2
+        return logZ
 
-    def DKL(self):
+    def dkl(self):
         """D_KL(P(θ|D)||P(θ)) the Kullback-Leibler divergence."""
-        return self.logV - logdet(2 * np.pi * np.e * self.Sigma_P) / 2
+        dkl = np.ones(self.shape) * self.logV
+        dkl -= logdet(2 * np.pi * np.e * self.Σ, self.diagonal) / 2
+        return dkl
+
+
+class ReducedMixtureModel(ReducedLinearModel):
+    """A model with no data.
+
+    Gaussian likelihood in the parameters
+
+    logL(θ) = logLmax - (θ - μ_L)' Σ_L^{-1} (θ - μ_L)
+
+    We can link this to a data-based model with the relations:
+
+    Σ_L = (M' C^{-1} M)^{-1}
+    μ_L = Σ_L M' C^{-1} (D-m)
+    logLmax =
+    - log|2 π C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
+
+    Parameters
+    ----------
+    μ_L : array_like
+        Likelihood peak
+    Σ_L : array_like
+        Likelihood covariance
+    logLmax : float, optional
+        Likelihood maximum, defaults to zero
+    logw : array_like, optional
+        log mixture weights
+        if ndim>=1: log mixture weights
+        if scalar: scalar * unit vector
+        Defaults to uniform weights
+    logw_L: array_like, optional
+        log mixture weights for the likelihood
+        if ndim>=1: log mixture weights
+        if scalar: scalar * unit vector
+        Defaults to uniform weights
+    n : int, optional
+        Number of parameters, defaults to automatically inferred value
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.logw = kwargs.pop("logw", 0)
+        self.logw_L = kwargs.pop("logw_L", 0)
+        super().__init__(*args, **kwargs)
+
+    @property
+    def shape(self):
+        """Shape of the distribution."""
+        return np.broadcast_shapes(
+            np.shape(self.logw), np.shape(self.logw_L), super().shape
+        )
+
+    @property
+    def k(self):
+        """Number of mixture components of the distribution."""
+        return self.shape[-1]
+
+    def prior(self):
+        """P(θ) as a scipy distribution object."""
+        dist = super().prior()
+        dist.__class__ = mixture_normal
+        dist.logw = self.logw
+        return dist
+
+    def posterior(self):
+        """P(θ|D) as a scipy distribution object."""
+        dist = super().posterior()
+        dist.__class__ = mixture_normal
+        dist.logw = dist.logw + self.logw_L
+        return dist
+
+
+class ReducedMixtureModelUniformPrior(ReducedLinearModelUniformPrior):
+    """Fill in docstring."""
+
+    def __init__(self, *args, **kwargs):
+        self.logw_L = kwargs.pop("logw_L", 0)
+        super().__init__(*args, **kwargs)
+
+    @property
+    def shape(self):
+        """Shape of the distribution."""
+        return np.broadcast_shapes(np.shape(self.logw_L), super().shape)
+
+    @property
+    def k(self):
+        """Number of mixture components of the distribution."""
+        return self.shape[-1]
+
+    def posterior(self):
+        """P(θ|D) as a scipy distribution object."""
+        dist = super().posterior()
+        dist.__class__ = mixture_normal
+        dist.logw = self.logw_L
+        return dist
+
+    def logπ(self, θ):
+        """P(θ) as a scalar."""
+        return -self.logV
+
+    def logP(self, θ):
+        """P(θ|D) as a scalar."""
+        return self.posterior().logpdf(θ)
+
+    def logL(self, θ):
+        """P(D|θ) as a scalar."""
+        dist = mixture_normal(
+            self.logw_L, self.μ, self.Σ, self.shape, self.n, self.diagonal
+        )
+        return self.logLmax + dist.logpdf(θ) - dist.logpdf(dist.μ)
+
+    def logZ(self):
+        """To be implemented."""
+        pass
+
+    def dkl(self):
+        """To be implemented."""
+        pass
