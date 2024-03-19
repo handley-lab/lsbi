@@ -312,9 +312,9 @@ class LinearModel(Model):
             logLmax=logLmax,
             n=self.n,
             shape=self.shape,
-            μ_π=self.μ,
-            Σ_π=self.Σ,
-            diagonal_Sigma_π=self.diagonal_Σ,
+            μ=self.μ,
+            Σ=self.Σ,
+            diagonal_Σ=self.diagonal_Σ,
         )
 
 
@@ -528,30 +528,38 @@ class ReducedLinearModel(object):
 
     Σ_L = (M' C^{-1} M)^{-1}
     μ_L = Σ_L M' C^{-1} (D-m)
-    logLmax = - log|2 π C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
+    logLmax = - log|2 π C|/2 - (D-m)'C^{-1}(D-m)/2
 
     Parameters
     ----------
+    logLmax : float, optional
+        log likelihood maximum, defaults to zero
     μ_L : array_like
         Likelihood peak
     Σ_L : array_like
         Likelihood covariance
-    logLmax : float, optional
-        Likelihood maxiμm, defaults to zero
-    mμ_π : array_like, optional
+    diagonal_Σ_L : bool, optional
+        Whether the likelihood covariance is diagonal, defaults to False
+    μ : array_like, optional
         Prior mean, defaults to zero vector
-    Σ_π : array_like, optional
+    Σ : array_like, optional
         Prior covariance, defaults to identity matrix
+    diagonal_Σ : bool, optional
+        Whether the prior covariance is diagonal, defaults to False
+    shape : (), optional
+        Number of mixture components, defaults to automatically inferred value
+    n : int, optional
+        Number of parameters, defaults to automatically inferred value
     """
 
     def __init__(self, *args, **kwargs):
         self.μ_L = kwargs.pop("μ_L", 0)
         self.Σ_L = kwargs.pop("Σ_L", 1)
         self.logLmax = kwargs.pop("logLmax", 0)
-        self.μ_π = kwargs.pop("μ_π", 0)
-        self.Σ_π = kwargs.pop("Σ_π", 1)
+        self.μ = kwargs.pop("μ", 0)
+        self.Σ = kwargs.pop("Σ", 1)
         self.diagonal_Σ_L = kwargs.pop("diagonal_Σ_L", False)
-        self.diagonal_Σ_π = kwargs.pop("diagonal_Σ_π", False)
+        self.diagonal_Σ = kwargs.pop("diagonal_Σ", False)
         self._shape = kwargs.pop("shape", ())
         self._n = kwargs.pop("n", 1)
 
@@ -561,8 +569,8 @@ class ReducedLinearModel(object):
         return np.broadcast_shapes(
             np.shape(self.μ_L)[:-1],
             np.shape(self.Σ_L)[: -2 + self.diagonal_Σ_L],
-            np.shape(self.μ_π)[:-1],
-            np.shape(self.Σ_π)[: -2 + self.diagonal_Σ_π],
+            np.shape(self.μ)[:-1],
+            np.shape(self.Σ)[: -2 + self.diagonal_Σ],
             np.shape(self.logLmax),
             self._shape,
         )
@@ -574,30 +582,28 @@ class ReducedLinearModel(object):
             [
                 *np.shape(self.Σ_L)[-2 + self.diagonal_Σ_L :],
                 *np.shape(self.μ_L)[-1:],
-                *np.shape(self.Σ_π)[-2 + self.diagonal_Σ_π :],
-                *np.shape(self.μ_π)[-1:],
+                *np.shape(self.Σ)[-2 + self.diagonal_Σ :],
+                *np.shape(self.μ)[-1:],
                 self._n,
             ]
         )
 
     def prior(self):
         """P(θ) as a scipy distribution object."""
-        return multivariate_normal(
-            self.μ_π, self.Σ_π, self.shape, self.n, self.diagonal_Σ_π
-        )
+        return multivariate_normal(self.μ, self.Σ, self.shape, self.n, self.diagonal_Σ)
 
     def posterior(self):
         """P(θ|D) as a scipy distribution object."""
-        diagonal = self.diagonal_Σ_L and self.diagonal_Σ_π
+        diagonal = self.diagonal_Σ_L and self.diagonal_Σ
 
         if diagonal:
-            Σ_P = 1 / (1 / self.Σ_π + 1 / self.Σ_L)
+            Σ_P = 1 / (1 / self.Σ + 1 / self.Σ_L)
         elif self.diagonal_Σ_L:
-            Σ_P = inv(inv(self.Σ_π) + np.eye(self.n) / self.Σ_L[..., None, :])
-        elif self.diagonal_Σ_π:
-            Σ_P = inv(np.eye(self.n) / self.Σ_π[..., None, :] + inv(self.Σ_L))
+            Σ_P = inv(inv(self.Σ) + np.eye(self.n) / self.Σ_L[..., None, :])
+        elif self.diagonal_Σ:
+            Σ_P = inv(np.eye(self.n) / self.Σ[..., None, :] + inv(self.Σ_L))
         else:
-            Σ_P = inv(inv(self.Σ_π) + inv(self.Σ_L))
+            Σ_P = inv(inv(self.Σ) + inv(self.Σ_L))
 
         if self.diagonal_Σ_L:
             x_L = self.μ_L / self.Σ_L
@@ -606,14 +612,12 @@ class ReducedLinearModel(object):
                 "...ij,...j->...i", inv(self.Σ_L), np.ones(self.n) * self.μ_L
             )
 
-        if self.diagonal_Σ_π:
-            x_π = μ_π / self.Σ_π
+        if self.diagonal_Σ:
+            x = μ / self.Σ
         else:
-            x_π = np.einsum(
-                "...ij,...j->...i", inv(self.Σ_π), np.ones(self.n) * self.μ_π
-            )
+            x = np.einsum("...ij,...j->...i", inv(self.Σ), np.ones(self.n) * self.μ)
 
-        μ_P = np.einsum("...ij,...j->...i", Σ_P, x_π + x_L)
+        μ_P = np.einsum("...ij,...j->...i", Σ_P, x + x_L)
         return multivariate_normal(μ_P, Σ_P, self.shape, self.n, diagonal)
 
     def logπ(self, θ):
@@ -645,22 +649,21 @@ class ReducedLinearModelUniformPrior(object):
 
     Gaussian likelihood in the parameters
 
-    logL(θ) = logLmax - (θ - μ)' Σ^{-1} (θ - μ)
+    logL(θ) = logLmax - (θ - μ_L)' Σ_L^{-1} (θ - μ_L)
 
     Uniform prior
 
     We can link this to a data-based model with the relations:
 
-    Σ = (M' C^{-1} M)^{-1}
-    μ = Σ_L M' C^{-1} (D-m)
-    logLmax =
-    -log|2 π C|/2 - (D-m)'C^{-1}(C - M (M' C^{-1} M)^{-1} M' )C^{-1}(D-m)/2
+    Σ_L = (M' C^{-1} M)^{-1}
+    μ_L = Σ_L M' C^{-1} (D-m)
+    logLmax = -log|2 π C|/2 - (D-m)'C^{-1}(D-m)/2
 
     Parameters
     ----------
-    μ : array_like
+    μ_L : array_like
         Likelihood peak
-    Σ : array_like
+    Σ_L : array_like
         Likelihood covariance
     logLmax : float, optional
         Likelihood maximum, defaults to zero
@@ -669,8 +672,8 @@ class ReducedLinearModelUniformPrior(object):
     """
 
     def __init__(self, *args, **kwargs):
-        self.μ = np.atleast_1d(kwargs.pop("μ"))
-        self.Σ = np.atleast_2d(kwargs.pop("Σ"))
+        self.μ_L = np.atleast_1d(kwargs.pop("μ_L"))
+        self.Σ_L = np.atleast_2d(kwargs.pop("Σ_L"))
         self.logLmax = kwargs.pop("logLmax", 0)
         self.logV = kwargs.pop("logV", 0)
         self.diagonal = kwargs.pop("diagonal", False)
@@ -681,8 +684,8 @@ class ReducedLinearModelUniformPrior(object):
     def shape(self):
         """Shape of the distribution."""
         return np.broadcast_shapes(
-            np.shape(self.μ)[:-1],
-            np.shape(self.Σ)[: -2 + self.diagonal_Σ],
+            np.shape(self.μ_L)[:-1],
+            np.shape(self.Σ_L)[: -2 + self.diagonal_Σ],
             np.shape(self.logLmax),
             np.shape(self.logV),
             self._shape,
@@ -693,15 +696,17 @@ class ReducedLinearModelUniformPrior(object):
         """Dimension of the distribution."""
         return np.max(
             [
-                *np.shape(self.Σ)[-2 + self.diagonal_Σ_L :],
-                *np.shape(self.μ)[-1:],
+                *np.shape(self.Σ_L)[-2 + self.diagonal_Σ_L :],
+                *np.shape(self.μ_L)[-1:],
                 self._n,
             ]
         )
 
     def posterior(self):
         """P(θ|D) as a distribution object."""
-        return multivariate_normal(self.μ, self.Σ, self.shape, self.n, self.diagonal)
+        return multivariate_normal(
+            self.μ_L, self.Σ_L, self.shape, self.n, self.diagonal
+        )
 
     def logπ(self, θ):
         """P(θ) as a scalar."""
@@ -713,20 +718,22 @@ class ReducedLinearModelUniformPrior(object):
 
     def logL(self, θ):
         """P(D|θ) as a scalar."""
-        dist = multivariate_normal(self.μ, self.Σ, self.shape, self.n, self.diagonal)
-        return self.logLmax + dist.logpdf(θ) - dist.logpdf(dist.μ)
+        dist = multivariate_normal(
+            self.μ_L, self.Σ_L, self.shape, self.n, self.diagonal
+        )
+        return self.logLmax + dist.logpdf(θ) - dist.logpdf(dist.μ_L)
 
     def logZ(self):
         """P(D) as a scalar."""
         logZ = np.ones(self.shape) * self.logLmax
         logZ -= self.logV
-        logZ += logdet(2 * np.pi * self.Σ, self.diagonal) / 2
+        logZ += logdet(2 * np.pi * self.Σ_L, self.diagonal) / 2
         return logZ
 
     def dkl(self):
         """D_KL(P(θ|D)||P(θ)) the Kullback-Leibler divergence."""
         dkl = np.ones(self.shape) * self.logV
-        dkl -= logdet(2 * np.pi * np.e * self.Σ, self.diagonal) / 2
+        dkl -= logdet(2 * np.pi * np.e * self.Σ_L, self.diagonal) / 2
         return dkl
 
 
@@ -832,10 +839,7 @@ class ReducedMixtureModelUniformPrior(ReducedLinearModelUniformPrior):
 
     def logL(self, θ):
         """P(D|θ) as a scalar."""
-        dist = mixture_normal(
-            self.logw_L, self.μ, self.Σ, self.shape, self.n, self.diagonal
-        )
-        return self.logLmax + dist.logpdf(θ) - dist.logpdf(dist.μ)
+        pass
 
     def logZ(self):
         """To be implemented."""
