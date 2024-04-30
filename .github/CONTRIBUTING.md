@@ -8,11 +8,11 @@ Note that a [code of conduct](https://github.com/handley-lab/lsbi/blob/master/CO
 
 ## Contributing - `pre-commit`
 
-lsbi uses flake8 and pydocstyle to maintain a consistent style. To speed up linting, contributors can optionally use pre-commit to ensure their commits comply.
+lsbi uses black and isort to maintain a consistent style. To speed up linting, contributors can optionally use pre-commit to ensure their commits comply.
 
-First, ensure that pre-commit, flake8 and pydocstyle are installed:
+First, ensure that pre-commit, black and isort are installed:
 ```
-pip install pre-commit flake8 pydocstyle
+pip install pre-commit black isort
 ```
 Then install the pre-commit to the .git folder:
 ```
