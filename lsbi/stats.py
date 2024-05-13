@@ -100,8 +100,9 @@ class multivariate_normal(object):
             chi2 = (dx**2 / self.cov).sum(axis=-1)
             norm = -np.log(2 * np.pi * np.ones(self.dim) * self.cov).sum(axis=-1) / 2
         else:
-            chi2 = np.einsum("...j,...jk,...k->...", dx, inv(self.cov), dx)
-            norm = -logdet(2 * np.pi * self.cov) / 2
+            cov = np.atleast_2d(self.cov)
+            chi2 = np.einsum("...j,...jk,...k->...", dx, inv(cov), dx)
+            norm = -logdet(2 * np.pi * cov) / 2
         return norm - chi2 / 2
 
     def pdf(self, x, broadcast=False):
@@ -146,7 +147,8 @@ class multivariate_normal(object):
         if self.diagonal:
             return self.mean + np.sqrt(self.cov) * x
         else:
-            return self.mean + np.einsum("...jk,...k->...j", cholesky(self.cov), x)
+            L = cholesky(np.atleast_2d(self.cov))
+            return self.mean + np.einsum("...jk,...k->...j", L, x)
 
     def predict(self, A=1, b=0, diagonal=False):
         """Predict the mean and covariance of a linear transformation.
@@ -296,14 +298,15 @@ class multivariate_normal(object):
             if self.diagonal:
                 y = (x - mean) / np.sqrt(self.cov)
             else:
-                y = np.einsum("...jk,...k->...j", inv(cholesky(self.cov)), x - mean)
+                Linv = inv(cholesky(np.atleast_2d(self.cov)))
+                y = np.einsum("...jk,...k->...j", Linv, x - mean)
             return scipy.stats.norm.cdf(y)
         else:
             y = scipy.stats.norm.ppf(x)
             if self.diagonal:
                 return mean + np.sqrt(self.cov) * y
             else:
-                L = cholesky(self.cov)
+                L = cholesky(np.atleast_2d(self.cov))
                 return mean + np.einsum("...jk,...k->...j", L, y)
 
     def __getitem__(self, arg):
@@ -516,7 +519,7 @@ class mixture_normal(multivariate_normal):
             L = np.take_along_axis(np.moveaxis(L, -2, 0), i[..., None], axis=0)
             rvs = mean + L * x
         else:
-            L = cholesky(self.cov)
+            L = cholesky(np.atleast_2d(self.cov))
             L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
             L = np.take_along_axis(np.moveaxis(L, -3, 0), i[..., None, None], axis=0)
             rvs = mean + np.einsum("...ij,...j->...i", L, x)
