@@ -338,7 +338,7 @@ def plot_2d(dist, axes=None, *args, **kwargs):
     for y, row in axes.iterrows():
         for x, ax in row.items():
             if ax.position == "diagonal":
-                pdf_plot_1d(ax.twin, dist[x], *args, **kwargs)
+                pdf_plot_1d(ax.twin, dist[[x]], *args, **kwargs)
             elif ax.position == "lower":
                 pdf_plot_2d(ax, dist[[x, y]], *args, **kwargs)
             elif ax.position == "upper":

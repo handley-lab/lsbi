@@ -613,9 +613,25 @@ class mixture_normal(multivariate_normal):
             return theta
 
     def __getitem__(self, arg):  # noqa: D105
-        dist = super().__getitem__(arg)
-        dist.__class__ = mixture_normal
-        dist.logw = np.broadcast_to(self.logw, self.shape)[arg]
+        dist = deepcopy(self)
+        if self.shape[:-1] == ():
+            dist.mean = (np.ones((*self.shape, self.dim)) * self.mean)[..., arg]
+            if self.diagonal:
+                dist.cov = (np.ones((*self.shape, self.dim)) * self.cov)[..., arg]
+            else:
+                dist.cov = self.cov[..., arg, :][..., arg]
+            dist._dim = np.shape(dist.mean)[-1]
+        else:
+            dist.mean = np.broadcast_to(self.mean, (*self.shape, self.dim))[arg]
+            if dist.diagonal:
+                dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim))[arg]
+            else:
+                dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim, self.dim))[
+                    arg
+                ]
+            dist.logw = np.broadcast_to(self.logw, self.shape)[arg]
+            dist._shape = dist.mean.shape[:-1]
+            dist._dim = dist.mean.shape[-1]
         return dist
 
     def plot_1d(self, axes=None, *args, **kwargs):  # noqa: D102
