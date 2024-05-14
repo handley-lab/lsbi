@@ -95,6 +95,28 @@ class TestMultivariateNormal(object):
     def test_getitem(self, dim, shape, mean_shape, cov_shape, diagonal):
         dist = self.random(dim, shape, mean_shape, cov_shape, diagonal)
 
+        if len(dist.shape) == 0:
+            dist_2 = dist[0]
+            assert isinstance(dist_2, self.cls)
+            assert dist_2.shape == ()
+            assert dist_2.dim == 1
+
+            if dist.dim > 1:
+                dist_2 = dist[[0, 1]]
+                assert isinstance(dist_2, self.cls)
+                assert dist_2.shape == ()
+                assert dist_2.dim == 2
+
+            if dist.dim > 2:
+                dist_2 = dist[[0, 2]]
+                assert isinstance(dist_2, self.cls)
+                assert dist_2.shape == ()
+                assert dist_2.dim == 2
+                dist_2 = dist[:2]
+                assert isinstance(dist_2, self.cls)
+                assert dist_2.shape == ()
+                assert dist_2.dim == 2
+
         if len(dist.shape) > 0:
             dist_2 = dist[0]
             assert isinstance(dist_2, self.cls)
