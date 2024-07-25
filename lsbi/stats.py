@@ -7,6 +7,7 @@ import scipy.stats
 from numpy.linalg import cholesky, inv
 from scipy.special import erf, logsumexp
 
+import lsbi.plot
 from lsbi.utils import bisect, logdet
 
 
@@ -99,8 +100,9 @@ class multivariate_normal(object):
             chi2 = (dx**2 / self.cov).sum(axis=-1)
             norm = -np.log(2 * np.pi * np.ones(self.dim) * self.cov).sum(axis=-1) / 2
         else:
-            chi2 = np.einsum("...j,...jk,...k->...", dx, inv(self.cov), dx)
-            norm = -logdet(2 * np.pi * self.cov) / 2
+            cov = np.atleast_2d(self.cov)
+            chi2 = np.einsum("...j,...jk,...k->...", dx, inv(cov), dx)
+            norm = -logdet(2 * np.pi * cov) / 2
         return norm - chi2 / 2
 
     def pdf(self, x, broadcast=False):
@@ -145,7 +147,8 @@ class multivariate_normal(object):
         if self.diagonal:
             return self.mean + np.sqrt(self.cov) * x
         else:
-            return self.mean + np.einsum("...jk,...k->...j", cholesky(self.cov), x)
+            L = cholesky(np.atleast_2d(self.cov))
+            return self.mean + np.einsum("...jk,...k->...j", L, x)
 
     def predict(self, A=1, b=0, diagonal=False):
         """Predict the mean and covariance of a linear transformation.
@@ -295,14 +298,15 @@ class multivariate_normal(object):
             if self.diagonal:
                 y = (x - mean) / np.sqrt(self.cov)
             else:
-                y = np.einsum("...jk,...k->...j", inv(cholesky(self.cov)), x - mean)
+                Linv = inv(cholesky(np.atleast_2d(self.cov)))
+                y = np.einsum("...jk,...k->...j", Linv, x - mean)
             return scipy.stats.norm.cdf(y)
         else:
             y = scipy.stats.norm.ppf(x)
             if self.diagonal:
                 return mean + np.sqrt(self.cov) * y
             else:
-                L = cholesky(self.cov)
+                L = cholesky(np.atleast_2d(self.cov))
                 return mean + np.einsum("...jk,...k->...j", L, y)
 
     def __getitem__(self, arg):
@@ -333,14 +337,44 @@ class multivariate_normal(object):
         (2,)
         """
         dist = deepcopy(self)
-        dist.mean = np.broadcast_to(self.mean, (*self.shape, self.dim))[arg]
-        if self.diagonal:
-            dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim))[arg]
+        if self.shape == ():
+            dist.mean = (np.ones(self.dim) * self.mean)[..., arg]
+            if self.diagonal:
+                dist.cov = (np.ones(self.dim) * self.cov)[..., arg]
+            else:
+                dist.cov = self.cov[..., arg, :][..., arg]
+            dist._dim = len(np.atleast_1d(dist.mean))
         else:
-            dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim, self.dim))[arg]
-        dist._shape = dist.mean.shape[:-1]
-        dist._dim = dist.mean.shape[-1]
+            dist.mean = np.broadcast_to(self.mean, (*self.shape, self.dim))[arg]
+            if dist.diagonal:
+                dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim))[arg]
+            else:
+                dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim, self.dim))[
+                    arg
+                ]
+            dist._shape = dist.mean.shape[:-1]
+            dist._dim = dist.mean.shape[-1]
         return dist
+
+    def plot_1d(self, axes=None, *args, **kwargs):  # noqa: D102
+        if self.shape:
+            for i in range(self.shape[0]):
+                axes = self[i].plot_1d(axes, *args, **kwargs)
+        else:
+            return lsbi.plot.plot_1d(self, axes, *args, **kwargs)
+        return axes
+
+    def plot_2d(self, axes=None, *args, **kwargs):  # noqa:D102
+        if self.shape:
+            for i in range(self.shape[0]):
+                axes = self[i].plot_2d(axes, *args, **kwargs)
+        else:
+            return lsbi.plot.plot_2d(self, axes, *args, **kwargs)
+        return axes
+
+
+multivariate_normal.plot_1d.__doc__ = lsbi.plot.plot_1d.__doc__
+multivariate_normal.plot_2d.__doc__ = lsbi.plot.plot_2d.__doc__
 
 
 class mixture_normal(multivariate_normal):
@@ -485,7 +519,7 @@ class mixture_normal(multivariate_normal):
             L = np.take_along_axis(np.moveaxis(L, -2, 0), i[..., None], axis=0)
             rvs = mean + L * x
         else:
-            L = cholesky(self.cov)
+            L = cholesky(np.atleast_2d(self.cov))
             L = np.broadcast_to(L, (*self.shape, self.dim, self.dim))
             L = np.take_along_axis(np.moveaxis(L, -3, 0), i[..., None, None], axis=0)
             rvs = mean + np.einsum("...ij,...j->...i", L, x)
@@ -579,10 +613,46 @@ class mixture_normal(multivariate_normal):
             return theta
 
     def __getitem__(self, arg):  # noqa: D105
-        dist = super().__getitem__(arg)
-        dist.__class__ = mixture_normal
-        dist.logw = np.broadcast_to(self.logw, self.shape)[arg]
+        dist = deepcopy(self)
+        if self.shape[:-1] == ():
+            dist.mean = (np.ones((*self.shape, self.dim)) * self.mean)[..., arg]
+            if self.diagonal:
+                dist.cov = (np.ones((*self.shape, self.dim)) * self.cov)[..., arg]
+            else:
+                dist.cov = self.cov[..., arg, :][..., arg]
+            dist._dim = np.shape(dist.mean)[-1]
+        else:
+            dist.mean = np.broadcast_to(self.mean, (*self.shape, self.dim))[arg]
+            if dist.diagonal:
+                dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim))[arg]
+            else:
+                dist.cov = np.broadcast_to(self.cov, (*self.shape, self.dim, self.dim))[
+                    arg
+                ]
+            dist.logw = np.broadcast_to(self.logw, self.shape)[arg]
+            dist._shape = dist.mean.shape[:-1]
+            dist._dim = dist.mean.shape[-1]
         return dist
+
+    def plot_1d(self, axes=None, *args, **kwargs):  # noqa: D102
+        if self.shape[:-1]:
+            for i in range(self.shape[0]):
+                axes = self[i].plot_1d(axes=axes, *args, **kwargs)
+        else:
+            return lsbi.plot.plot_1d(self, axes=axes, *args, **kwargs)
+        return axes
+
+    def plot_2d(self, axes=None, *args, **kwargs):  # noqa:D102
+        if self.shape[:-1]:
+            for i in range(self.shape[0]):
+                axes = self[i].plot_2d(axes=axes, *args, **kwargs)
+        else:
+            return lsbi.plot.plot_2d(self, axes=axes, *args, **kwargs)
+        return axes
+
+
+mixture_normal.plot_1d.__doc__ = lsbi.plot.plot_1d.__doc__
+mixture_normal.plot_2d.__doc__ = lsbi.plot.plot_2d.__doc__
 
 
 def dkl(p, q, n=0):

@@ -17,7 +17,7 @@ dependencies = [
     'numpy',
     'scipy',
     'matplotlib',
-    'torch',
+    'anesthetic',
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
