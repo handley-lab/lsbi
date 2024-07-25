@@ -69,8 +69,8 @@ You can check that things are working by running the test suite:
 .. code:: bash
 
     python -m pytest
-    black lsbi
-    isort --profile black lsbi
+    black .
+    isort --profile black .
     pydocstyle --convention=numpy lsbi
 
 

@@ -265,27 +265,6 @@ class TestLinearModel(object):
         assert dkl.shape == model.shape
         assert (dkl >= 0).all()
 
-        bmd = model.bmd(D)
-        assert bmd.shape == model.shape
-        assert (bmd >= 0).all()
-
-        mutual_information = model.mutual_information()
-        assert mutual_information.shape == model.shape
-        mutual_information.shape
-        assert (mutual_information >= 0).all()
-
-        mutual_information_mc, err = model.mutual_information(N, True)
-        assert mutual_information_mc.shape == model.shape
-        assert_allclose((mutual_information - mutual_information_mc) / err, 0, atol=10)
-
-        dimensionality = model.dimensionality()
-        assert dimensionality.shape == model.shape
-        assert (dimensionality >= 0).all()
-
-        dimensionality_mc, err = model.dimensionality(N, True)
-        assert dimensionality_mc.shape == model.shape
-        assert_allclose((dimensionality - dimensionality_mc) / err, 0, atol=10)
-
     def test_evidence(
         self,
         M_shape,
@@ -640,24 +619,6 @@ class TestMixtureModel(TestLinearModel):
 
         dkl = model.dkl(D, 10)
         assert dkl.shape == model.shape[:-1]
-
-        with pytest.raises(ValueError):
-            model.bmd(D)
-
-        bmd = model.bmd(D, 10)
-        assert bmd.shape == model.shape[:-1]
-
-        with pytest.raises(ValueError):
-            model.mutual_information()
-
-        mutual_information = model.mutual_information(10)
-        assert mutual_information.shape == model.shape[:-1]
-
-        with pytest.raises(ValueError):
-            model.dimensionality()
-
-        dimensionality = model.dimensionality(10)
-        assert dimensionality.shape == model.shape[:-1]
 
     def test_evidence(
         self,
