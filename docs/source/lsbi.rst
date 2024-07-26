@@ -16,20 +16,13 @@ lsbi.model module
    :show-inheritance:
 
 
-lsbi.network module
--------------------
-
-.. automodule:: lsbi.network
-   :members:
-   :undoc-members:
-
-
 lsbi.stats module
 -----------------
 
 .. automodule:: lsbi.stats
    :members:
    :undoc-members:
+   :show-inheritance:
 
 
 lsbi.utils module

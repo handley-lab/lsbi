@@ -3,7 +3,7 @@ lsbi: Linear Simulation Based Inference
 =======================================
 :lsbi: Linear Simulation Based Inference
 :Author: Will Handley & David Yallup
-:Version: 0.12.2
+:Version: 0.12.3
 :Homepage: https://github.com/handley-lab/lsbi
 :Documentation: http://lsbi.readthedocs.io/
 
@@ -134,7 +134,6 @@ There are many ways you can contribute via the `GitHub repository <https://githu
 
 - You can `open an issue <https://github.com/handley-lab/lsbi/issues>`__ to report bugs or to propose new features.
 - Pull requests are very welcome. Note that if you are going to propose major changes, be sure to open an issue for discussion first, to make sure that your PR will be accepted before you spend effort coding it.
-- Adding models and data to the grid. Contact `Will Handley <mailto:wh260@cam.ac.uk>`__ to request models or ask for your own to be uploaded.
 
 
 Questions/Comments
