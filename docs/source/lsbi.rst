@@ -41,6 +41,7 @@ lsbi.stats module
 .. automodule:: lsbi.stats
    :members:
    :undoc-members:
+   :show-inheritance:
 
 
 lsbi.utils module
