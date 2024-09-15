@@ -16,14 +16,6 @@ lsbi.model module
    :show-inheritance:
 
 
-lsbi.network module
--------------------
-
-.. automodule:: lsbi.network
-   :members:
-   :undoc-members:
-
-
 lsbi.plot module
 ----------------
 
@@ -31,8 +23,6 @@ lsbi.plot module
    :members:
    :undoc-members:
    :show-inheritance:
-
-
 
 
 lsbi.stats module
