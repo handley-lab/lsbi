@@ -19,6 +19,16 @@ from anesthetic.utils import (
     match_contour_to_contourf,
 )
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.tri import Triangulation
+
+
+def _Triangulation(x, y):
+    if len(x.shape) == 1:
+        return Triangulation(x, y).triangles
+    else:
+        return np.array(
+            [_Triangulation(x[i], y[i]) for i in range(x.shape[0])], dtype=object
+        )
 
 
 def pdf_plot_1d(ax, dist, *args, **kwargs):
@@ -56,7 +66,7 @@ def pdf_plot_1d(ax, dist, *args, **kwargs):
         :meth:`matplotlib.axes.Axes.plot` command).
     """
     kwargs = normalize_kwargs(kwargs)
-    nplot = kwargs.get("nplot_1d", 10000)
+    nplot = kwargs.pop("nplot_1d", 10000)
 
     levels = kwargs.pop("levels", [0.95, 0.68])
     density = kwargs.pop("density", False)
@@ -74,6 +84,8 @@ def pdf_plot_1d(ax, dist, *args, **kwargs):
     else:
         edgecolor = color
 
+    orientation = kwargs.pop("orientation", "horizontal")
+
     x = dist.rvs(nplot)
     logpdf = dist.logpdf(x)
     logpdfmin = np.sort(logpdf)[::-1][int(0.997 * nplot)]
@@ -85,6 +97,9 @@ def pdf_plot_1d(ax, dist, *args, **kwargs):
     if not density:
         logpdf -= np.nanmax(logpdf)
     pdf = np.exp(logpdf)
+    if orientation == "vertical":
+        x, pdf = pdf, x
+
     ans = ax.plot(x, pdf, color=color, *args, **kwargs)
 
     if facecolor and facecolor not in [None, "None", "none"]:
@@ -103,10 +118,16 @@ def pdf_plot_1d(ax, dist, *args, **kwargs):
 
         ans = ans, fill
 
-    if density:
-        ax.set_ylim(bottom=0)
+    if orientation == "vertical":
+        if density:
+            ax.set_xlim(bottom=0)
+        else:
+            ax.set_xlim(0, 1.1)
     else:
-        ax.set_ylim(0, 1.1)
+        if density:
+            ax.set_ylim(bottom=0)
+        else:
+            ax.set_ylim(0, 1.1)
 
     return ans
 
@@ -174,12 +195,28 @@ def pdf_plot_2d(ax, dist, *args, **kwargs):
     levels = iso_probability_contours_from_samples(P, contours=levels)
     y = np.atleast_1d(x[..., 1])
     x = np.atleast_1d(x[..., 0])
+    x_ = x - np.mean(x, axis=-1, keepdims=True)
+    y_ = y - np.mean(y, axis=-1, keepdims=True)
+    cov = np.moveaxis(
+        [
+            [np.mean(x_ * x_, axis=-1), np.mean(x_ * y_, axis=-1)],
+            [np.mean(y_ * x_, axis=-1), np.mean(y_ * y_, axis=-1)],
+        ],
+        [0, 1],
+        [-2, -1],
+    )
+
+    L = np.linalg.cholesky(cov)
+    Linv = np.linalg.inv(L)
+    xy_ = np.einsum("...ij,...kj->...ki", Linv, np.moveaxis([x_, y_], 0, -1))
+    tri = _Triangulation(xy_[..., 0], xy_[..., 1])
 
     if facecolor not in [None, "None", "none"]:
         linewidths = kwargs.pop("linewidths", 0.5)
         contf = ax.tricontourf(
             x,
             y,
+            tri,
             P,
             levels=levels,
             cmap=cmap,
@@ -207,6 +244,7 @@ def pdf_plot_2d(ax, dist, *args, **kwargs):
     cont = ax.tricontour(
         x,
         y,
+        tri,
         P,
         levels=levels,
         zorder=zorder,
@@ -335,8 +373,8 @@ def plot_2d(dist, axes=None, *args, **kwargs):
         axes = list(range(dist.dim))
     if not isinstance(axes, AxesDataFrame):
         fig, axes = make_2d_axes(axes)
-    for y, row in axes.iterrows():
-        for x, ax in row.items():
+    for y, (_, row) in enumerate(axes.iterrows()):
+        for x, (_, ax) in enumerate(row.items()):
             if ax.position == "diagonal":
                 pdf_plot_1d(ax.twin, dist[[x]], *args, **kwargs)
             elif ax.position == "lower":
