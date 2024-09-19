@@ -372,6 +372,13 @@ class multivariate_normal(object):
             return lsbi.plot.plot_2d(self, axes, *args, **kwargs)
         return axes
 
+    @classmethod
+    def fit(cls, x, *args, **kwargs):
+        """INSERT DOCSTRING HERE."""
+        mean = np.mean(x, axis=0, keepdims=True)
+        cov = np.einsum("k...i,k...j->...ij", x - mean, x - mean) / x.shape[0]
+        return cls(mean[0], cov, *args, **kwargs)
+
 
 multivariate_normal.plot_1d.__doc__ = lsbi.plot.plot_1d.__doc__
 multivariate_normal.plot_2d.__doc__ = lsbi.plot.plot_2d.__doc__
@@ -649,6 +656,50 @@ class mixture_normal(multivariate_normal):
         else:
             return lsbi.plot.plot_2d(self, axes=axes, *args, **kwargs)
         return axes
+
+    @classmethod
+    def fit(cls, x, n, *args, **kwargs):
+        """INSERT DOCSTRING HERE."""
+        dim = np.shape(x)[-1]
+        shape = np.shape(x)[1:-1] + (n,)
+
+        from scipy.cluster.vq import kmeans
+
+        cov = x.var(axis=0)
+        mean, _ = kmeans(x / cov**0.5, n)
+        mean *= cov**0.5
+
+        i = np.argmin(((x[..., None, :] - mean) ** 2).sum(axis=-1), axis=-1)
+        logw = np.zeros(shape)
+        np.add.at(logw, i, 1)
+        logw = np.log(logw)
+        entropy0 = -np.inf
+
+        while True:
+            dist = cls(logw, mean, cov)
+            logγ = (
+                super(dist.__class__, dist).logpdf(x[..., None, :], broadcast=True)
+                - dist.logpdf(x, broadcast=True)[..., None]
+            )
+
+            γ = np.exp(logγ - logsumexp(logγ, axis=0, keepdims=True))
+            logw = (
+                logsumexp(logγ, axis=0)
+                - logsumexp(logγ, axis=(0, -1), keepdims=True)[0]
+            )
+            mean = (x[..., None, :] * γ[..., None]).sum(axis=0)
+            cov = np.einsum(
+                "k...n, k...ni,k...nj->...nij",
+                γ,
+                x[..., None, :] - mean,
+                x[..., None, :] - mean,
+            )
+            entropy1 = dist.logpdf(x).mean()
+            if entropy1 - entropy0 < 1e-6:
+                break
+            entropy0 = entropy1
+
+        return cls(logw, mean, cov, *args, **kwargs)
 
 
 mixture_normal.plot_1d.__doc__ = lsbi.plot.plot_1d.__doc__
