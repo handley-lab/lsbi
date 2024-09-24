@@ -5,7 +5,7 @@ from copy import deepcopy
 import numpy as np
 import scipy.stats
 from numpy.linalg import cholesky, inv
-from scipy.special import erf, logsumexp
+from scipy.special import erf, logsumexp, multigammaln
 
 import lsbi.plot
 from lsbi.utils import bisect, logdet
@@ -658,48 +658,92 @@ class mixture_normal(multivariate_normal):
         return axes
 
     @classmethod
-    def fit(cls, x, n, *args, **kwargs):
+    def fit(cls, x, n=None, *args, **kwargs):
         """INSERT DOCSTRING HERE."""
+        return_logZ = kwargs.pop("return_logZ", False)
+
+        # Initialise
+        if n is None:
+            logZ_ = -np.inf
+            dist_ = None
+            n = 1
+            while True:
+                dist, logZ = cls.fit(x, n=n, return_logZ=True)
+                print(n)
+                if logZ < logZ_:
+                    return dist_
+                logZ_ = logZ
+                dist_ = dist
+                n += 1
+
+        dist0 = cls.__bases__[0].fit(x)
         dim = np.shape(x)[-1]
         shape = np.shape(x)[1:-1] + (n,)
-
-        from scipy.cluster.vq import kmeans
-
-        cov = x.var(axis=0)
-        mean, _ = kmeans(x / cov**0.5, n)
-        mean *= cov**0.5
-
-        i = np.argmin(((x[..., None, :] - mean) ** 2).sum(axis=-1), axis=-1)
         logw = np.zeros(shape)
-        np.add.at(logw, i, 1)
-        logw = np.log(logw)
+        mean = dist0.rvs(n)
+        cov = dist0.cov
         entropy0 = -np.inf
 
         while True:
             dist = cls(logw, mean, cov)
             logγ = (
-                super(dist.__class__, dist).logpdf(x[..., None, :], broadcast=True)
+                dist.logw
+                + super(dist.__class__, dist).logpdf(x[..., None, :], broadcast=True)
                 - dist.logpdf(x, broadcast=True)[..., None]
             )
 
-            γ = np.exp(logγ - logsumexp(logγ, axis=0, keepdims=True))
+            k = np.exp(logsumexp(logγ, axis=0))
+            γ = np.exp(logγ)
             logw = (
                 logsumexp(logγ, axis=0)
                 - logsumexp(logγ, axis=(0, -1), keepdims=True)[0]
             )
-            mean = (x[..., None, :] * γ[..., None]).sum(axis=0)
-            cov = np.einsum(
-                "k...n, k...ni,k...nj->...nij",
-                γ,
-                x[..., None, :] - mean,
-                x[..., None, :] - mean,
+            mean = (x[..., None, :] * γ[..., None]).sum(axis=0) / k[..., None]
+            cov = (
+                np.einsum(
+                    "k...n, k...ni,k...nj->...nij",
+                    γ,
+                    x[..., None, :] - mean,
+                    x[..., None, :] - mean,
+                )
+                / k[..., None, None]
             )
             entropy1 = dist.logpdf(x).mean()
+            print("> ", entropy1 - entropy0)
             if entropy1 - entropy0 < 1e-6:
                 break
             entropy0 = entropy1
 
-        return cls(logw, mean, cov, *args, **kwargs)
+        if return_logZ:
+            ν0 = kwargs.pop("ν0", dim)
+            λ0 = kwargs.pop("λ0", 1)
+            μ0 = kwargs.pop("μ0", dist0.mean)
+            Ψ0 = kwargs.pop("Ψ0", dist0.cov)
+            ν = ν0 + k
+            λ = λ0 + k
+            μ = μ0 + (λ0 * μ0 + k[..., None] * mean) / (λ0 + k[..., None])
+            Ψ = (
+                Ψ0
+                + k[..., None, None] * cov
+                + (λ0 * k[..., None, None] / (λ0 + k[..., None, None]))
+                * (mean - μ0)[..., None]
+                * (mean - μ0)[..., None, :]
+            )
+
+            logZ = (
+                k * logw
+                + ν0 / 2 * logdet(Ψ0)
+                - ν0 * dim / 2 * np.log(2)
+                - multigammaln(ν0 / 2, dim)
+                + dim / 2 * np.log(λ0)
+                - ν / 2 * logdet(Ψ)
+                + ν * dim / 2 * np.log(2)
+                + multigammaln(ν / 2, dim)
+                - dim / 2 * np.log(λ)
+            ).sum()
+            return cls(logw, mean, cov, *args, **kwargs), logZ
+        else:
+            return cls(logw, mean, cov, *args, **kwargs)
 
 
 mixture_normal.plot_1d.__doc__ = lsbi.plot.plot_1d.__doc__
