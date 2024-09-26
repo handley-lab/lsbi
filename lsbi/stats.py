@@ -4,6 +4,7 @@ from copy import deepcopy
 
 import numpy as np
 import scipy.stats
+import tqdm
 from numpy.linalg import cholesky, inv
 from scipy.special import erf, logsumexp, multigammaln
 
@@ -662,14 +663,21 @@ class mixture_normal(multivariate_normal):
         """INSERT DOCSTRING HERE."""
         return_logZ = kwargs.pop("return_logZ", False)
 
+        def generator():
+            while True:
+                yield
+
         # Initialise
         if n is None:
+            if len(x.shape) > 2:
+                raise NotImplementedError(
+                    "Cannot maximise over n for more than one model"
+                )
             logZ_ = -np.inf
             dist_ = None
             n = 1
-            while True:
+            for _ in tqdm.tqdm(generator()):
                 dist, logZ = cls.fit(x, n=n, return_logZ=True)
-                print(n)
                 if logZ < logZ_:
                     return dist_
                 logZ_ = logZ
@@ -679,46 +687,45 @@ class mixture_normal(multivariate_normal):
         dist0 = cls.__bases__[0].fit(x)
         dim = np.shape(x)[-1]
         shape = np.shape(x)[1:-1] + (n,)
-        logw = np.zeros(shape)
-        mean = dist0.rvs(n)
-        cov = dist0.cov
+        logw = np.zeros(shape) - np.log(n)
+        mean = np.moveaxis(dist0.rvs(n), 0, -2)
+        cov = dist0.cov[..., None, :, :]
         entropy0 = -np.inf
 
-        while True:
+        for _ in tqdm.tqdm(generator()):
             dist = cls(logw, mean, cov)
-            logγ = (
-                dist.logw
-                + super(dist.__class__, dist).logpdf(x[..., None, :], broadcast=True)
-                - dist.logpdf(x, broadcast=True)[..., None]
+            logpdf = dist.logw + super(dist.__class__, dist).logpdf(
+                x[..., None, :], broadcast=True
             )
+            logpdf_tot = logsumexp(logpdf, axis=-1)
 
-            k = np.exp(logsumexp(logγ, axis=0))
+            entropy1 = logpdf_tot.mean(axis=0)
+            if (entropy1 - entropy0 < 1e-6).all():
+                break
+
+            entropy0 = entropy1
+            logγ = logpdf - logpdf_tot[..., None]
+            logk = logsumexp(logγ, axis=0)
+            k = np.exp(logk)
             γ = np.exp(logγ)
-            logw = (
-                logsumexp(logγ, axis=0)
-                - logsumexp(logγ, axis=(0, -1), keepdims=True)[0]
-            )
+            logw = logk - logsumexp(logk, axis=-1, keepdims=True)[0]
             mean = (x[..., None, :] * γ[..., None]).sum(axis=0) / k[..., None]
+            dx = x[..., None, :] - mean
             cov = (
                 np.einsum(
                     "k...n, k...ni,k...nj->...nij",
                     γ,
-                    x[..., None, :] - mean,
-                    x[..., None, :] - mean,
+                    dx,
+                    dx,
                 )
                 / k[..., None, None]
             )
-            entropy1 = dist.logpdf(x).mean()
-            print("> ", entropy1 - entropy0)
-            if entropy1 - entropy0 < 1e-6:
-                break
-            entropy0 = entropy1
 
         if return_logZ:
             ν0 = kwargs.pop("ν0", dim)
             λ0 = kwargs.pop("λ0", 1)
-            μ0 = kwargs.pop("μ0", dist0.mean)
-            Ψ0 = kwargs.pop("Ψ0", dist0.cov)
+            μ0 = kwargs.pop("μ0", dist0.mean[..., None, :])
+            Ψ0 = kwargs.pop("Ψ0", dist0.cov[..., None, :, :])
             ν = ν0 + k
             λ = λ0 + k
             μ = μ0 + (λ0 * μ0 + k[..., None] * mean) / (λ0 + k[..., None])
@@ -740,7 +747,7 @@ class mixture_normal(multivariate_normal):
                 + ν * dim / 2 * np.log(2)
                 + multigammaln(ν / 2, dim)
                 - dim / 2 * np.log(λ)
-            ).sum()
+            ).sum(axis=0)
             return cls(logw, mean, cov, *args, **kwargs), logZ
         else:
             return cls(logw, mean, cov, *args, **kwargs)
