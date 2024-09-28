@@ -5,7 +5,7 @@ from copy import deepcopy
 import numpy as np
 import scipy.stats
 import tqdm
-from numpy.linalg import cholesky, inv
+from numpy.linalg import LinAlgError, cholesky, inv
 from scipy.special import erf, logsumexp, multigammaln
 
 import lsbi.plot
@@ -677,7 +677,8 @@ class mixture_normal(multivariate_normal):
             dist_ = None
             n = 1
             for _ in tqdm.tqdm(generator()):
-                dist, logZ = cls.fit(x, n=n, return_logZ=True)
+                dist, logZ = cls.fit(x, n=n, return_logZ=True, dist=dist_)
+                print(logZ)
                 if logZ < logZ_:
                     return dist_
                 logZ_ = logZ
@@ -685,28 +686,59 @@ class mixture_normal(multivariate_normal):
                 n += 1
 
         dist0 = cls.__bases__[0].fit(x)
-        dim = np.shape(x)[-1]
-        shape = np.shape(x)[1:-1] + (n,)
-        logw = np.zeros(shape) - np.log(n)
-        mean = np.moveaxis(dist0.rvs(n), 0, -2)
-        cov = dist0.cov[..., None, :, :]
-        entropy0 = -np.inf
+        dist = kwargs.pop("dist", None)
+        if dist is None:
+            dist = cls(
+                mean=dist0.mean[..., None, :],
+                cov=dist0.cov[..., None, :, :],
+                shape=dist0.shape + (1,),
+            )
+        dim = dist.dim
+        shape = dist0.shape + (n,)
+        logw = np.zeros(shape)
+        mean = np.zeros(shape + (dim,))
+        cov = np.zeros(shape + (dim, dim))
+        if dist.k <= n:
+            logw[..., : dist.k] = dist.logw
+            logw[..., dist.k :] = np.mean(np.atleast_1d(dist.logw), axis=-1)
+            mean[..., : dist.k, :] = dist.mean
+            mean[..., dist.k :, :] = np.moveaxis(dist0.rvs(n - dist.k), 0, -2)
+            cov[..., : dist.k, :, :] = dist.cov
+            cov[..., dist.k :, :, :] = dist0.cov[..., None, :, :]
+            cov
+        else:
+            mean = np.moveaxis(dist.rvs(n), 0, -2)
+            cov = dist0.cov[..., None, :, :]
 
+        # TODO fix by using MAP rather than MLE estimates. Also more valid in terms of evidence calculation.
+        entropy0 = -np.inf
         for _ in tqdm.tqdm(generator()):
             dist = cls(logw, mean, cov)
-            logpdf = dist.logw + super(dist.__class__, dist).logpdf(
-                x[..., None, :], broadcast=True
-            )
+            if n == 1:
+                k = len(x) * np.ones(shape)
+                break
+            try:
+                logpdf = dist.logw + super(dist.__class__, dist).logpdf(
+                    x[..., None, :], broadcast=True
+                )
+            except LinAlgError:
+                print("Singular matrix")
+                break
             logpdf_tot = logsumexp(logpdf, axis=-1)
 
             entropy1 = logpdf_tot.mean(axis=0)
-            if (entropy1 - entropy0 < 1e-6).all():
+            std = np.std(logpdf_tot, axis=0, where=~np.isinf(logpdf_tot)) / np.sqrt(
+                len(x)
+            )
+            if (np.abs(entropy1 - entropy0) < 1e-3 * std).all():
                 break
 
             entropy0 = entropy1
             logγ = logpdf - logpdf_tot[..., None]
             logk = logsumexp(logγ, axis=0)
             k = np.exp(logk)
+            if (k < 1).any():
+                break
             γ = np.exp(logγ)
             logw = logk - logsumexp(logk, axis=-1, keepdims=True)[0]
             mean = (x[..., None, :] * γ[..., None]).sum(axis=0) / k[..., None]
@@ -739,11 +771,11 @@ class mixture_normal(multivariate_normal):
 
             logZ = (
                 k * logw
-                + ν0 / 2 * logdet(Ψ0)
+                + ν0 / 2 * logdet(2 * np.pi * Ψ0)
                 - ν0 * dim / 2 * np.log(2)
                 - multigammaln(ν0 / 2, dim)
                 + dim / 2 * np.log(λ0)
-                - ν / 2 * logdet(Ψ)
+                - ν / 2 * logdet(2 * np.pi * Ψ)
                 + ν * dim / 2 * np.log(2)
                 + multigammaln(ν / 2, dim)
                 - dim / 2 * np.log(λ)
