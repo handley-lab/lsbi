@@ -6,7 +6,7 @@ import numpy as np
 import scipy.stats
 import tqdm
 from numpy.linalg import LinAlgError, cholesky, inv
-from scipy.special import erf, logsumexp, multigammaln
+from scipy.special import erf, gammaln, logsumexp, multigammaln
 
 import lsbi.plot
 from lsbi.utils import bisect, logdet
@@ -676,9 +676,10 @@ class mixture_normal(multivariate_normal):
             logZ_ = -np.inf
             dist_ = None
             n = 1
-            for _ in tqdm.tqdm(generator()):
-                dist, logZ = cls.fit(x, n=n, return_logZ=True, dist=dist_)
-                print(logZ)
+            while True:
+                dist, logZ = cls.fit(
+                    x, n=n, return_logZ=True, dist=dist_, *args, **kwargs
+                )
                 if logZ < logZ_:
                     return dist_
                 logZ_ = logZ
@@ -686,6 +687,7 @@ class mixture_normal(multivariate_normal):
                 n += 1
 
         dist0 = cls.__bases__[0].fit(x)
+
         dist = kwargs.pop("dist", None)
         if dist is None:
             dist = cls(
@@ -695,6 +697,11 @@ class mixture_normal(multivariate_normal):
             )
         dim = dist.dim
         shape = dist0.shape + (n,)
+        ν0 = kwargs.pop("ν0", dist0.dim)
+        λ0 = kwargs.pop("λ0", 1)
+        μ0 = kwargs.pop("μ0", dist0.mean[..., None, :])
+        Ψ0 = kwargs.pop("Ψ0", dist0.cov[..., None, :, :])
+        α0 = kwargs.pop("α0", np.ones(shape))
         logw = np.zeros(shape)
         mean = np.zeros(shape + (dim,))
         cov = np.zeros(shape + (dim, dim))
@@ -710,35 +717,27 @@ class mixture_normal(multivariate_normal):
             mean = np.moveaxis(dist.rvs(n), 0, -2)
             cov = dist0.cov[..., None, :, :]
 
-        # TODO fix by using MAP rather than MLE estimates. Also more valid in terms of evidence calculation.
-        entropy0 = -np.inf
-        for _ in tqdm.tqdm(generator()):
-            dist = cls(logw, mean, cov)
-            if n == 1:
-                k = len(x) * np.ones(shape)
-                break
-            try:
-                logpdf = dist.logw + super(dist.__class__, dist).logpdf(
-                    x[..., None, :], broadcast=True
-                )
-            except LinAlgError:
-                print("Singular matrix")
-                break
+        logZ0 = -np.inf
+        logZ = -np.inf
+        dist = cls(logw, mean, cov)
+        pbar = tqdm.tqdm(generator())
+        for _ in pbar:
+            logpdf = dist.logw + super(dist.__class__, dist).logpdf(
+                x[..., None, :], broadcast=True
+            )
             logpdf_tot = logsumexp(logpdf, axis=-1)
 
-            entropy1 = logpdf_tot.mean(axis=0)
-            std = np.std(logpdf_tot, axis=0, where=~np.isinf(logpdf_tot)) / np.sqrt(
-                len(x)
-            )
-            if (np.abs(entropy1 - entropy0) < 1e-3 * std).all():
-                break
+            # entropy1 = logpdf_tot.mean(axis=0)
+            # std = np.std(logpdf_tot, axis=0, where=~np.isinf(logpdf_tot)) / np.sqrt(
+            #     len(x)
+            # )
+            # if (np.abs(entropy1 - entropy0) < 1e-3 * std).all():
+            #    break
 
-            entropy0 = entropy1
+            # entropy0 = entropy1
             logγ = logpdf - logpdf_tot[..., None]
             logk = logsumexp(logγ, axis=0)
             k = np.exp(logk)
-            if (k < 1).any():
-                break
             γ = np.exp(logγ)
             logw = logk - logsumexp(logk, axis=-1, keepdims=True)[0]
             mean = (x[..., None, :] * γ[..., None]).sum(axis=0) / k[..., None]
@@ -753,14 +752,9 @@ class mixture_normal(multivariate_normal):
                 / k[..., None, None]
             )
 
-        if return_logZ:
-            ν0 = kwargs.pop("ν0", dim)
-            λ0 = kwargs.pop("λ0", 1)
-            μ0 = kwargs.pop("μ0", dist0.mean[..., None, :])
-            Ψ0 = kwargs.pop("Ψ0", dist0.cov[..., None, :, :])
             ν = ν0 + k
             λ = λ0 + k
-            μ = μ0 + (λ0 * μ0 + k[..., None] * mean) / (λ0 + k[..., None])
+            μ = (λ0 * μ0 + k[..., None] * mean) / (λ0 + k[..., None])
             Ψ = (
                 Ψ0
                 + k[..., None, None] * cov
@@ -768,18 +762,34 @@ class mixture_normal(multivariate_normal):
                 * (mean - μ0)[..., None]
                 * (mean - μ0)[..., None, :]
             )
+            α = α0 + k
 
             logZ = (
-                k * logw
-                + ν0 / 2 * logdet(2 * np.pi * Ψ0)
-                - ν0 * dim / 2 * np.log(2)
-                - multigammaln(ν0 / 2, dim)
-                + dim / 2 * np.log(λ0)
-                - ν / 2 * logdet(2 * np.pi * Ψ)
-                + ν * dim / 2 * np.log(2)
-                + multigammaln(ν / 2, dim)
-                - dim / 2 * np.log(λ)
-            ).sum(axis=0)
+                (
+                    +ν0 / 2 * logdet(2 * np.pi * Ψ0)
+                    - ν0 * dim / 2 * np.log(2)
+                    - multigammaln(ν0 / 2, dim)
+                    + dim / 2 * np.log(λ0)
+                    - ν / 2 * logdet(2 * np.pi * Ψ)
+                    + ν * dim / 2 * np.log(2)
+                    + multigammaln(ν / 2, dim)
+                    - dim / 2 * np.log(λ)
+                    - gammaln(α0)
+                    + gammaln(α)
+                ).sum(axis=0)
+                + gammaln(α0.sum(axis=0))
+                - gammaln(α.sum(axis=0))
+            )
+            dist = cls(logw, μ, Ψ / (ν + dim + 1)[..., None, None])
+            # dist = cls(logw, μ, cov)
+            # dist = cls(logw, mean, cov)
+
+            pbar.set_description(f"n={n}, logZ={logZ:.2f}")
+            if np.abs(logZ - logZ0) < 1e-5:
+                break
+            logZ0 = logZ
+
+        if return_logZ:
             return cls(logw, mean, cov, *args, **kwargs), logZ
         else:
             return cls(logw, mean, cov, *args, **kwargs)
