@@ -1,23 +1,58 @@
 """Utility functions for lsbi."""
 
+from typing import Union, Callable, Tuple, Any, Type
+
 import numpy as np
+from numpy.typing import NDArray
+
+# Type aliases
+ArrayLike = Union[float, int, NDArray[np.floating], list, tuple]
 
 
-def logdet(A, diagonal=False):
-    """log(abs(det(A)))."""
+def logdet(A: ArrayLike, diagonal: bool = False) -> Union[float, NDArray[np.floating]]:
+    """Compute log absolute determinant of matrix A.
+    
+    Parameters
+    ----------
+    A : array_like
+        Input matrix or matrices. If diagonal=True, can be 1D array
+        representing diagonal elements.
+    diagonal : bool, optional
+        If True, A represents diagonal elements only. Default is False.
+        
+    Returns
+    -------
+    float or ndarray
+        Log absolute determinant of A.
+        
+    Examples
+    --------
+    >>> logdet(np.eye(2))  # Returns 0.0
+    >>> logdet([2, 3], diagonal=True)  # Returns log(6)
+    """
     if diagonal:
         return np.log(np.abs(A)).sum(axis=-1)
     else:
         return np.linalg.slogdet(A)[1]
 
 
-def quantise(f, x, tol=1e-8):
+def quantise(
+    f: Callable[[ArrayLike], ArrayLike], 
+    x: ArrayLike, 
+    tol: float = 1e-8
+) -> NDArray[np.floating]:
     """Quantise f(x) to zero within tolerance tol."""
     y = np.atleast_1d(f(x))
     return np.where(np.abs(y) < tol, 0, y)
 
 
-def bisect(f, a, b, args=(), tol=1e-8):
+def bisect(
+    f: Callable[[ArrayLike], ArrayLike],
+    a: ArrayLike,
+    b: ArrayLike, 
+    args: Tuple[Any, ...] = (),
+    tol: float = 1e-8
+) -> NDArray[np.floating]:
     """Vectorised simple bisection search.
 
     The shape of the output is the broadcasted shape of a and b.
@@ -61,15 +96,40 @@ def bisect(f, a, b, args=(), tol=1e-8):
     return (a + b) / 2
 
 
-def dediagonalise(x, diagonal, *args):
-    """Optionally construct a dense matrix with x on the diagonal."""
+def dediagonalise(
+    x: ArrayLike, 
+    diagonal: bool, 
+    *args: int
+) -> Union[ArrayLike, NDArray[np.floating]]:
+    """Convert diagonal representation to full matrix if needed.
+    
+    Parameters
+    ----------
+    x : array_like
+        Input array. If diagonal=True, represents diagonal elements.
+    diagonal : bool
+        If True, construct full matrix with x on diagonal.
+        If False, return x unchanged.
+    *args : int
+        Dimensions for the identity matrix when diagonal=True.
+        
+    Returns
+    -------
+    array_like or ndarray
+        Full matrix if diagonal=True, otherwise x unchanged.
+        
+    Examples
+    --------
+    >>> dediagonalise([1, 2], True, 2)  # Returns 2x2 matrix with [1,2] on diagonal
+    >>> dediagonalise(np.eye(2), False)  # Returns input unchanged
+    """
     if diagonal:
         return np.atleast_1d(x)[..., None, :] * np.eye(*args)
     else:
         return x
 
 
-def alias(cls, name, alias):
+def alias(cls: Type[Any], name: str, alias: str) -> None:
     """Create an alias for a property.
 
     Parameters
