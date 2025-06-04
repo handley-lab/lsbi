@@ -1,13 +1,19 @@
 """Extensions to scipy.stats functions."""
 
 from copy import deepcopy
+from typing import Union, Tuple, Optional, Any
 
 import numpy as np
 import scipy.stats
+from numpy.typing import NDArray
 from numpy.linalg import cholesky, inv
 from scipy.special import erf, logsumexp
 
 from lsbi.utils import bisect, logdet
+
+# Type aliases
+ArrayLike = Union[float, int, NDArray[np.floating], list, tuple]
+Shape = Tuple[int, ...]
 
 
 class multivariate_normal(object):
@@ -41,7 +47,38 @@ class multivariate_normal(object):
         If True, cov is interpreted as the diagonal of the covariance matrix.
     """
 
-    def __init__(self, mean=0, cov=1, shape=(), dim=1, diagonal=False):
+    def __init__(
+        self,
+        mean: ArrayLike = 0,
+        cov: ArrayLike = 1, 
+        shape: Shape = (),
+        dim: int = 1,
+        diagonal: bool = False
+    ) -> None:
+        """Initialize a multivariate normal distribution.
+        
+        Parameters
+        ----------
+        mean : array_like, optional
+            Mean of the distribution. Shape (..., dim). Default is 0.
+        cov : array_like, optional
+            Covariance matrix. Shape (..., dim, dim) if diagonal=False,
+            or (..., dim) if diagonal=True. Default is 1.
+        shape : tuple, optional
+            Shape for broadcasting beyond mean/cov shapes. Default is ().
+        dim : int, optional
+            Dimension of the distribution. Default is 1.
+        diagonal : bool, optional
+            If True, cov represents diagonal covariance. Default is False.
+            
+        Examples
+        --------
+        >>> # 2D distribution with identity covariance
+        >>> dist = multivariate_normal(mean=[0, 0], cov=np.eye(2))
+        >>> 
+        >>> # Batch of 1D distributions with diagonal covariance
+        >>> dist = multivariate_normal(mean=np.zeros(5), cov=np.ones(5), diagonal=True)
+        """
         self.mean = mean
         self.cov = cov
         self._shape = shape
@@ -371,7 +408,41 @@ class mixture_normal(multivariate_normal):
         If True, cov is interpreted as the diagonal of the covariance matrix.
     """
 
-    def __init__(self, logw=0, mean=0, cov=1, shape=(), dim=1, diagonal=False):
+    def __init__(
+        self,
+        logw: ArrayLike = 0,
+        mean: ArrayLike = 0,
+        cov: ArrayLike = 1,
+        shape: Shape = (),
+        dim: int = 1,
+        diagonal: bool = False
+    ) -> None:
+        """Initialize a mixture of multivariate normal distributions.
+        
+        Parameters
+        ----------
+        logw : array_like, optional
+            Log mixing weights. Shape (..., n_components). Default is 0.
+        mean : array_like, optional
+            Component means. Shape (..., n_components, dim). Default is 0.
+        cov : array_like, optional
+            Component covariances. Shape (..., n_components, dim, dim) if 
+            diagonal=False, or (..., n_components, dim) if diagonal=True.
+            Default is 1.
+        shape : tuple, optional
+            Shape for broadcasting. Default is ().
+        dim : int, optional
+            Dimension of each component. Default is 1.
+        diagonal : bool, optional
+            If True, cov represents diagonal covariances. Default is False.
+            
+        Examples
+        --------
+        >>> # 2-component 1D mixture
+        >>> logw = np.log([0.3, 0.7])
+        >>> means = np.array([[-1], [1]])
+        >>> dist = mixture_normal(logw=logw, mean=means, cov=1)
+        """
         self.logw = logw
         super().__init__(mean, cov, shape, dim, diagonal)
 
@@ -585,7 +656,11 @@ class mixture_normal(multivariate_normal):
         return dist
 
 
-def dkl(p, q, n=0):
+def dkl(
+    p: multivariate_normal, 
+    q: multivariate_normal, 
+    n: int = 0
+) -> Union[float, NDArray[np.floating]]:
     """Kullback-Leibler divergence between two distributions.
 
     Parameters

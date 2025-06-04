@@ -1,13 +1,19 @@
 """Gaussian models for linear Bayesian inference."""
 
 import copy
+from typing import Optional, Union, Tuple, Any
 
 import numpy as np
+from numpy.typing import NDArray
 from numpy.linalg import inv, solve
 from scipy.special import logsumexp
 
 from lsbi.stats import dkl, mixture_normal, multivariate_normal
 from lsbi.utils import alias, dediagonalise, logdet
+
+# Type aliases for clarity
+ArrayLike = Union[float, int, NDArray[np.floating], list, tuple]
+Shape = Tuple[int, ...]
 
 
 class LinearModel(object):
@@ -61,7 +67,59 @@ class LinearModel(object):
         Number of mixture components, defaults to automatically inferred value
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize a LinearModel.
+        
+        Parameters
+        ----------
+        M : array_like, optional
+            Model matrix. Can be:
+            - ndim>=2: full model matrices (..., d, n)
+            - ndim==1: diagonal model matrix for all components  
+            - ndim==0: scalar * rectangular identity matrix
+            Default is rectangular identity matrix.
+        m : array_like, optional
+            Data mean offset. Can be:
+            - ndim>=1: data means (..., d)
+            - ndim==0: scalar for all components
+            Default is 0.
+        C : array_like, optional  
+            Data covariance. Can be:
+            - ndim>=2: full covariance matrices (..., d, d)
+            - ndim==1: diagonal covariance for all components
+            - ndim==0: scalar * identity matrix
+            Default is identity matrix.
+        μ or mu : array_like, optional
+            Prior mean. Can be:
+            - ndim>=1: prior means (..., n)
+            - ndim==0: scalar for all components  
+            Default is 0.
+        Σ or Sigma : array_like, optional
+            Prior covariance. Can be:
+            - ndim>=2: full covariance matrices (..., n, n)
+            - ndim==1: diagonal covariance for all components
+            - ndim==0: scalar * identity matrix
+            Default is identity matrix.
+        n : int, optional
+            Number of parameters. Auto-inferred if not provided.
+        d : int, optional  
+            Number of data dimensions. Auto-inferred if not provided.
+        shape : tuple, optional
+            Shape for broadcasting. Auto-inferred if not provided.
+            
+        Raises
+        ------
+        ValueError
+            If unrecognized keyword arguments are provided.
+            
+        Examples
+        --------
+        >>> # Simple 1D linear regression
+        >>> model = LinearModel(M=1, C=0.1)
+        >>> 
+        >>> # 2D model with diagonal covariances
+        >>> model = LinearModel(M=np.eye(2), C=[0.1, 0.2], Sigma=[1.0, 2.0])
+        """
         self.M = kwargs.pop("M", 1)
         self.diagonal_M = kwargs.pop("diagonal_M", False)
         if len(np.shape(self.M)) < 2:
@@ -87,8 +145,14 @@ class LinearModel(object):
             raise ValueError(f"Unrecognised arguments: {kwargs}")
 
     @property
-    def shape(self):
-        """Shape of the distribution."""
+    def shape(self) -> Shape:
+        """Shape of the distribution (batch dimensions).
+        
+        Returns
+        -------
+        tuple of int
+            Broadcasted shape across all model components.
+        """
         return np.broadcast_shapes(
             np.shape(self.M)[: -2 + self.diagonal_M],
             np.shape(self.m)[:-1],
@@ -99,8 +163,14 @@ class LinearModel(object):
         )
 
     @property
-    def n(self):
-        """Dimension of the distribution."""
+    def n(self) -> int:
+        """Number of model parameters.
+        
+        Returns
+        -------
+        int
+            Dimension of parameter space θ.
+        """
         return np.max(
             [
                 *np.shape(self.M)[len(np.shape(self.M)) - 1 + self.diagonal_M :],
@@ -111,8 +181,14 @@ class LinearModel(object):
         )
 
     @property
-    def d(self):
-        """Dimensionality of data space len(D)."""
+    def d(self) -> int:
+        """Number of data dimensions.
+        
+        Returns
+        -------
+        int
+            Dimension of data space D.
+        """
         return np.max(
             [
                 *np.shape(self.M)[-2 + self.diagonal_M : -1],
@@ -122,14 +198,25 @@ class LinearModel(object):
             ]
         )
 
-    def model(self, θ):
-        """Model matrix M(θ) for a given parameter vector.
+    def model(self, θ: ArrayLike) -> NDArray[np.floating]:
+        """Compute model prediction for given parameters.
 
-        M(θ) = m + M θ
+        Evaluates the linear model: M(θ) = m + M θ
 
         Parameters
         ----------
-        θ : array_like, shape (..., n,)
+        θ : array_like, shape (..., n)
+            Parameter vector(s) to evaluate.
+
+        Returns
+        -------
+        ndarray, shape (..., d)
+            Model prediction for the given parameters.
+            
+        Examples
+        --------
+        >>> model = LinearModel(M=2.0, m=1.0)
+        >>> model.model([0.5])  # Returns [2.0]
         """
         return self.m + np.einsum("...ja,...a->...j", self._M, θ * np.ones(self.n))
 
@@ -343,7 +430,27 @@ class MixtureModel(LinearModel):
         Number of data dimensions, defaults to automatically inferred value
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize a MixtureModel.
+        
+        Parameters
+        ----------
+        logw : array_like, optional
+            Log mixture weights. Can be:
+            - ndim>=1: log weights (..., k)
+            - ndim==0: scalar (uniform weights)
+            Default is uniform weights.
+        **kwargs
+            Additional arguments passed to LinearModel.__init__.
+            
+        Examples
+        --------
+        >>> # Mixture of 3 components with equal weights
+        >>> model = MixtureModel(logw=np.zeros(3))
+        >>> 
+        >>> # Mixture with different weights
+        >>> model = MixtureModel(logw=np.log([0.5, 0.3, 0.2]))
+        """
         self.logw = kwargs.pop("logw", 0)
         super().__init__(*args, **kwargs)
 
@@ -494,7 +601,27 @@ class ReducedLinearModel(object):
         Prior covariance, defaults to identity matrix
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize a ReducedLinearModel.
+        
+        Parameters
+        ----------
+        mu_L : array_like
+            Likelihood peak location.
+        Sigma_L : array_like  
+            Likelihood covariance matrix.
+        logLmax : float, optional
+            Maximum log-likelihood value. Default is 0.
+        mu_pi : array_like, optional
+            Prior mean. Default is zero vector.
+        Sigma_pi : array_like, optional  
+            Prior covariance matrix. Default is identity matrix.
+            
+        Examples
+        --------
+        >>> # Simple 1D reduced model
+        >>> model = ReducedLinearModel(mu_L=[1.0], Sigma_L=[[0.1]])
+        """
         self.mu_L = np.atleast_1d(kwargs.pop("mu_L"))
         self.Sigma_L = np.atleast_2d(kwargs.pop("Sigma_L", None))
         self.logLmax = kwargs.pop("logLmax", 0)
@@ -579,7 +706,25 @@ class ReducedLinearModelUniformPrior(object):
         log prior volume, defaults to zero
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize a ReducedLinearModelUniformPrior.
+        
+        Parameters
+        ----------
+        mu_L : array_like
+            Likelihood peak location.
+        Sigma_L : array_like
+            Likelihood covariance matrix.
+        logLmax : float, optional
+            Maximum log-likelihood value. Default is 0.
+        logV : float, optional
+            Log prior volume. Default is 0.
+            
+        Examples
+        --------
+        >>> # Simple uniform prior model
+        >>> model = ReducedLinearModelUniformPrior(mu_L=[1.0], Sigma_L=[[0.1]])
+        """
         self.mu_L = np.atleast_1d(kwargs.pop("mu_L"))
         self.Sigma_L = np.atleast_2d(kwargs.pop("Sigma_L"))
         self.logLmax = kwargs.pop("logLmax", 0)
