@@ -35,7 +35,7 @@ lsbi: Linear Simulation Based Inference
 
 A repository for linear modelling and simulation based inference
 
-UNDER CONSTRUCTION
+``lsbi`` is a Python package for efficient Bayesian inference with models that are linear in their parameters.
 
 
 Features
