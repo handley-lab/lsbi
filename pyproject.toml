@@ -40,7 +40,7 @@ classifiers = [
 "Documentation" = "https://lsbi.readthedocs.io/en/latest/"
 
 [project.optional-dependencies]
-docs = ["sphinx", "sphinx_rtd_theme", "numpydoc"]
+docs = ["sphinx", "sphinx_rtd_theme", "numpydoc", "nbsphinx", "jupyter", "ipykernel"]
 test = ["pytest", "pytest-cov", "flake8", "pydocstyle", "packaging", "pre-commit"]
 
 [tool.setuptools.dynamic]

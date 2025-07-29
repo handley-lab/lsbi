@@ -154,14 +154,53 @@ class LinearModel(object):
         return multivariate_normal(self.μ, self.Σ, self.shape, self.n, self.diagonal_Σ)
 
     def posterior(self, D):
-        """P(θ|D) as a distribution object.
+        """Computes the posterior distribution P(θ|D).
 
+        This method performs the Bayesian update, conditioning the model's prior
+        on the provided data `D` to compute the posterior distribution of the
+        parameters θ.
+
+        The posterior is a multivariate normal distribution:
         θ|D ~ N( μ + S M'C^{-1}(D - m - M μ), S )
         S = (Σ^{-1} + M'C^{-1}M)^{-1}
 
         Parameters
         ----------
-        D : array_like, shape (d,)
+        D : array_like, shape (..., d)
+            The data vector or batch of data vectors to condition on. The shape
+            `...` is broadcast against the model's shape.
+
+        Returns
+        -------
+        lsbi.stats.multivariate_normal
+            A distribution object representing the posterior P(θ|D). Its `mean`
+            and `cov` attributes define the posterior. The shape of the
+            distribution will be the result of broadcasting the model's shape
+            with the shape of `D`.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from lsbi import LinearModel
+        >>> # Model with n=2 parameters, d=3 data dimensions
+        >>> M = np.random.rand(3, 2)
+        >>> model = LinearModel(M=M, n=2, d=3)
+        >>>
+        >>> # Data for a single observation
+        >>> data_single = np.array([1.0, 2.0, 3.0])
+        >>> posterior_single = model.posterior(data_single)
+        >>> posterior_single.shape
+        ()
+        >>> posterior_single.mean.shape
+        (2,)
+        >>>
+        >>> # Data for a batch of 4 observations
+        >>> data_batch = np.random.rand(4, 3)
+        >>> posterior_batch = model.posterior(data_batch)
+        >>> posterior_batch.shape
+        (4,)
+        >>> posterior_batch.mean.shape
+        (4, 2)
         """
         values = D - self.model(self.μ)
 

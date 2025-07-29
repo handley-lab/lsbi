@@ -33,13 +33,80 @@ lsbi: Linear Simulation Based Inference
    :alt: License information
 
 
-A repository for linear modelling and simulation based inference
+``lsbi`` is a Python package for efficient Bayesian inference with models that are linear in their parameters. It is built on NumPy and leverages vectorization to allow for powerful broadcasting and performance optimizations.
 
-UNDER CONSTRUCTION
+What is Linear Simulation Based Inference?
+------------------------------------------
 
+``lsbi`` solves Bayesian inference problems where the data likelihood and parameter prior are Gaussian:
+
+- **Likelihood**: :math:`P(D|\theta) = \mathcal{N}(D | m + M\theta, C)`
+- **Prior**: :math:`P(\theta) = \mathcal{N}(\theta | \mu, \Sigma)`
+
+Here, :math:`\theta` are the model parameters and :math:`D` is the data. The library provides tools to compute the posterior :math:`P(\theta|D)`, the evidence :math:`P(D)`, and other key statistical quantities analytically.
 
 Features
 --------
+
+- **Vectorized Operations**: Perform inference on thousands of models simultaneously using NumPy broadcasting.
+- **Performance Optimizations**: Native support for diagonal covariance matrices for significant speed-ups.
+- **Complete Bayesian Toolkit**: Analytically compute the posterior, evidence, and posterior predictive distributions.
+- **Mixture Models**: Extend linear models to handle complex, multi-modal distributions.
+- **Interoperability**: A clean API built on top of NumPy arrays.
+
+Quick Start
+-----------
+
+Here is a 2-minute example of fitting a straight line (:math:`y = mx + c`) to data.
+
+.. code-block:: python
+
+    import numpy as np
+    from lsbi import LinearModel
+    import matplotlib.pyplot as plt
+
+    # 1. Define the true model and generate mock data
+    np.random.seed(0)
+    theta_true = np.array([2.0, -1.0])  # [slope, intercept]
+    x_data = np.linspace(0, 1, 10)
+    y_data_true = theta_true[0] * x_data + theta_true[1]
+    y_noise_std = 0.1
+    y_data_noisy = y_data_true + np.random.normal(0, y_noise_std, size=x_data.shape)
+
+    # 2. Set up the Bayesian Linear Model in lsbi
+    # Our parameters are theta = [slope, intercept]
+    # The model is D = M @ theta, where D is y_data and M maps theta to y_data.
+    M = np.vstack([x_data, np.ones_like(x_data)]).T
+    
+    # Priors: Broad Gaussian priors on slope and intercept
+    mu = np.zeros(2)      # Prior mean
+    Sigma = np.eye(2) * 4 # Prior covariance
+    
+    # Likelihood: The data covariance C is the noise variance
+    C = np.eye(10) * y_noise_std**2
+
+    model = LinearModel(M=M, mu=mu, Sigma=Sigma, C=C)
+
+    # 3. Compute the posterior given the noisy data
+    posterior = model.posterior(y_data_noisy)
+
+    print("True parameters:", theta_true)
+    print("Posterior mean:", posterior.mean)
+    print("Posterior covariance:")
+    print(posterior.cov)
+    
+    # 4. Plot the results
+    plt.errorbar(x_data, y_data_noisy, yerr=y_noise_std, fmt='o', label='Data')
+    plt.plot(x_data, y_data_true, 'k-', label='True Line')
+    
+    # Plot some lines drawn from the posterior
+    for i in range(100):
+        theta_sample = posterior.rvs()
+        plt.plot(x_data, M @ theta_sample, 'r-', alpha=0.1)
+    
+    plt.title("LSBI Fit to Noisy Data")
+    plt.legend()
+    plt.show()
 
 Installation
 ------------

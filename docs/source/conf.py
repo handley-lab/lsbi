@@ -62,6 +62,7 @@ extensions = [
     "sphinx.ext.imgconverter",
     "matplotlib.sphinxext.plot_directive",
     "numpydoc",
+    "nbsphinx",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
